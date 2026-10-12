@@ -5,4 +5,6 @@
 !**/.env.example
 **/dist/
 **/storage/logs/*
+.runtime/
+backend-php80-backup/
 .DS_Store

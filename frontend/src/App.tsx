@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, Factory, Boxes, ShoppingCart, Truck, Receipt, Landmark, Users, ChartColumn, Settings, Search, Bell, ChevronRight, Menu, Plus, X, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, Factory, Boxes, ShoppingCart, Truck, Receipt, Landmark, Users, ChartColumn, Settings, Search, Bell, ChevronRight, Menu, Plus, X, CheckCircle2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { demoKpis, demoTables } from './demoData';
 
@@ -16,6 +16,12 @@ const modules: Module[] = [
   { label:'HR & Payroll', icon: Users, detail:'Employees, attendance imports, payroll and approvals' },
   { label:'Management Accounting', icon: ChartColumn, detail:'Budgets, batch costs and profitability' },
   { label:'Settings & Roles', icon: Settings, detail:'Editable roles, approval rules and business settings' },
+];
+const navigationGroups = [
+  { label: 'Overview', items: ['Dashboard'] },
+  { label: 'Operations', items: ['Manufacturing', 'Inventory', 'Purchasing', 'Sales & Reps', 'Collections'] },
+  { label: 'Finance & People', items: ['Financial Accounting', 'HR & Payroll', 'Management Accounting'] },
+  { label: 'Administration', items: ['Settings & Roles'] },
 ];
 const workflow = [ {title:'Material purchasing',description:'Supplier → PO → GRN → Supplier invoice'}, {title:'Production',description:'BOM → Material issue → Stage updates → QA'}, {title:'Sales',description:'Finished stock → Dispatch → Invoice'}, {title:'Finance',description:'Payment → Verified receipt → Journal posting'} ];
 const capabilities: Record<string, Capability[]> = {
@@ -66,15 +72,16 @@ const capabilities: Record<string, Capability[]> = {
   ],
 };
 export default function App(){
- const [page,setPage]=useState('Dashboard'); const [menu,setMenu]=useState(false);const [filter,setFilter]=useState('');const [modal,setModal]=useState(false); const [saved,setSaved]=useState(false);const [reference,setReference]=useState('');const [createdRows,setCreatedRows]=useState<Record<string,string[][]>>({});
+ const [page,setPage]=useState('Dashboard'); const [menu,setMenu]=useState(false);const [collapsed,setCollapsed]=useState(false);const [filter,setFilter]=useState('');const [modal,setModal]=useState(false); const [saved,setSaved]=useState(false);const [reference,setReference]=useState('');const [createdRows,setCreatedRows]=useState<Record<string,string[][]>>({});
  const current=modules.find(m=>m.label===page)!;
  const openModal=()=>{setSaved(false);setReference('');setModal(true)};
  const saveDemoRecord=()=>{const value=reference.trim();const table=demoTables[page];if(!value||!table)return;const row=[value,...table.columns.slice(1).map(()=> 'New')];setCreatedRows(rows=>({...rows,[page]:[...(rows[page]??[]),row]}));setSaved(true)};
- return <div className="shell">
-   <aside className={'sidebar '+(menu?'open':'')}>
-     <div className="identity"><span className="logo">A</span><div><strong>AeroSoft<span>360</span></strong><small>Manufacturing ERP</small></div><button className="mobile-close" onClick={()=>setMenu(false)} aria-label="Close menu"><X size={18}/></button></div>
-     <div className="section-label">WORKSPACE</div><nav>{modules.map(m=><button key={m.label} onClick={()=>{setPage(m.label);setMenu(false);setSaved(false)}} className={'nav '+(page===m.label?'active':'')}><m.icon size={18}/><span>{m.label}</span>{page===m.label&&<ChevronRight size={15} />}</button>)}</nav>
-     <div className="sidebar-bottom"><div className="avatar">SA</div><div><strong>Super Admin</strong><small>Prototype access</small></div></div>
+ return <div className={'shell '+(collapsed?'sidebar-collapsed':'')}>
+   {menu&&<button className="sidebar-scrim" aria-label="Close navigation" onClick={()=>setMenu(false)}/>}
+   <aside className={'sidebar '+(menu?'open ':'')+(collapsed?'collapsed':'')} aria-label="Primary navigation">
+     <div className="identity"><span className="logo">A</span><div className="identity-copy"><strong>AeroSoft<span>360</span></strong><small>Manufacturing ERP</small></div><button className="mobile-close" onClick={()=>setMenu(false)} aria-label="Close menu"><X size={18}/></button></div>
+     <nav className="sidebar-nav">{navigationGroups.map(group=><div className="nav-group" key={group.label}><div className="section-label">{group.label}</div>{group.items.map(label=>{const m=modules.find(item=>item.label===label)!;return <button title={collapsed?m.label:undefined} aria-current={page===m.label?'page':undefined} key={m.label} onClick={()=>{setPage(m.label);setMenu(false);setSaved(false)}} className={'nav '+(page===m.label?'active':'')}><m.icon size={19}/><span>{m.label}</span>{page===m.label&&<ChevronRight className="nav-arrow" size={15}/>}</button>})}</div>)}</nav>
+     <div className="sidebar-footer"><div className="sidebar-bottom"><div className="avatar">SA</div><div className="profile-copy"><strong>Super Admin</strong><small>Demo workspace</small></div></div><button className="collapse-toggle" onClick={()=>setCollapsed(value=>!value)} aria-label={collapsed?'Expand sidebar':'Collapse sidebar'}>{collapsed?<PanelLeftOpen size={18}/>:<><PanelLeftClose size={18}/><span>Collapse sidebar</span></>}</button></div>
    </aside>
    <main className="main"><header className="topbar"><button className="hamburger" aria-label="Open menu" onClick={()=>setMenu(true)}><Menu size={22}/></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <b>{page}</b></div><div className="top-actions"><div className="search"><Search size={16}/><input placeholder="Search modules" value={filter} onChange={e=>setFilter(e.target.value)}/></div><Bell size={19}/><span className="user-bubble">SA</span></div></header>
      <section className="body"><div className="heading"><div><div className="eyebrow">AEROSOFT360 / {page.toUpperCase()}</div><h1>{page==='Dashboard'?'Business Overview':page}</h1><p>{page==='Dashboard'?'Track manufacturing, sales, stock and financial performance in one place.':current.detail}</p></div>{page!=='Dashboard'&&<button className="primary" onClick={openModal}><Plus size={17}/> New Demo Record</button>}</div>
