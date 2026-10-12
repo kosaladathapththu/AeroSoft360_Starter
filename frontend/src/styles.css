@@ -17,3 +17,45 @@
 .sidebar-scrim{display:none}.topbar{position:sticky;top:0;z-index:10}
 
 @media(max-width:730px){.sidebar,.sidebar.collapsed{position:fixed;width:min(290px,86vw);height:100dvh}.sidebar.collapsed .identity-copy,.sidebar.collapsed .section-label,.sidebar.collapsed .nav span,.sidebar.collapsed .nav-arrow,.sidebar.collapsed .profile-copy{display:block}.sidebar.collapsed .identity{padding:24px 22px}.sidebar.collapsed .sidebar-nav{padding-inline:14px}.sidebar.collapsed .nav{justify-content:flex-start;padding-inline:12px}.sidebar.collapsed .sidebar-bottom{justify-content:flex-start;padding-inline:8px}.collapse-toggle{display:none}.sidebar-scrim{display:block;position:fixed;inset:0;border:0;background:#07111eb3;z-index:25}.topbar{z-index:15}}
+
+/* Readable application typography */
+:root{font-size:17px}
+.sidebar{width:320px}
+.identity{min-height:112px}
+.identity strong{font-size:25px}
+.identity small{font-size:14px}
+.section-label{font-size:12px;letter-spacing:1.4px;padding-bottom:11px}
+.nav{min-height:53px;font-size:16px;padding:14px}
+.sidebar-bottom strong{font-size:15px}
+.sidebar-bottom small{font-size:13px}
+.avatar{width:45px;height:45px;font-size:14px}
+.collapse-toggle{min-height:44px;font-size:14px}
+.topbar{height:90px}
+.breadcrumb{font-size:16px}
+.search{height:44px}
+.search input{font-size:15px;width:180px}
+.user-bubble{width:40px;height:40px;font-size:13px}
+.body{padding:46px 48px}
+.eyebrow{font-size:13px}
+.heading h1{font-size:40px;margin-top:10px}
+.primary{font-size:15px;padding:15px 20px}
+.panel{padding:30px}
+.panel-title h2{font-size:22px}
+.stat>span:first-child{font-size:15px}
+.stat strong{font-size:34px}
+.stat small{font-size:14px}
+.flow-item b{font-size:16px}
+.num{font-size:14px}
+.shortcuts button span{font-size:14px}
+.data-panel table{min-width:820px}
+.data-panel th,.data-panel td{font-size:16px;padding:17px 14px}
+.data-panel th{font-size:13px;letter-spacing:.7px}
+.field label,.success{font-size:15px}
+.field input{font-size:16px;padding:14px}
+.modal h2{font-size:25px}
+.brand-logo{display:block;width:225px;height:78px;object-fit:contain;object-position:left center}
+.identity{justify-content:space-between;padding-block:17px}
+.sidebar.collapsed .brand-logo{width:48px;height:48px;object-fit:cover;object-position:left center}
+
+@media(max-width:1050px){.sidebar{width:280px}.body{padding:34px 28px}.heading h1{font-size:34px}}
+@media(max-width:730px){:root{font-size:16px}.sidebar,.sidebar.collapsed{width:min(320px,90vw)}.sidebar.collapsed .brand-logo{width:225px;height:78px;object-fit:contain}.nav{font-size:16px}.body{padding:26px 18px}.heading h1{font-size:29px}.data-panel th,.data-panel td{font-size:15px;padding:15px 12px}}
