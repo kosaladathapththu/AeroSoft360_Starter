@@ -1,14 +1,14 @@
-export type DemoTable = { columns: string[]; rows: string[][] };
+export type SystemTable = { columns: string[]; rows: string[][] };
 
-export const demoKpis = [
+export const systemKpis = [
   { title: 'Sales today', value: 'LKR 482,500', note: '12 posted invoices' },
   { title: 'Production output', value: '1,240 pcs', note: '96.8% accepted' },
   { title: 'Inventory value', value: 'LKR 8.42M', note: 'Across 3 stock types' },
   { title: 'Outstanding AR', value: 'LKR 2.16M', note: 'LKR 340K overdue' },
 ];
 
-export const demoTables: Record<string, DemoTable> = {
-  Manufacturing: {
+export const systemTables: Record<string, SystemTable> = {
+  'Footwear Production': {
     columns: ['Batch', 'Product', 'Planned', 'Accepted', 'Rejected', 'Status'],
     rows: [
       ['PB-260101', 'Aero Runner / Black', '600', '420', '8', 'In production'],
@@ -16,7 +16,7 @@ export const demoTables: Record<string, DemoTable> = {
       ['PB-260103', 'Classic Slipper / Brown', '300', '0', '0', 'Materials reserved'],
     ],
   },
-  Inventory: {
+  'Materials & Inventory': {
     columns: ['SKU', 'Batch', 'Location', 'Saleable', 'Blocked', 'Unit cost'],
     rows: [
       ['AR-BLK-08', 'FG-260091', 'FG-A01', '184', '6', 'LKR 1,245.00'],
@@ -24,7 +24,7 @@ export const demoTables: Record<string, DemoTable> = {
       ['SOLE-EVA-01', 'RM-260044', 'RM-B03', '2,450', '0', 'LKR 185.50'],
     ],
   },
-  Purchasing: {
+  'Purchasing & GRN': {
     columns: ['PO', 'Supplier', 'Order date', 'Expected', 'Total', 'Status'],
     rows: [
       ['PO-260041', 'Lanka Polymer Supplies', '08 Oct 2026', '15 Oct 2026', 'LKR 685,000', 'Part received'],
@@ -32,7 +32,7 @@ export const demoTables: Record<string, DemoTable> = {
       ['PO-260043', 'ColourChem Lanka', '10 Oct 2026', '20 Oct 2026', 'LKR 96,800', 'Draft'],
     ],
   },
-  'Sales & Reps': {
+  'Sales, Sets & Reps': {
     columns: ['Invoice', 'Customer', 'Channel', 'Representative', 'Amount', 'Status'],
     rows: [
       ['INV-260812', 'City Footwear', 'Head Office', 'N. Perera', 'LKR 185,000', 'Part paid'],
@@ -40,7 +40,7 @@ export const demoTables: Record<string, DemoTable> = {
       ['INV-260814', 'Kandy Traders', 'Direct Sales', 'A. Silva', 'LKR 155,000', 'Posted'],
     ],
   },
-  Collections: {
+  'Collections & Commission': {
     columns: ['Receipt', 'Invoice', 'Collected', 'Cleared', 'Allocated', 'Commission'],
     rows: [
       ['RCT-260312', 'INV-260812', '10 Oct 2026', '10 Oct 2026', 'LKR 92,500', 'LKR 2,312.50'],
@@ -48,7 +48,7 @@ export const demoTables: Record<string, DemoTable> = {
       ['RCT-260314', 'INV-260701', '08 Oct 2026', '08 Oct 2026', 'LKR 48,000', 'Late - zero'],
     ],
   },
-  'Financial Accounting': {
+  'Finance & General Ledger': {
     columns: ['Journal', 'Source', 'Posting date', 'Debit', 'Credit', 'Status'],
     rows: [
       ['JNL-260901', 'Sales invoice INV-260812', '10 Oct 2026', 'LKR 185,000', 'LKR 185,000', 'Posted'],
@@ -64,7 +64,7 @@ export const demoTables: Record<string, DemoTable> = {
       ['EMP-031 / D. Saman', 'Production', '11 Oct 2026', '00:00', '00:00', '08:00'],
     ],
   },
-  'Management Accounting': {
+  'Costing & Management': {
     columns: ['Cost centre', 'Budget', 'Actual', 'Variance', 'Utilization', 'Status'],
     rows: [
       ['Factory - Cutting', 'LKR 1.20M', 'LKR 1.08M', 'LKR 120K', '90.0%', 'Within budget'],
