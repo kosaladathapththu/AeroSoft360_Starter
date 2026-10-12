@@ -8,6 +8,8 @@
 - Configurable product set expansion, sales invoice, receipt allocation and commission schema
 - Confirmed business-rule services for set expansion, 100-day proportional commission and configurable attendance defaults
 - Unit test cases for journal, sets, commission eligibility and attendance calculations
+- Production-blocked Laravel demo seeder covering users/roles, masters, stock, PO/GRN, invoice/receipt, commission and a balanced journal
+- Fictional frontend KPI and module datasets with browser-session demo record entry
 - Git ignore and local setup instructions
 
 ## Not yet implemented
