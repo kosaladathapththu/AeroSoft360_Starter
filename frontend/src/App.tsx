@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Building2, Check, ClipboardCheck, Factory, FileText, LayoutDashboard, Loader2, Menu, PackagePlus, Pencil, Plus, RefreshCw, Search, ShieldCheck, Trash2, Truck, Warehouse, X } from 'lucide-react';
 import './styles.css';
+import './actions.css';
 
 const API=import.meta.env.VITE_API_URL||'http://127.0.0.1:8000/api/v1';
 type Supplier={id:number;code:string;name:string;phone?:string;payment_days:number;status:string};

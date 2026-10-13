@@ -1,0 +1,21 @@
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.icon-action {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d9e1e6;
+  border-radius: 8px;
+  background: white;
+  display: grid;
+  place-items: center;
+}
+
+.icon-action svg { width: 16px; }
+.icon-action.edit { color: #176f89; }
+.icon-action.edit:hover { background: #e9f5f8; }
+.icon-action.delete { color: #b3473d; }
+.icon-action.delete:hover { background: #fff0ee; border-color: #efc0bb; }
