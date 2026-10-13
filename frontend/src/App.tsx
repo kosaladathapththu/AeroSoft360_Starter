@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import "./styles.css";
 import "./actions.css";
+import "./reports.css";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api/v1";
 type Supplier = {
@@ -343,56 +344,59 @@ export default function App() {
           ) : page === "Reports" ? (
             <ReportsPage token={token() || ""} />
           ) : (
-          <>
-          <div className="heading">
-            <div>
-              <span>SUPUN AEROSOFT (PVT) LTD</span>
-              <h1>{page}</h1>
-              <p>
-                {page === "Dashboard"
-                  ? "Purchasing, goods receiving, batch stock and accounting in one controlled flow."
-                  : "Search, review and process authorized business records."}
-              </p>
-            </div>
-            {page === "Suppliers" && (
-              <button className="primary" onClick={() => setModal("supplier")}>
-                <Plus /> Add Supplier
-              </button>
-            )}
-            {page === "Purchase Orders" && (
-              <button className="primary" onClick={() => setModal("po")}>
-                <Plus /> New Purchase Order
-              </button>
-            )}
-            {page === "Receive Goods" && (
-              <button className="primary" onClick={() => setModal("grn")}>
-                <PackagePlus /> Receive Goods
-              </button>
-            )}
-          </div>
-          {error && <div className="error">{error}</div>}
-          {loading ? (
-            <div className="loading">
-              <Loader2 /> Loading records…
-            </div>
-          ) : page === "Dashboard" ? (
-            <Dashboard data={data} go={setPage} />
-          ) : (
-            <Records
-              page={page}
-              rows={rows as RecordRow[]}
-              approve={async (id) => {
-                try {
-                  await call(`/purchase-orders/${id}/approve`);
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-              edit={setEditing}
-              remove={remove}
-            />
-          )}
-          </>
+            <>
+              <div className="heading">
+                <div>
+                  <span>SUPUN AEROSOFT (PVT) LTD</span>
+                  <h1>{page}</h1>
+                  <p>
+                    {page === "Dashboard"
+                      ? "Purchasing, goods receiving, batch stock and accounting in one controlled flow."
+                      : "Search, review and process authorized business records."}
+                  </p>
+                </div>
+                {page === "Suppliers" && (
+                  <button
+                    className="primary"
+                    onClick={() => setModal("supplier")}
+                  >
+                    <Plus /> Add Supplier
+                  </button>
+                )}
+                {page === "Purchase Orders" && (
+                  <button className="primary" onClick={() => setModal("po")}>
+                    <Plus /> New Purchase Order
+                  </button>
+                )}
+                {page === "Receive Goods" && (
+                  <button className="primary" onClick={() => setModal("grn")}>
+                    <PackagePlus /> Receive Goods
+                  </button>
+                )}
+              </div>
+              {error && <div className="error">{error}</div>}
+              {loading ? (
+                <div className="loading">
+                  <Loader2 /> Loading records…
+                </div>
+              ) : page === "Dashboard" ? (
+                <Dashboard data={data} go={setPage} />
+              ) : (
+                <Records
+                  page={page}
+                  rows={rows as RecordRow[]}
+                  approve={async (id) => {
+                    try {
+                      await call(`/purchase-orders/${id}/approve`);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                  edit={setEditing}
+                  remove={remove}
+                />
+              )}
+            </>
           )}
         </section>
       </main>
@@ -1279,172 +1283,271 @@ function PayrollPage({ token }: { token: string }) {
   }, [token]);
   return (
     <>
-        <div className="heading">
-          <div>
-            <span>HUMAN RESOURCES AND PAYROLL</span>
-            <h1>Payroll</h1>
-            <p>Employee salaries, earnings, deductions and net-pay history.</p>
-          </div>
+      <div className="heading">
+        <div>
+          <span>HUMAN RESOURCES AND PAYROLL</span>
+          <h1>Payroll</h1>
+          <p>Employee salaries, earnings, deductions and net-pay history.</p>
         </div>
-        {error && <div className="error">{error}</div>}
-        {!data ? (
-          <div className="loading">
-            <Loader2 /> Loading payroll…
+      </div>
+      {error && <div className="error">{error}</div>}
+      {!data ? (
+        <div className="loading">
+          <Loader2 /> Loading payroll…
+        </div>
+      ) : (
+        <>
+          <div className="kpis">
+            <article>
+              <span>Employees</span>
+              <b>{data.employees.length}</b>
+              <small>Employee master records</small>
+            </article>
+            <article>
+              <span>Payroll runs</span>
+              <b>{data.runs.length}</b>
+              <small>Processed pay periods</small>
+            </article>
+            <article>
+              <span>Latest gross payroll</span>
+              <b>{money(data.runs[0]?.gross_total || 0)}</b>
+              <small>Earnings before deductions</small>
+            </article>
+            <article>
+              <span>Latest net payroll</span>
+              <b>{money(data.runs[0]?.net_total || 0)}</b>
+              <small>Employee take-home total</small>
+            </article>
           </div>
-        ) : (
-          <>
-            <div className="kpis">
-              <article>
-                <span>Employees</span>
-                <b>{data.employees.length}</b>
-                <small>Employee master records</small>
-              </article>
-              <article>
-                <span>Payroll runs</span>
-                <b>{data.runs.length}</b>
-                <small>Processed pay periods</small>
-              </article>
-              <article>
-                <span>Latest gross payroll</span>
-                <b>{money(data.runs[0]?.gross_total || 0)}</b>
-                <small>Earnings before deductions</small>
-              </article>
-              <article>
-                <span>Latest net payroll</span>
-                <b>{money(data.runs[0]?.net_total || 0)}</b>
-                <small>Employee take-home total</small>
-              </article>
-            </div>
-            <div className="table-card">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Employee</th>
-                    <th>Department</th>
-                    <th>Designation</th>
-                    <th>Basic salary</th>
-                    <th>Status</th>
+          <div className="table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Department</th>
+                  <th>Designation</th>
+                  <th>Basic salary</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.employees.map((e: any) => (
+                  <tr key={e.id}>
+                    <td>
+                      <b>{e.employee_no}</b>
+                      <br />
+                      {e.name}
+                    </td>
+                    <td>{e.department}</td>
+                    <td>{e.designation}</td>
+                    <td>{money(e.basic_salary)}</td>
+                    <td>{status(e.status)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {data.employees.map((e: any) => (
-                    <tr key={e.id}>
-                      <td>
-                        <b>{e.employee_no}</b>
-                        <br />
-                        {e.name}
-                      </td>
-                      <td>{e.department}</td>
-                      <td>{e.designation}</td>
-                      <td>{money(e.basic_salary)}</td>
-                      <td>{status(e.status)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="table-card">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Payroll</th>
-                    <th>Period</th>
-                    <th>Gross</th>
-                    <th>Deductions</th>
-                    <th>Net pay</th>
-                    <th>Status</th>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Payroll</th>
+                  <th>Period</th>
+                  <th>Gross</th>
+                  <th>Deductions</th>
+                  <th>Net pay</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.runs.map((r: any) => (
+                  <tr key={r.id}>
+                    <td>
+                      <b>{r.number}</b>
+                    </td>
+                    <td>
+                      {r.period_start} to {r.period_end}
+                    </td>
+                    <td>{money(r.gross_total)}</td>
+                    <td>{money(r.deduction_total)}</td>
+                    <td>{money(r.net_total)}</td>
+                    <td>{status(r.status)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {data.runs.map((r: any) => (
-                    <tr key={r.id}>
-                      <td>
-                        <b>{r.number}</b>
-                      </td>
-                      <td>
-                        {r.period_start} to {r.period_end}
-                      </td>
-                      <td>{money(r.gross_total)}</td>
-                      <td>{money(r.deduction_total)}</td>
-                      <td>{money(r.net_total)}</td>
-                      <td>{status(r.status)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </>
   );
 }
 function ReportsPage({ token }: { token: string }) {
-  const now=new Date(), [from,setFrom]=useState(`${now.getFullYear()}-01-01`),[to,setTo]=useState(now.toISOString().slice(0,10));
-  const [data,setData]=useState<any>(null),[financial,setFinancial]=useState<any>(null),[error,setError]=useState("");
-  const load=useCallback(()=>{setError("");Promise.all([fetch(`${API}/reports/management`,{headers:{Authorization:`Bearer ${token}`}}),fetch(`${API}/reports/financial-statements?from=${from}&to=${to}`,{headers:{Authorization:`Bearer ${token}`}})]).then(async([a,b])=>{if(!a.ok||!b.ok)throw new Error();setData(await a.json());setFinancial(await b.json())}).catch(()=>setError("Unable to load financial reports."))},[token,from,to]);
-  useEffect(load,[load]);
-  const download=async()=>{const r=await fetch(`${API}/reports/financial-statements/excel?from=${from}&to=${to}`,{headers:{Authorization:`Bearer ${token}`}});if(!r.ok){setError("Excel export failed.");return}const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`AeroSoft360_Financial_Statements_${to}.xls`;a.click();URL.revokeObjectURL(url)};
+  const now = new Date(),
+    [from, setFrom] = useState(`${now.getFullYear()}-01-01`),
+    [to, setTo] = useState(now.toISOString().slice(0, 10));
+  const [data, setData] = useState<any>(null),
+    [financial, setFinancial] = useState<any>(null),
+    [error, setError] = useState(""),
+    [selected, setSelected] = useState("summary");
+  const load = useCallback(() => {
+    setError("");
+    Promise.all([
+      fetch(`${API}/reports/management`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      fetch(`${API}/reports/financial-statements?from=${from}&to=${to}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ])
+      .then(async ([a, b]) => {
+        if (!a.ok || !b.ok) throw new Error();
+        setData(await a.json());
+        setFinancial(await b.json());
+      })
+      .catch(() => setError("Unable to load financial reports."));
+  }, [token, from, to]);
+  useEffect(load, [load]);
+  const download = async (report = selected) => {
+    const r = await fetch(
+      `${API}/reports/financial-statements/excel?from=${from}&to=${to}&report=${report}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!r.ok) {
+      setError("Excel export failed.");
+      return;
+    }
+    const blob = await r.blob(),
+      url = URL.createObjectURL(blob),
+      a = document.createElement("a");
+    a.href = url;
+    a.download = `AeroSoft360_${report}_${to}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   return (
     <>
-        <div className="heading">
-          <div>
-            <span>FINANCE AND MANAGEMENT ACCOUNTING</span>
-            <h1>Financial Reports</h1>
-            <p>Profit and loss, balance sheet, cash flow, trial balance and management summaries.</p>
-          </div>
-          <button className="primary" onClick={download}><FileText/> Download Excel</button>
+      <div className="heading">
+        <div>
+          <span>FINANCE AND MANAGEMENT ACCOUNTING</span>
+          <h1>Financial Reports</h1>
+          <p>
+            Profit and loss, balance sheet, cash flow, trial balance and
+            management summaries.
+          </p>
         </div>
-        <div className="report-filters"><label>From<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>To<input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label><button onClick={load}>Apply period</button></div>
-        {error && <div className="error">{error}</div>}
-        {!data||!financial ? (
-          <div className="loading">
-            <Loader2 /> Loading reports…
+        <button className="primary" onClick={() => download()}>
+          <FileText /> Download this report
+        </button>
+      </div>
+      <div className="report-menu">
+        {[["summary","Report centre"],["profit_loss","Profit and Loss"],["balance_sheet","Balance Sheet"],["cash_flow","Cash Flow"],["trial_balance","Trial Balance"]].map(([key,label])=><button className={selected===key?'active':''} onClick={()=>setSelected(key)} key={key}><FileText/><span>{label}</span><small>Open report →</small></button>)}
+      </div>
+      <div className="report-filters">
+        <label>
+          From
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+        </label>
+        <label>
+          To
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
+        </label>
+        <button onClick={load}>Apply period</button>
+      </div>
+      {error && <div className="error">{error}</div>}
+      {!data || !financial ? (
+        <div className="loading">
+          <Loader2 /> Loading reports…
+        </div>
+      ) : (
+        <>
+          <div className="kpis">
+            <article>
+              <span>Revenue</span>
+              <b>{money(financial.profit_loss.revenue)}</b>
+              <small>Posted income</small>
+            </article>
+            <article>
+              <span>Net profit</span>
+              <b>{money(financial.profit_loss.net_profit)}</b>
+              <small>Revenue less expenses</small>
+            </article>
+            <article>
+              <span>Total assets</span>
+              <b>{money(financial.balance_sheet.assets_total)}</b>
+              <small>Balance sheet assets</small>
+            </article>
+            <article>
+              <span>Net cash change</span>
+              <b>{money(financial.cash_flow.net_change)}</b>
+              <small>Cash and bank accounts</small>
+            </article>
           </div>
-        ) : (
-          <>
-            <div className="kpis">
-              <article>
-                <span>Revenue</span><b>{money(financial.profit_loss.revenue)}</b><small>Posted income</small>
-              </article>
-              <article>
-                <span>Net profit</span><b>{money(financial.profit_loss.net_profit)}</b><small>Revenue less expenses</small>
-              </article>
-              <article>
-                <span>Total assets</span><b>{money(financial.balance_sheet.assets_total)}</b><small>Balance sheet assets</small>
-              </article>
-              <article>
-                <span>Net cash change</span><b>{money(financial.cash_flow.net_change)}</b><small>Cash and bank accounts</small>
-              </article>
-            </div>
-            <div className="statement-grid"><Statement title="Profit and Loss" rows={[['Revenue',financial.profit_loss.revenue],['Expenses',financial.profit_loss.expenses_total],['Net profit',financial.profit_loss.net_profit]]}/><Statement title="Balance Sheet" rows={[['Assets',financial.balance_sheet.assets_total],['Liabilities and equity',financial.balance_sheet.liabilities_equity_total],['Difference',financial.balance_sheet.difference]]}/><Statement title="Cash Flow" rows={[['Operating activities',financial.cash_flow.operating],['Investing activities',financial.cash_flow.investing],['Financing activities',financial.cash_flow.financing],['Net cash change',financial.cash_flow.net_change]]}/></div>
-            <div className="panels">
-              <section>
-                <div className="panel-head">
-                  <h2>Purchases by status</h2>
+          <FinancialReportView selected={selected} financial={financial}/>
+          <div className="panels">
+            <section>
+              <div className="panel-head">
+                <h2>Purchases by status</h2>
+              </div>
+              {data.purchase_by_status.map((x: any) => (
+                <div className="report-row" key={x.status}>
+                  <span>{x.status.replace("_", " ")}</span>
+                  <b>{x.records} records</b>
+                  <strong>{money(x.total)}</strong>
                 </div>
-                {data.purchase_by_status.map((x: any) => (
-                  <div className="report-row" key={x.status}>
-                    <span>{x.status.replace("_", " ")}</span>
-                    <b>{x.records} records</b>
-                    <strong>{money(x.total)}</strong>
-                  </div>
-                ))}
-              </section>
-              <section>
-                <div className="panel-head">
-                  <h2>Payroll by department</h2>
+              ))}
+            </section>
+            <section>
+              <div className="panel-head">
+                <h2>Payroll by department</h2>
+              </div>
+              {data.payroll_by_department.map((x: any) => (
+                <div className="report-row" key={x.department}>
+                  <span>{x.department}</span>
+                  <strong>{money(x.total)}</strong>
                 </div>
-                {data.payroll_by_department.map((x: any) => (
-                  <div className="report-row" key={x.department}>
-                    <span>{x.department}</span>
-                    <strong>{money(x.total)}</strong>
-                  </div>
-                ))}
-              </section>
-            </div>
-          </>
-        )}
+              ))}
+            </section>
+          </div>
+        </>
+      )}
     </>
   );
 }
-function Statement({title,rows}:{title:string;rows:[string,number][]}){return <section className="statement"><h2>{title}</h2>{rows.map(([label,value],i)=><div className={i===rows.length-1?'statement-total':''} key={label}><span>{label}</span><b>{money(value)}</b></div>)}</section>}
+function FinancialReportView({selected,financial}:{selected:string;financial:any}){
+ if(selected==='profit_loss')return <div className="statement-page"><Statement title="Profit and Loss" rows={[["Revenue",financial.profit_loss.revenue],["Expenses",financial.profit_loss.expenses_total],["Net profit",financial.profit_loss.net_profit]]}/></div>;
+ if(selected==='balance_sheet')return <div className="statement-page"><Statement title="Balance Sheet" rows={[["Assets",financial.balance_sheet.assets_total],["Liabilities and equity",financial.balance_sheet.liabilities_equity_total],["Difference",financial.balance_sheet.difference]]}/></div>;
+ if(selected==='cash_flow')return <div className="statement-page"><Statement title="Cash Flow" rows={[["Operating activities",financial.cash_flow.operating],["Investing activities",financial.cash_flow.investing],["Financing activities",financial.cash_flow.financing],["Net cash change",financial.cash_flow.net_change]]}/></div>;
+ if(selected==='trial_balance')return <div className="table-card"><table><thead><tr><th>Code</th><th>Account</th><th>Type</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>{financial.trial_balance.map((x:any)=><tr key={x.code}><td>{x.code}</td><td>{x.account}</td><td>{x.type}</td><td>{money(x.debit)}</td><td>{money(x.credit)}</td><td>{money(x.balance)}</td></tr>)}</tbody></table></div>;
+ return <div className="statement-grid"><Statement title="Profit and Loss" rows={[["Revenue",financial.profit_loss.revenue],["Expenses",financial.profit_loss.expenses_total],["Net profit",financial.profit_loss.net_profit]]}/><Statement title="Balance Sheet" rows={[["Assets",financial.balance_sheet.assets_total],["Liabilities and equity",financial.balance_sheet.liabilities_equity_total],["Difference",financial.balance_sheet.difference]]}/><Statement title="Cash Flow" rows={[["Operating activities",financial.cash_flow.operating],["Investing activities",financial.cash_flow.investing],["Financing activities",financial.cash_flow.financing],["Net cash change",financial.cash_flow.net_change]]}/></div>;
+}
+function Statement({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: [string, number][];
+}) {
+  return (
+    <section className="statement">
+      <h2>{title}</h2>
+      {rows.map(([label, value], i) => (
+        <div
+          className={i === rows.length - 1 ? "statement-total" : ""}
+          key={label}
+        >
+          <span>{label}</span>
+          <b>{money(value)}</b>
+        </div>
+      ))}
+    </section>
+  );
+}
