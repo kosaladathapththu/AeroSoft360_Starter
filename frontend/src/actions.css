@@ -365,13 +365,18 @@
   border: 1px solid #cbdde1;
   border-radius: 12px;
   background: #f4fafb;
+  overflow: hidden;
 }
+.po-modal { width: min(1180px, calc(100vw - 48px)); overflow-x: hidden; }
 .po-lines-head,
 .po-line {
   display: flex;
   align-items: end;
   gap: 12px;
 }
+.po-line label { min-width: 0; margin-top: 0; }
+.po-line select,
+.po-line input { min-width: 0; }
 .po-lines-head {
   align-items: center;
   justify-content: space-between;
@@ -432,6 +437,18 @@
 .dispatch-row:nth-child(odd) { background: #f3f9fa; }
 .dispatch-row small { display: block; color: #71808e; margin-top: 3px; }
 .dispatch-row input { width: 100%; padding: 9px; border: 1px solid #cbd8dd; border-radius: 7px; }
+@media (max-width: 1050px) {
+  .po-line { grid-template-columns: 1fr 1fr; }
+  .po-line-total { min-width: 0; }
+  .po-line .icon-action { justify-self: end; }
+}
+@media (max-width: 680px) {
+  .po-modal { width: 100%; padding: 22px 16px; }
+  .po-lines { padding: 12px; }
+  .po-lines-head { align-items: flex-start; }
+  .po-line { grid-template-columns: 1fr; }
+  .po-line .icon-action { justify-self: start; }
+}
 @media (max-width: 900px) {
   .statement-grid {
     grid-template-columns: 1fr;

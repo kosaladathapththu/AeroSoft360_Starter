@@ -1223,7 +1223,7 @@ function SalesCreateModal({
   return (
     <div className="backdrop" onMouseDown={close}>
       <form
-        className="modal"
+        className={`modal ${type === "po" ? "po-modal" : ""}`}
         onSubmit={submit}
         onMouseDown={(e) => e.stopPropagation()}
       >
