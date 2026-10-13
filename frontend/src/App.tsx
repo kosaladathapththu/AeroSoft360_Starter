@@ -490,6 +490,7 @@ function SalesPage({
     [error, setError] = useState(""),
     [modal, setModal] = useState(""),
     [editingArticle, setEditingArticle] = useState<any>(null),
+    [dispatchOrder, setDispatchOrder] = useState<any>(null),
     [viewing, setViewing] = useState<any>(null);
   const loadSales = useCallback(() => {
     setError("");
@@ -819,9 +820,15 @@ function SalesPage({
                             }
                           }}
                         >
-                          <Check /> Convert to invoice
+                          <Check /> Create sales order
                         </button>
                       )}
+                      {page === "Sales Orders" &&
+                        r.lines?.some((line: any) => Number(line.remaining_quantity) > 0) && (
+                          <button className="approve" onClick={() => setDispatchOrder(r)}>
+                            <FileText /> Dispatch &amp; invoice
+                          </button>
+                        )}
                       <button
                         className="icon-action view"
                         onClick={() => setViewing(r)}
@@ -872,6 +879,21 @@ function SalesPage({
               setError("");
               await post(path, body, method);
               setEditingArticle(null);
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        />
+      )}
+      {dispatchOrder && (
+        <DispatchInvoiceModal
+          order={dispatchOrder}
+          close={() => setDispatchOrder(null)}
+          save={async (body) => {
+            try {
+              setError("");
+              await post(`sales-orders/${dispatchOrder.id}/invoice`, body);
+              setDispatchOrder(null);
             } catch (e) {
               setError((e as Error).message);
             }
@@ -1044,6 +1066,49 @@ function salesCells(page: string, r: any) {
     </>
   );
 }
+function DispatchInvoiceModal({ order, close, save }: { order: any; close: () => void; save: (body: any) => Promise<void> }) {
+  const available = order.lines.filter((line: any) => Number(line.remaining_quantity) > 0);
+  const [quantities, setQuantities] = useState<Record<number, number>>(
+    Object.fromEntries(available.map((line: any) => [line.id, Number(line.remaining_quantity)])),
+  );
+  const [busy, setBusy] = useState(false);
+  const total = available.reduce(
+    (sum: number, line: any) => sum + Number(quantities[line.id] || 0) * Number(line.rate),
+    0,
+  );
+  return (
+    <div className="backdrop" onMouseDown={close}>
+      <form className="modal dispatch-modal" onMouseDown={(e) => e.stopPropagation()} onSubmit={async (e) => {
+        e.preventDefault(); setBusy(true);
+        const f = new FormData(e.currentTarget);
+        try { await save({ invoice_date: f.get("invoice_date"), lines: available.map((line: any) => ({ sales_order_size_line_id: line.id, quantity: Number(quantities[line.id] || 0) })) }); }
+        finally { setBusy(false); }
+      }}>
+        <button type="button" className="close" onClick={close}><X /></button>
+        <span>PARTIAL FULFILMENT</span>
+        <h2>Dispatch and create invoice</h2>
+        <p>{order.number} — {order.customer_name}. Enter only the quantity being sent now; the balance remains as backorder.</p>
+        <label>Invoice / dispatch date<input name="invoice_date" type="date" required /></label>
+        <div className="dispatch-lines">
+          <div className="dispatch-head"><b>Article / size</b><b>Ordered</b><b>Already invoiced</b><b>Remaining</b><b>Dispatch now</b><b>Amount</b></div>
+          {available.map((line: any) => (
+            <div className="dispatch-row" key={line.id}>
+              <span><b>{line.article_code}</b><small>{line.article_name} · Size {line.size_label}</small></span>
+              <span>{Number(line.quantity)}</span>
+              <span>{Number(line.invoiced_quantity)}</span>
+              <span>{Number(line.remaining_quantity)}</span>
+              <input type="number" min="0" max={Number(line.remaining_quantity)} step="1" value={quantities[line.id] || 0} onChange={(e) => setQuantities((all) => ({ ...all, [line.id]: Number(e.target.value) }))} />
+              <b>{money(Number(quantities[line.id] || 0) * Number(line.rate))}</b>
+            </div>
+          ))}
+        </div>
+        <div className="po-grand-total"><span>Invoice total for this dispatch</span><strong>{money(total)}</strong></div>
+        <div className="modal-actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy || total <= 0}><Check /> Create partial invoice</button></div>
+      </form>
+    </div>
+  );
+}
+
 function SalesCreateModal({
   type,
   data,
@@ -1075,6 +1140,20 @@ function SalesCreateModal({
   const [poLines, setPoLines] = useState<any[]>([
     { set_template_id: firstSetId, sets: 1 },
   ]);
+  const availableSets = (data.articles || []).flatMap((article: any) =>
+    article.sets
+      .filter((set: any) => set.status !== "inactive")
+      .map((set: any) => ({ ...set, article })),
+  );
+  const poLineTotal = (line: any) =>
+    Number(
+      availableSets.find((set: any) => Number(set.id) === Number(line.set_template_id))
+        ?.set_price || 0,
+    ) * Number(line.sets || 0);
+  const poGrandTotal = poLines.reduce(
+    (total: number, line: any) => total + poLineTotal(line),
+    0,
+  );
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setBusy(true);
@@ -1491,9 +1570,17 @@ function SalesCreateModal({
                   <label>Number of sets
                     <input type="number" step="1" min="1" value={line.sets} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, sets: Number(e.target.value) } : x))} required />
                   </label>
+                  <div className="po-line-total">
+                    <small>Line total</small>
+                    <b>{money(poLineTotal(line))}</b>
+                  </div>
                   <button type="button" className="icon-action delete" title="Remove article" disabled={poLines.length === 1} onClick={() => setPoLines((lines) => lines.filter((_, i) => i !== index))}><Trash2 /></button>
                 </div>
               ))}
+              <div className="po-grand-total">
+                <span>Customer PO total</span>
+                <strong>{money(poGrandTotal)}</strong>
+              </div>
             </div>
           </>
         ) : (

@@ -20,6 +20,7 @@ Route::prefix('v1')->group(function ():void {
   Route::put('/articles/{id}',[SalesController::class,'updateArticle'])->middleware('permission:accounting.manage');
   Route::post('/customer-pos',[SalesController::class,'storePo'])->middleware('permission:accounting.manage');
   Route::post('/customer-pos/{id}/convert',[SalesController::class,'convert'])->middleware('permission:accounting.manage');
+  Route::post('/sales-orders/{id}/invoice',[SalesController::class,'invoiceDispatch'])->middleware('permission:accounting.manage');
   Route::post('/customer-receipts',[SalesController::class,'receipt'])->middleware('permission:accounting.manage');
   Route::get('/sales/aging',[SalesController::class,'aging'])->middleware('permission:workspace.view');
   Route::post('/suppliers',[ProcurementController::class,'storeSupplier'])->middleware('permission:suppliers.manage');
