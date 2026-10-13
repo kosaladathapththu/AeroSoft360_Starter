@@ -2027,6 +2027,7 @@ function ReportsPage({ token }: { token: string }) {
     [to, setTo] = useState(now.toISOString().slice(0, 10));
   const [data, setData] = useState<any>(null),
     [financial, setFinancial] = useState<any>(null),
+    [aging, setAging] = useState<any>(null),
     [error, setError] = useState(""),
     [selected, setSelected] = useState("summary");
   const load = useCallback(() => {
@@ -2038,18 +2039,23 @@ function ReportsPage({ token }: { token: string }) {
       fetch(`${API}/reports/financial-statements?from=${from}&to=${to}`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
+      fetch(`${API}/reports/aging?as_of=${to}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
     ])
-      .then(async ([a, b]) => {
-        if (!a.ok || !b.ok) throw new Error();
+      .then(async ([a, b, c]) => {
+        if (!a.ok || !b.ok || !c.ok) throw new Error();
         setData(await a.json());
         setFinancial(await b.json());
+        setAging(await c.json());
       })
       .catch(() => setError("Unable to load financial reports."));
   }, [token, from, to]);
   useEffect(load, [load]);
   const download = async (report = selected) => {
+    const isAging = report === "aging";
     const r = await fetch(
-      `${API}/reports/financial-statements/excel?from=${from}&to=${to}&report=${report}`,
+      isAging ? `${API}/reports/aging/excel?as_of=${to}` : `${API}/reports/financial-statements/excel?from=${from}&to=${to}&report=${report}`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!r.ok) {
@@ -2060,7 +2066,7 @@ function ReportsPage({ token }: { token: string }) {
       url = URL.createObjectURL(blob),
       a = document.createElement("a");
     a.href = url;
-    a.download = `AeroSoft360_${report}_${to}.xls`;
+    a.download = isAging ? `Accounts_Payable_Aging_${to}.xls` : `AeroSoft360_${report}_${to}.xls`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -2086,6 +2092,7 @@ function ReportsPage({ token }: { token: string }) {
           ["balance_sheet", "Balance Sheet"],
           ["cash_flow", "Cash Flow"],
           ["trial_balance", "Trial Balance"],
+          ["aging", "Payables Aging"],
         ].map(([key, label]) => (
           <button
             className={selected === key ? "active" : ""}
@@ -2118,7 +2125,7 @@ function ReportsPage({ token }: { token: string }) {
         <button onClick={load}>Apply period</button>
       </div>
       {error && <div className="error">{error}</div>}
-      {!data || !financial ? (
+      {!data || !financial || !aging ? (
         <div className="loading">
           <Loader2 /> Loading reports…
         </div>
@@ -2146,7 +2153,7 @@ function ReportsPage({ token }: { token: string }) {
               <small>Cash and bank accounts</small>
             </article>
           </div>
-          <FinancialReportView selected={selected} financial={financial} />
+          {selected === "aging" ? <AgingReportView aging={aging} /> : <FinancialReportView selected={selected} financial={financial} />}
           <div className="panels">
             <section>
               <div className="panel-head">
@@ -2176,6 +2183,14 @@ function ReportsPage({ token }: { token: string }) {
       )}
     </>
   );
+}
+function AgingReportView({ aging }: { aging: any }) {
+  const totals = aging.totals;
+  return <div className="aging-report">
+    <div className="aging-summary"><article><span>Current</span><b>{money(totals.current)}</b></article><article><span>1–30 days</span><b>{money(totals.days_1_30)}</b></article><article><span>31–60 days</span><b>{money(totals.days_31_60)}</b></article><article><span>61–90 days</span><b>{money(totals.days_61_90)}</b></article><article><span>90+ days</span><b>{money(totals.days_90_plus)}</b></article><article className="aging-total"><span>Total outstanding</span><b>{money(totals.total)}</b></article></div>
+    <div className="table-card"><table><thead><tr><th>Supplier</th><th>Invoice</th><th>Invoice date</th><th>Due date</th><th>Days overdue</th><th>Aging bucket</th><th>Outstanding</th></tr></thead><tbody>{aging.rows.length === 0 ? <tr><td colSpan={7}>No outstanding supplier invoices as of {aging.as_of}.</td></tr> : aging.rows.map((row: any) => <tr key={row.id}><td><b>{row.supplier_code}</b><br />{row.supplier}</td><td>{row.invoice}</td><td>{row.invoice_date}</td><td>{row.due_date}</td><td>{row.days_overdue}</td><td>{status(row.bucket.replace("days_", ""))}</td><td><b>{money(row.outstanding)}</b></td></tr>)}</tbody></table></div>
+    <p className="report-note">Based on posted goods receipts and each supplier’s payment terms. Recorded supplier payments will require payment-allocation entries when that module is added.</p>
+  </div>;
 }
 function FinancialReportView({
   selected,
