@@ -437,6 +437,25 @@
 .dispatch-row:nth-child(odd) { background: #f3f9fa; }
 .dispatch-row small { display: block; color: #71808e; margin-top: 3px; }
 .dispatch-row input { width: 100%; padding: 9px; border: 1px solid #cbd8dd; border-radius: 7px; }
+.sales-table-card { overflow-x: auto; }
+.sales-table-card th,
+.sales-table-card td { vertical-align: middle; }
+.invoice-table-card table { min-width: 1240px; }
+.invoice-table-card th,
+.invoice-table-card td { padding-left: 13px; padding-right: 13px; }
+.invoice-table-card th:last-child,
+.invoice-table-card td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  min-width: 82px;
+  text-align: center;
+  box-shadow: -5px 0 10px rgba(16, 34, 48, .06);
+}
+.invoice-table-card th:last-child { background: #dcecef; z-index: 3; }
+.invoice-table-card tbody tr:nth-child(odd) td:last-child { background: #fff; }
+.invoice-table-card tbody tr:nth-child(even) td:last-child { background: #eef7f8; }
+.invoice-table-card .row-actions { justify-content: center; }
 @media (max-width: 1050px) {
   .po-line { grid-template-columns: 1fr 1fr; }
   .po-line-total { min-width: 0; }

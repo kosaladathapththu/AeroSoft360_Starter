@@ -789,7 +789,7 @@ function SalesPage({
         )}
       </div>
       {error && <div className="error">{error}</div>}
-      <div className="table-card">
+      <div className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""}`}>
         <table>
           <thead>
             <tr>
@@ -2024,7 +2024,7 @@ function RecordView({
               <div key={line.id}>
                 <span>
                   {line.article_name
-                    ? `${line.article_code} — ${line.article_name}${line.set_name ? ` — ${line.set_name}` : ""}`
+                    ? `${line.article_code} — ${line.article_name}${line.order_mode === "size" && line.size_label ? ` — Size ${line.size_label}` : line.set_name ? ` — ${line.set_name}` : ""}`
                     : line.material_name || line.account_name || line.name}
                 </span>
                 <b>
