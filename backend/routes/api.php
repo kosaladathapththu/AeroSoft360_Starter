@@ -23,6 +23,11 @@ Route::prefix('v1')->group(function ():void {
   Route::put('/journals/{journal}',[ProcurementController::class,'updateJournal'])->middleware('permission:accounting.manage');
   Route::delete('/journals/{journal}',[ProcurementController::class,'deleteJournal'])->middleware('permission:accounting.manage');
   Route::get('/payroll',[PayrollReportController::class,'payroll'])->middleware('permission:workspace.view');
+  Route::post('/employees',[PayrollReportController::class,'storeEmployee'])->middleware('permission:accounting.manage');
+  Route::put('/employees/{employee}',[PayrollReportController::class,'updateEmployee'])->middleware('permission:accounting.manage');
+  Route::delete('/employees/{employee}',[PayrollReportController::class,'deleteEmployee'])->middleware('permission:accounting.manage');
+  Route::put('/payroll-runs/{payrollRun}',[PayrollReportController::class,'updatePayrollRun'])->middleware('permission:accounting.manage');
+  Route::delete('/payroll-runs/{payrollRun}',[PayrollReportController::class,'deletePayrollRun'])->middleware('permission:accounting.manage');
   Route::get('/reports/management',[PayrollReportController::class,'reports'])->middleware('permission:workspace.view');
   Route::get('/reports/financial-statements',[PayrollReportController::class,'financialStatements'])->middleware('permission:workspace.view');
   Route::get('/reports/financial-statements/excel',[PayrollReportController::class,'exportFinancialStatements'])->middleware('permission:workspace.view');

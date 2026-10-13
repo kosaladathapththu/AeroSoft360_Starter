@@ -4,6 +4,7 @@ import {
   Check,
   ClipboardCheck,
   Factory,
+  Eye,
   FileText,
   LayoutDashboard,
   Loader2,
@@ -127,6 +128,7 @@ export default function App() {
     [error, setError] = useState(""),
     [modal, setModal] = useState(""),
     [editing, setEditing] = useState<RecordRow | null>(null),
+    [viewing, setViewing] = useState<RecordRow | null>(null),
     [menu, setMenu] = useState(false),
     [search, setSearch] = useState("");
   const token = () => localStorage.getItem("aerosoft_token");
@@ -393,6 +395,7 @@ export default function App() {
                     }
                   }}
                   edit={setEditing}
+                  view={setViewing}
                   remove={remove}
                 />
               )}
@@ -433,6 +436,7 @@ export default function App() {
           }}
         />
       )}
+      {viewing && <RecordView page={page} row={viewing as any} close={()=>setViewing(null)}/>} 
     </div>
   );
 }
