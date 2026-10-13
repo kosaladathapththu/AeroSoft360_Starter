@@ -1,0 +1,10 @@
+employee_no,date,status,overtime_hours
+EMP-001,2026-10-01,present,2
+EMP-001,2026-10-02,present,0
+EMP-001,2026-10-03,absent,0
+EMP-002,2026-10-01,present,1.5
+EMP-002,2026-10-02,paid_leave,0
+EMP-002,2026-10-03,half_day,0
+EMP-003,2026-10-01,present,0
+EMP-003,2026-10-02,no_pay,0
+EMP-003,2026-10-03,holiday,0

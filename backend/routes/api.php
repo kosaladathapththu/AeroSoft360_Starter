@@ -23,6 +23,8 @@ Route::prefix('v1')->group(function ():void {
   Route::put('/journals/{journal}',[ProcurementController::class,'updateJournal'])->middleware('permission:accounting.manage');
   Route::delete('/journals/{journal}',[ProcurementController::class,'deleteJournal'])->middleware('permission:accounting.manage');
   Route::get('/payroll',[PayrollReportController::class,'payroll'])->middleware('permission:workspace.view');
+  Route::post('/attendance/import',[PayrollReportController::class,'importAttendance'])->middleware('permission:accounting.manage');
+  Route::post('/payroll/calculate',[PayrollReportController::class,'calculatePayroll'])->middleware('permission:accounting.manage');
   Route::post('/employees',[PayrollReportController::class,'storeEmployee'])->middleware('permission:accounting.manage');
   Route::put('/employees/{employee}',[PayrollReportController::class,'updateEmployee'])->middleware('permission:accounting.manage');
   Route::delete('/employees/{employee}',[PayrollReportController::class,'deleteEmployee'])->middleware('permission:accounting.manage');

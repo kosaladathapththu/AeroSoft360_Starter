@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   Factory,
   Eye,
+  FileUp,
   FileText,
   LayoutDashboard,
   Loader2,
@@ -1361,7 +1362,9 @@ function PayrollPage({ token }: { token: string }) {
     [error, setError] = useState(""),
     [viewing, setViewing] = useState<any>(null),
     [editing, setEditing] = useState<any>(null),
-    [editType, setEditType] = useState("");
+    [editType, setEditType] = useState(""),
+    [attendanceOpen, setAttendanceOpen] = useState(false),
+    [calculating, setCalculating] = useState<number | null>(null);
   const loadPayroll = useCallback(() => {
     fetch(`${API}/payroll`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -1384,6 +1387,28 @@ function PayrollPage({ token }: { token: string }) {
     }
     loadPayroll();
   };
+  const calculatePayroll = async (attendanceImportId: number) => {
+    setCalculating(attendanceImportId);
+    setError("");
+    try {
+      const response = await fetch(`${API}/payroll/calculate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ attendance_import_id: attendanceImportId }),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.message || "Payroll calculation failed.");
+      loadPayroll();
+    } catch (exception) {
+      setError((exception as Error).message);
+    } finally {
+      setCalculating(null);
+    }
+  };
   return (
     <>
       <div className="heading">
@@ -1392,6 +1417,9 @@ function PayrollPage({ token }: { token: string }) {
           <h1>Payroll</h1>
           <p>Employee salaries, earnings, deductions and net-pay history.</p>
         </div>
+        <button className="primary" onClick={() => setAttendanceOpen(true)}>
+          <FileUp /> Upload attendance
+        </button>
       </div>
       {error && <div className="error">{error}</div>}
       {!data ? (
@@ -1421,6 +1449,47 @@ function PayrollPage({ token }: { token: string }) {
               <b>{money(data.runs[0]?.net_total || 0)}</b>
               <small>Employee take-home total</small>
             </article>
+          </div>
+          <div className="table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Attendance file</th>
+                  <th>Period</th>
+                  <th>Employees</th>
+                  <th>Paid days</th>
+                  <th>No-pay days</th>
+                  <th>OT hours</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.imports.length === 0 ? (
+                  <tr><td colSpan={8}>No attendance sheets uploaded yet.</td></tr>
+                ) : data.imports.map((item: any) => (
+                  <tr key={item.id}>
+                    <td><b>{item.file_name}</b><br /><small>{item.record_count} valid records</small></td>
+                    <td>{item.period_start} to {item.period_end}</td>
+                    <td>{item.employees}</td>
+                    <td>{item.paid_days}</td>
+                    <td>{item.no_pay_days}</td>
+                    <td>{item.overtime_hours}</td>
+                    <td>{status(item.status)}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="icon-action view" onClick={() => setViewing(item)} title="View validation summary"><Eye /></button>
+                        {item.status === "validated" && (
+                          <button className="approve" disabled={calculating === item.id} onClick={() => calculatePayroll(item.id)}>
+                            {calculating === item.id ? <Loader2 /> : <Check />} Calculate payroll
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
           <div className="table-card">
             <table>
@@ -1559,7 +1628,64 @@ function PayrollPage({ token }: { token: string }) {
           }}
         />
       )}
+      {attendanceOpen && (
+        <AttendanceUploadModal
+          token={token}
+          close={() => setAttendanceOpen(false)}
+          saved={() => {
+            setAttendanceOpen(false);
+            loadPayroll();
+          }}
+        />
+      )}
     </>
+  );
+}
+function AttendanceUploadModal({ token, close, saved }: { token: string; close: () => void; saved: () => void }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const body = new FormData(event.currentTarget);
+      const response = await fetch(`${API}/attendance/import`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        body,
+      });
+      const json = await response.json();
+      if (!response.ok) {
+        const firstValidationError = json.errors ? Object.values(json.errors).flat()[0] : null;
+        throw new Error(String(firstValidationError || json.message || "Attendance upload failed."));
+      }
+      saved();
+    } catch (exception) {
+      setError((exception as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="backdrop" onMouseDown={close}>
+      <form className="modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+        <button type="button" className="close" onClick={close}><X /></button>
+        <span>ATTENDANCE IMPORT</span>
+        <h2>Upload attendance sheet</h2>
+        <p>Upload CSV, XLS or XLSX from the attendance system. Required columns: <b>employee_no</b>, <b>date</b>, <b>status</b>. Optional: <b>overtime_hours</b>.</p>
+        {error && <div className="error">{error}</div>}
+        <div className="form-row">
+          <label>Period start<input type="date" name="period_start" required /></label>
+          <label>Period end<input type="date" name="period_end" required /></label>
+        </div>
+        <label>Attendance sheet<input type="file" name="file" accept=".csv,.xls,.xlsx" required /></label>
+        <p>Accepted statuses: present, absent, paid_leave, holiday, off, half_day and no_pay.</p>
+        <div className="actions">
+          <button type="button" onClick={close}>Cancel</button>
+          <button className="primary" disabled={busy}>{busy ? <Loader2 /> : <FileUp />} {busy ? "Validating..." : "Upload and validate"}</button>
+        </div>
+      </form>
+    </div>
   );
 }
 function PayrollEditModal({
