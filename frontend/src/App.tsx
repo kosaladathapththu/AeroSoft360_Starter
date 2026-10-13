@@ -1563,15 +1563,29 @@ function SalesCreateModal({
               </div>
               {poLines.map((line, index) => (
                 <div className="po-line" key={index}>
-                  <label>Article and set type
-                    <select value={line.set_template_id} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, set_template_id: Number(e.target.value) } : x))} required>
-                      {data.articles.flatMap((article: any) => article.sets.filter((set: any) => set.status !== "inactive").map((set: any) => (
-                        <option value={set.id} key={set.id}>{article.code} — {article.name} — {set.name} ({set.pieces} pcs, {money(set.set_price)})</option>
-                      )))}
+                  <label>Article
+                    <select value={line.article_id} onChange={(e) => { const article=data.articles.find((a:any)=>Number(a.id)===Number(e.target.value)); const set=article?.sets?.find((s:any)=>s.status!=="inactive"); setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, article_id: Number(e.target.value), set_template_id: Number(set?.id||0), set_item_id: Number(set?.items?.[0]?.id||0) } : x)); }} required>
+                      {data.articles.map((article: any) => <option value={article.id} key={article.id}>{article.code} — {article.name}</option>)}
                     </select>
                   </label>
-                  <label>Number of sets
-                    <input type="number" step="1" min="1" value={line.sets} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, sets: Number(e.target.value) } : x))} required />
+                  <label>Order as
+                    <select value={line.order_mode} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, order_mode: e.target.value } : x))}>
+                      <option value="badge">Complete badge</option><option value="size">Individual size</option>
+                    </select>
+                  </label>
+                  <label>{line.order_mode === "badge" ? "Badge" : "Size"}
+                    {line.order_mode === "badge" ? (
+                      <select value={line.set_template_id} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, set_template_id: Number(e.target.value) } : x))} required>
+                        {data.articles.find((a:any)=>Number(a.id)===Number(line.article_id))?.sets.filter((s:any)=>s.status!=="inactive").map((set:any)=><option value={set.id} key={set.id}>{set.name} ({set.pieces} pcs · {money(set.set_price)})</option>)}
+                      </select>
+                    ) : (
+                      <select value={line.set_item_id} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, set_item_id: Number(e.target.value) } : x))} required>
+                        {data.articles.find((a:any)=>Number(a.id)===Number(line.article_id))?.sets.flatMap((set:any)=>set.items.map((item:any)=><option value={item.id} key={item.id}>Size {item.size_label} · {money(item.unit_price)}</option>))}
+                      </select>
+                    )}
+                  </label>
+                  <label>{line.order_mode === "badge" ? "No. of badges" : "Pieces"}
+                    <input type="number" step="1" min="1" value={line.quantity} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, quantity: Number(e.target.value) } : x))} required />
                   </label>
                   <div className="po-line-total">
                     <small>Line total</small>
