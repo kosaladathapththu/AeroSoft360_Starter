@@ -43,6 +43,27 @@ final class ProcurementController extends Controller
         return response()->json(DB::table('suppliers')->find($id), 201);
     }
 
+    public function updateSupplier(Request $request, int $supplier): JsonResponse
+    {
+        abort_unless(DB::table('suppliers')->where('id', $supplier)->exists(), 404, 'Supplier not found.');
+        $data = $request->validate([
+            'code' => ['required','string','max:30',Rule::unique('suppliers', 'code')->ignore($supplier)],
+            'name' => ['required','string','max:160'], 'phone' => ['nullable','string','max:30'],
+            'payment_days' => ['required','integer','min:0','max:365'], 'status' => ['required',Rule::in(['active','inactive'])],
+        ]);
+        DB::table('suppliers')->where('id', $supplier)->update($data + ['updated_at' => now()]);
+        $this->audit('supplier.updated', 'supplier', $supplier, $data);
+        return response()->json(DB::table('suppliers')->find($supplier));
+    }
+
+    public function deleteSupplier(int $supplier): JsonResponse
+    {
+        abort_if(DB::table('purchase_orders')->where('supplier_id', $supplier)->exists(), 422, 'This supplier has purchase orders and cannot be deleted.');
+        abort_unless(DB::table('suppliers')->where('id', $supplier)->delete() === 1, 404, 'Supplier not found.');
+        $this->audit('supplier.deleted', 'supplier', $supplier, []);
+        return response()->json(['message' => 'Supplier deleted.']);
+    }
+
     public function storePurchaseOrder(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -61,6 +82,76 @@ final class ProcurementController extends Controller
         return response()->json($order, 201);
     }
 
+    public function updatePurchaseOrder(Request $request, int $purchaseOrder): JsonResponse
+    {
+        $order = DB::table('purchase_orders')->find($purchaseOrder);
+        abort_unless($order, 404, 'Purchase order not found.');
+        $data = $request->validate([
+            'supplier_id' => ['required','integer','exists:suppliers,id'], 'order_date' => ['required','date'],
+            'expected_date' => ['nullable','date','after_or_equal:order_date'],
+            'status' => ['required',Rule::in(['draft','approved','part_received','received','cancelled'])],
+        ]);
+        $data['approved_at'] = $data['status'] === 'draft' ? null : ($order->approved_at ?: now());
+        DB::table('purchase_orders')->where('id', $purchaseOrder)->update($data + ['updated_at' => now()]);
+        $this->audit('purchase_order.updated', 'purchase_order', $purchaseOrder, $data);
+        return response()->json(DB::table('purchase_orders')->find($purchaseOrder));
+    }
+
+    public function deletePurchaseOrder(int $purchaseOrder): JsonResponse
+    {
+        abort_if(DB::table('goods_receipts')->where('purchase_order_id', $purchaseOrder)->exists(), 422, 'This purchase order has received goods. Delete is blocked to protect stock and accounting history.');
+        DB::transaction(function () use ($purchaseOrder): void {
+            DB::table('purchase_order_lines')->where('purchase_order_id', $purchaseOrder)->delete();
+            abort_unless(DB::table('purchase_orders')->where('id', $purchaseOrder)->delete() === 1, 404, 'Purchase order not found.');
+            $this->audit('purchase_order.deleted', 'purchase_order', $purchaseOrder, []);
+        });
+        return response()->json(['message' => 'Purchase order deleted.']);
+    }
+
+    public function updateStock(Request $request, int $stock): JsonResponse
+    {
+        abort_unless(DB::table('stock_balances')->where('id', $stock)->exists(), 404, 'Stock batch not found.');
+        $data = $request->validate([
+            'batch_number' => ['required','string','max:80'], 'quantity' => ['required','numeric','gte:0'],
+            'unit_cost' => ['required','numeric','gte:0'],
+        ]);
+        $duplicate = DB::table('stock_balances')->where('batch_number', $data['batch_number'])->where('id', '<>', $stock)
+            ->where('material_id', DB::table('stock_balances')->where('id', $stock)->value('material_id'))->exists();
+        abort_if($duplicate, 422, 'That batch number already exists for this material.');
+        DB::table('stock_balances')->where('id', $stock)->update($data + ['updated_at' => now()]);
+        $this->audit('stock_balance.updated', 'stock_balance', $stock, $data);
+        return response()->json(DB::table('stock_balances')->find($stock));
+    }
+
+    public function deleteStock(int $stock): JsonResponse
+    {
+        abort_unless(DB::table('stock_balances')->where('id', $stock)->delete() === 1, 404, 'Stock batch not found.');
+        $this->audit('stock_balance.deleted', 'stock_balance', $stock, []);
+        return response()->json(['message' => 'Stock batch deleted.']);
+    }
+
+    public function updateJournal(Request $request, int $journal): JsonResponse
+    {
+        abort_unless(DB::table('journal_entries')->where('id', $journal)->exists(), 404, 'Journal not found.');
+        $data = $request->validate([
+            'posting_date' => ['required','date'], 'description' => ['required','string','max:255'],
+            'status' => ['required',Rule::in(['draft','posted','void'])],
+        ]);
+        DB::table('journal_entries')->where('id', $journal)->update($data + ['posted_at' => $data['status'] === 'posted' ? now() : null, 'updated_at' => now()]);
+        $this->audit('journal.updated', 'journal', $journal, $data);
+        return response()->json(DB::table('journal_entries')->find($journal));
+    }
+
+    public function deleteJournal(int $journal): JsonResponse
+    {
+        DB::transaction(function () use ($journal): void {
+            DB::table('journal_lines')->where('journal_entry_id', $journal)->delete();
+            abort_unless(DB::table('journal_entries')->where('id', $journal)->delete() === 1, 404, 'Journal not found.');
+            $this->audit('journal.deleted', 'journal', $journal, []);
+        });
+        return response()->json(['message' => 'Journal deleted.']);
+    }
+
     public function approvePurchaseOrder(int $purchaseOrder): JsonResponse
     {
         $updated = DB::table('purchase_orders')->where('id', $purchaseOrder)->where('status', 'draft')->update(['status'=>'approved','approved_at'=>now(),'updated_at'=>now()]);
@@ -73,5 +164,10 @@ final class ProcurementController extends Controller
     {
         $data = $request->validate(['received_on'=>['required','date'], 'supplier_invoice'=>['nullable','string','max:80'], 'lines'=>['required','array','min:1'], 'lines.*.purchase_order_line_id'=>['required','integer','distinct'], 'lines.*.quantity'=>['required','numeric','gt:0'], 'lines.*.batch_number'=>['required','string','max:80']]);
         return response()->json($service->receive($purchaseOrder, $data), 201);
+    }
+
+    private function audit(string $event, string $type, int $id, array $payload): void
+    {
+        DB::table('audit_logs')->insert(['event' => $event, 'entity_type' => $type, 'entity_id' => $id, 'payload' => json_encode($payload), 'created_at' => now()]);
     }
 }
