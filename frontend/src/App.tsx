@@ -490,6 +490,7 @@ function SalesPage({
     [error, setError] = useState(""),
     [modal, setModal] = useState(""),
     [editingArticle, setEditingArticle] = useState<any>(null),
+    [editingPo, setEditingPo] = useState<any>(null),
     [dispatchOrder, setDispatchOrder] = useState<any>(null),
     [viewing, setViewing] = useState<any>(null);
   const loadSales = useCallback(() => {
@@ -835,6 +836,12 @@ function SalesPage({
                       >
                         <Eye />
                       </button>
+                      {page === "Customer POs" && r.status === "draft" && (
+                        <>
+                          <button className="icon-action edit" title="Edit and update PO" onClick={() => setEditingPo(r)}><Pencil /></button>
+                          <button className="icon-action delete" title="Delete draft PO" onClick={async () => { if (!confirm(`Delete ${r.number}?`)) return; try { await post(`customer-pos/${r.id}`, undefined, "DELETE"); } catch (e) { setError((e as Error).message); } }}><Trash2 /></button>
+                        </>
+                      )}
                       {page === "Articles & Sets" && (
                         <button
                           className="icon-action edit"
@@ -882,6 +889,18 @@ function SalesPage({
             } catch (e) {
               setError((e as Error).message);
             }
+          }}
+        />
+      )}
+      {editingPo && (
+        <SalesCreateModal
+          type="po"
+          data={data}
+          initial={editingPo}
+          close={() => setEditingPo(null)}
+          save={async (path, body, method) => {
+            try { setError(""); await post(path, body, method); setEditingPo(null); }
+            catch (e) { setError((e as Error).message); }
           }}
         />
       )}
