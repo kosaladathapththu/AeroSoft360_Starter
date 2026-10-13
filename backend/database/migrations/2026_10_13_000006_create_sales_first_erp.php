@@ -1,0 +1,3 @@
+<?php
+use Illuminate\Database\Migrations\Migration;use Illuminate\Support\Facades\DB;
+return new class extends Migration {public function up():void {$sql=file_get_contents(base_path('../database/mysql/006_sales_first_erp.sql'));foreach(array_filter(array_map('trim',explode(';',$sql))) as $statement){if(strtoupper($statement)!=='USE AEROSOFT360_REBUILD')DB::statement($statement);}}public function down():void {foreach(['receipt_allocations','customer_receipts','sales_invoices','sales_order_size_lines','sales_orders','customer_po_lines','customer_pos','article_sizes','articles','sales_representatives','customers'] as $table)DB::statement("DROP TABLE IF EXISTS `$table`");}};
