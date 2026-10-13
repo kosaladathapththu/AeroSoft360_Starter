@@ -1137,19 +1137,22 @@ function SalesCreateModal({
         ]),
   ]);
   const firstSetId = Number(data.articles?.[0]?.sets?.[0]?.id || 0);
+  const firstArticleId = Number(data.articles?.[0]?.id || 0);
+  const firstItemId = Number(data.articles?.[0]?.sets?.[0]?.items?.[0]?.id || 0);
   const [poLines, setPoLines] = useState<any[]>([
-    { set_template_id: firstSetId, sets: 1 },
+    { article_id: firstArticleId, order_mode: "badge", set_template_id: firstSetId, set_item_id: firstItemId, quantity: 1 },
   ]);
   const availableSets = (data.articles || []).flatMap((article: any) =>
     article.sets
       .filter((set: any) => set.status !== "inactive")
       .map((set: any) => ({ ...set, article })),
   );
-  const poLineTotal = (line: any) =>
-    Number(
-      availableSets.find((set: any) => Number(set.id) === Number(line.set_template_id))
-        ?.set_price || 0,
-    ) * Number(line.sets || 0);
+  const poLineTotal = (line: any) => {
+    const unitPrice = line.order_mode === "badge"
+      ? Number(availableSets.find((set: any) => Number(set.id) === Number(line.set_template_id))?.set_price || 0)
+      : Number(data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items)).find((item: any) => Number(item.id) === Number(line.set_item_id))?.unit_price || 0);
+    return unitPrice * Number(line.quantity || 0);
+  };
   const poGrandTotal = poLines.reduce(
     (total: number, line: any) => total + poLineTotal(line),
     0,
@@ -1555,8 +1558,8 @@ function SalesCreateModal({
             </div>
             <div className="po-lines">
               <div className="po-lines-head">
-                <div><b>PO articles</b><small>Select every article/set requested by the customer.</small></div>
-                <button type="button" className="secondary-action" onClick={() => setPoLines((lines) => [...lines, { set_template_id: firstSetId, sets: 1 }])}><Plus /> Add article</button>
+                <div><b>PO articles</b><small>Order complete badges and individual article sizes together.</small></div>
+                <button type="button" className="secondary-action" onClick={() => setPoLines((lines) => [...lines, { article_id: firstArticleId, order_mode: "badge", set_template_id: firstSetId, set_item_id: firstItemId, quantity: 1 }])}><Plus /> Add article</button>
               </div>
               {poLines.map((line, index) => (
                 <div className="po-line" key={index}>

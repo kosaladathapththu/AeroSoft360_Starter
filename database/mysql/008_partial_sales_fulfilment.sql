@@ -21,3 +21,8 @@ CREATE TABLE IF NOT EXISTS sales_invoice_lines (
   FOREIGN KEY (sales_order_size_line_id) REFERENCES sales_order_size_lines(id),
   FOREIGN KEY (article_id) REFERENCES articles(id)
 ) ENGINE=InnoDB;
+
+UPDATE sales_order_size_lines l
+JOIN sales_invoices i ON i.sales_order_id = l.sales_order_id
+SET l.invoiced_quantity = l.quantity
+WHERE l.invoiced_quantity = 0;
