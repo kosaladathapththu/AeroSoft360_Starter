@@ -24,5 +24,7 @@ Route::prefix('v1')->group(function ():void {
   Route::delete('/journals/{journal}',[ProcurementController::class,'deleteJournal'])->middleware('permission:accounting.manage');
   Route::get('/payroll',[PayrollReportController::class,'payroll'])->middleware('permission:workspace.view');
   Route::get('/reports/management',[PayrollReportController::class,'reports'])->middleware('permission:workspace.view');
+  Route::get('/reports/financial-statements',[PayrollReportController::class,'financialStatements'])->middleware('permission:workspace.view');
+  Route::get('/reports/financial-statements/excel',[PayrollReportController::class,'exportFinancialStatements'])->middleware('permission:workspace.view');
  });
 });

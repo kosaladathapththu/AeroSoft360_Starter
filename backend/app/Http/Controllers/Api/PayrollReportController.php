@@ -3,6 +3,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
+use App\Services\Reporting\FinancialReportService;
+use App\Services\Reporting\ExcelStatementExporter;
 class PayrollReportController extends Controller {
  public function payroll():JsonResponse {return response()->json(['employees'=>DB::table('employees')->orderBy('employee_no')->get(),'runs'=>DB::table('payroll_runs')->latest('period_end')->get()->map(function($run){$run->items=DB::table('payroll_items as i')->join('employees as e','e.id','=','i.employee_id')->where('i.payroll_run_id',$run->id)->select('i.*','e.employee_no','e.name','e.department')->get();return $run;})]);}
  public function reports():JsonResponse {
@@ -13,4 +16,6 @@ class PayrollReportController extends Controller {
    'purchase_by_status'=>DB::table('purchase_orders')->select('status',DB::raw('COUNT(*) records'),DB::raw('SUM(total) total'))->groupBy('status')->get(),
   ]);
  }
+ public function financialStatements(Request $request,FinancialReportService $service):JsonResponse {$data=$request->validate(['from'=>['nullable','date'],'to'=>['nullable','date']]);$from=$data['from']??now()->startOfYear()->toDateString();$to=$data['to']??now()->toDateString();return response()->json($service->statements($from,$to));}
+ public function exportFinancialStatements(Request $request,FinancialReportService $service,ExcelStatementExporter $exporter) {$data=$request->validate(['from'=>['nullable','date'],'to'=>['nullable','date']]);$from=$data['from']??now()->startOfYear()->toDateString();$to=$data['to']??now()->toDateString();$xml=$exporter->make($service->statements($from,$to));return response($xml,200,['Content-Type'=>'application/vnd.ms-excel; charset=UTF-8','Content-Disposition'=>'attachment; filename="AeroSoft360_Financial_Statements_'.$to.'.xls"','Cache-Control'=>'no-store']);}
 }
