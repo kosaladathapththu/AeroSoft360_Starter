@@ -355,7 +355,18 @@ export default function App() {
           </button>
         </header>
         <section className="content">
-          {["Dashboard", "Customers", "Salespersons", "Articles & Sets", "Customer POs", "Sales Orders", "Invoices", "Collections", "Receivables Aging", "Commissions"].includes(page) ? (
+          {[
+            "Dashboard",
+            "Customers",
+            "Salespersons",
+            "Articles & Sets",
+            "Customer POs",
+            "Sales Orders",
+            "Invoices",
+            "Collections",
+            "Receivables Aging",
+            "Commissions",
+          ].includes(page) ? (
             <SalesPage token={token() || ""} page={page} go={setPage} />
           ) : page === "Employees" ? (
             <EmployeesPage token={token() || ""} />
@@ -465,20 +476,878 @@ export default function App() {
   );
 }
 
-function SalesPage({ token, page, go }: { token: string; page: string; go: (page: string) => void }) {
-  const [data, setData] = useState<any>(null), [aging, setAging] = useState<any>(null), [error, setError] = useState(""), [modal, setModal] = useState(""), [viewing, setViewing] = useState<any>(null);
-  const loadSales = useCallback(() => { Promise.all([fetch(`${API}/sales/workspace`, { headers: { Authorization: `Bearer ${token}` } }), fetch(`${API}/sales/aging`, { headers: { Authorization: `Bearer ${token}` } })]).then(async ([a,b]) => { if(!a.ok||!b.ok) throw new Error(); setData(await a.json()); setAging(await b.json()); }).catch(() => setError("Unable to load sales workspace.")); }, [token]);
+function SalesPage({
+  token,
+  page,
+  go,
+}: {
+  token: string;
+  page: string;
+  go: (page: string) => void;
+}) {
+  const [data, setData] = useState<any>(null),
+    [aging, setAging] = useState<any>(null),
+    [error, setError] = useState(""),
+    [modal, setModal] = useState(""),
+    [viewing, setViewing] = useState<any>(null);
+  const loadSales = useCallback(() => {
+    Promise.all([
+      fetch(`${API}/sales/workspace`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      fetch(`${API}/sales/aging`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ])
+      .then(async ([a, b]) => {
+        if (!a.ok || !b.ok) throw new Error();
+        setData(await a.json());
+        setAging(await b.json());
+      })
+      .catch(() => setError("Unable to load sales workspace."));
+  }, [token]);
   useEffect(loadSales, [loadSales]);
-  const post = async (path: string, body?: any) => { const response=await fetch(`${API}/${path}`,{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json",Accept:"application/json"},body:body?JSON.stringify(body):undefined});const json=await response.json();if(!response.ok)throw new Error(json.message||Object.values(json.errors||{}).flat().join(" ")||"Request failed.");await loadSales();return json; };
-  if(!data||!aging)return <div className="loading"><Loader2 /> Loading sales workspace...</div>;
-  if(page==="Dashboard")return <><div className="heading"><div><span>SALES AND RECEIVABLES ERP</span><h1>Sales Dashboard</h1><p>Customer orders, invoicing, collections, aging and commission in one controlled flow.</p></div><button className="primary" onClick={()=>setModal("po")}><Plus /> New customer PO</button></div>{error&&<div className="error">{error}</div>}<div className="kpis"><article><span>Customers</span><b>{data.customers.length}</b><small>Active customer accounts</small></article><article><span>Open credit invoices</span><b>{data.invoices.filter((x:any)=>Number(x.outstanding)>0).length}</b><small>{money(aging.total)} outstanding</small></article><article><span>Collections received</span><b>{money(data.receipts.reduce((s:number,x:any)=>s+Number(x.amount),0))}</b><small>Allocated customer receipts</small></article><article><span>Commission earned</span><b>{money(data.commissions.reduce((s:number,x:any)=>s+Number(x.commission_amount),0))}</b><small>Collection-based eligible commission</small></article></div><div className="flow-card"><h2>Customer order to commission</h2><p>The customer and article data continues through every step without re-entry.</p><div className="flow">{[["1","Customer PO","Customer POs"],["2","Sales Order","Sales Orders"],["3","Size Expansion","Articles & Sets"],["4","Invoice","Invoices"],["5","Collection","Collections"],["6","Commission","Commissions"]].map(x=><button key={x[0]} onClick={()=>go(x[2])}><i>{x[0]}</i><b>{x[1]}</b></button>)}</div></div><div className="panels"><section><div className="panel-head"><h2>Recent invoices</h2><button onClick={()=>go("Invoices")}>View all</button></div>{data.invoices.slice(0,5).map((x:any)=><div className="list-row" key={x.id}><FileText/><span><b>{x.number}</b><small>{x.customer_name} · {x.rep_name}</small></span><strong>{money(x.outstanding)}</strong>{status(x.status)}</div>)}</section><section><div className="panel-head"><h2>Recent collections</h2><button onClick={()=>go("Collections")}>View all</button></div>{data.receipts.slice(0,5).map((x:any)=><div className="list-row" key={x.id}><Check/><span><b>{x.number}</b><small>{x.customer_name} · {x.receipt_date}</small></span><strong>{money(x.amount)}</strong></div>)}</section></div>{modal&&<SalesCreateModal type={modal} data={data} close={()=>setModal("")} save={async(path,body)=>{try{setError("");await post(path,body);setModal("");}catch(e){setError((e as Error).message);}}}/>}</>;
-  const map:any={"Customers":data.customers,"Salespersons":data.reps,"Articles & Sets":data.articles,"Customer POs":data.pos,"Sales Orders":data.orders,"Invoices":data.invoices,"Collections":data.receipts,"Receivables Aging":aging.rows,"Commissions":data.commissions};const rows=map[page]||[];
-  const addType:any={"Customers":"customer","Salespersons":"rep","Articles & Sets":"article","Customer POs":"po","Collections":"receipt"};
-  const heads:any={"Customers":["Customer","Phone","Credit terms","Credit limit","Status"],"Salespersons":["Representative","Manager","Channel","Default rate","Status"],"Articles & Sets":["Article","Category","Set template","Sizes","Selling price","Commission rate"],"Customer POs":["PO","Customer","Salesperson","Date","Sale type","Total","Status"],"Sales Orders":["Sales order","Customer","Salesperson","Date","Total","Status"],"Invoices":["Invoice","Customer","Salesperson","Invoice/Due","Type","Total","Received","Outstanding","Status"],"Collections":["Receipt","Customer","Salesperson","Date","Method","Amount"],"Receivables Aging":["Invoice","Customer","Salesperson","Due date","Days overdue","Bucket","Outstanding"],"Commissions":["Representative","Customer","Invoice","Receipt","Collected","Days","Eligibility","Commission"]};
-  return <><div className="heading"><div><span>SALES OPERATIONS</span><h1>{page}</h1><p>Sales-first transaction records linked from customer order through collection.</p></div>{addType[page]&&<button className="primary" onClick={()=>setModal(addType[page])}><Plus /> {page==="Collections"?"Record collection":`Add ${page.replace(/s$/,"")}`}</button>}</div>{error&&<div className="error">{error}</div>}<div className="table-card"><table><thead><tr>{heads[page].map((h:string)=><th key={h}>{h}</th>)}<th>Actions</th></tr></thead><tbody>{rows.length===0?<tr><td colSpan={heads[page].length+1}>No records yet.</td></tr>:rows.map((r:any)=><tr key={r.id}>{salesCells(page,r)}<td><div className="row-actions">{page==="Customer POs"&&r.status==="draft"&&<button className="approve" onClick={async()=>{try{await post(`customer-pos/${r.id}/convert`);}catch(e){setError((e as Error).message);}}}><Check/> Convert to invoice</button>}<button className="icon-action view" onClick={()=>setViewing(r)}><Eye/></button></div></td></tr>)}</tbody></table></div>{modal&&<SalesCreateModal type={modal} data={data} close={()=>setModal("")} save={async(path,body)=>{try{setError("");await post(path,body);setModal("");}catch(e){setError((e as Error).message);}}}/>} {viewing&&<RecordView page={page} row={viewing} close={()=>setViewing(null)}/>}</>;
+  const post = async (path: string, body?: any) => {
+    const response = await fetch(`${API}/${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const json = await response.json();
+    if (!response.ok)
+      throw new Error(
+        json.message ||
+          Object.values(json.errors || {})
+            .flat()
+            .join(" ") ||
+          "Request failed.",
+      );
+    await loadSales();
+    return json;
+  };
+  if (!data || !aging)
+    return (
+      <div className="loading">
+        <Loader2 /> Loading sales workspace...
+      </div>
+    );
+  if (page === "Dashboard")
+    return (
+      <>
+        <div className="heading">
+          <div>
+            <span>SALES AND RECEIVABLES ERP</span>
+            <h1>Sales Dashboard</h1>
+            <p>
+              Customer orders, invoicing, collections, aging and commission in
+              one controlled flow.
+            </p>
+          </div>
+          <button className="primary" onClick={() => setModal("po")}>
+            <Plus /> New customer PO
+          </button>
+        </div>
+        {error && <div className="error">{error}</div>}
+        <div className="kpis">
+          <article>
+            <span>Customers</span>
+            <b>{data.customers.length}</b>
+            <small>Active customer accounts</small>
+          </article>
+          <article>
+            <span>Open credit invoices</span>
+            <b>
+              {
+                data.invoices.filter((x: any) => Number(x.outstanding) > 0)
+                  .length
+              }
+            </b>
+            <small>{money(aging.total)} outstanding</small>
+          </article>
+          <article>
+            <span>Collections received</span>
+            <b>
+              {money(
+                data.receipts.reduce(
+                  (s: number, x: any) => s + Number(x.amount),
+                  0,
+                ),
+              )}
+            </b>
+            <small>Allocated customer receipts</small>
+          </article>
+          <article>
+            <span>Commission earned</span>
+            <b>
+              {money(
+                data.commissions.reduce(
+                  (s: number, x: any) => s + Number(x.commission_amount),
+                  0,
+                ),
+              )}
+            </b>
+            <small>Collection-based eligible commission</small>
+          </article>
+        </div>
+        <div className="flow-card">
+          <h2>Customer order to commission</h2>
+          <p>
+            The customer and article data continues through every step without
+            re-entry.
+          </p>
+          <div className="flow">
+            {[
+              ["1", "Customer PO", "Customer POs"],
+              ["2", "Sales Order", "Sales Orders"],
+              ["3", "Size Expansion", "Articles & Sets"],
+              ["4", "Invoice", "Invoices"],
+              ["5", "Collection", "Collections"],
+              ["6", "Commission", "Commissions"],
+            ].map((x) => (
+              <button key={x[0]} onClick={() => go(x[2])}>
+                <i>{x[0]}</i>
+                <b>{x[1]}</b>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="panels">
+          <section>
+            <div className="panel-head">
+              <h2>Recent invoices</h2>
+              <button onClick={() => go("Invoices")}>View all</button>
+            </div>
+            {data.invoices.slice(0, 5).map((x: any) => (
+              <div className="list-row" key={x.id}>
+                <FileText />
+                <span>
+                  <b>{x.number}</b>
+                  <small>
+                    {x.customer_name} · {x.rep_name}
+                  </small>
+                </span>
+                <strong>{money(x.outstanding)}</strong>
+                {status(x.status)}
+              </div>
+            ))}
+          </section>
+          <section>
+            <div className="panel-head">
+              <h2>Recent collections</h2>
+              <button onClick={() => go("Collections")}>View all</button>
+            </div>
+            {data.receipts.slice(0, 5).map((x: any) => (
+              <div className="list-row" key={x.id}>
+                <Check />
+                <span>
+                  <b>{x.number}</b>
+                  <small>
+                    {x.customer_name} · {x.receipt_date}
+                  </small>
+                </span>
+                <strong>{money(x.amount)}</strong>
+              </div>
+            ))}
+          </section>
+        </div>
+        {modal && (
+          <SalesCreateModal
+            type={modal}
+            data={data}
+            close={() => setModal("")}
+            save={async (path, body) => {
+              try {
+                setError("");
+                await post(path, body);
+                setModal("");
+              } catch (e) {
+                setError((e as Error).message);
+              }
+            }}
+          />
+        )}
+      </>
+    );
+  const map: any = {
+    Customers: data.customers,
+    Salespersons: data.reps,
+    "Articles & Sets": data.articles,
+    "Customer POs": data.pos,
+    "Sales Orders": data.orders,
+    Invoices: data.invoices,
+    Collections: data.receipts,
+    "Receivables Aging": aging.rows,
+    Commissions: data.commissions,
+  };
+  const rows = map[page] || [];
+  const addType: any = {
+    Customers: "customer",
+    Salespersons: "rep",
+    "Articles & Sets": "article",
+    "Customer POs": "po",
+    Collections: "receipt",
+  };
+  const heads: any = {
+    Customers: ["Customer", "Phone", "Credit terms", "Credit limit", "Status"],
+    Salespersons: [
+      "Representative",
+      "Manager",
+      "Channel",
+      "Default rate",
+      "Status",
+    ],
+    "Articles & Sets": [
+      "Article",
+      "Category",
+      "Set types",
+      "Size, quantity and price",
+    ],
+    "Customer POs": [
+      "PO",
+      "Customer",
+      "Salesperson",
+      "Date",
+      "Sale type",
+      "Total",
+      "Status",
+    ],
+    "Sales Orders": [
+      "Sales order",
+      "Customer",
+      "Salesperson",
+      "Date",
+      "Total",
+      "Status",
+    ],
+    Invoices: [
+      "Invoice",
+      "Customer",
+      "Salesperson",
+      "Invoice/Due",
+      "Type",
+      "Total",
+      "Received",
+      "Outstanding",
+      "Status",
+    ],
+    Collections: [
+      "Receipt",
+      "Customer",
+      "Collected by",
+      "Date",
+      "Method",
+      "Amount",
+    ],
+    "Receivables Aging": [
+      "Invoice",
+      "Customer",
+      "Salesperson",
+      "Due date",
+      "Days overdue",
+      "Bucket",
+      "Outstanding",
+    ],
+    Commissions: [
+      "Collected by",
+      "Customer",
+      "Invoice",
+      "Receipt",
+      "Collected",
+      "Days",
+      "Rate",
+      "Eligibility",
+      "Commission",
+    ],
+  };
+  return (
+    <>
+      <div className="heading">
+        <div>
+          <span>SALES OPERATIONS</span>
+          <h1>{page}</h1>
+          <p>
+            Sales-first transaction records linked from customer order through
+            collection.
+          </p>
+        </div>
+        {addType[page] && (
+          <button className="primary" onClick={() => setModal(addType[page])}>
+            <Plus />{" "}
+            {page === "Collections"
+              ? "Record collection"
+              : `Add ${page.replace(/s$/, "")}`}
+          </button>
+        )}
+      </div>
+      {error && <div className="error">{error}</div>}
+      <div className="table-card">
+        <table>
+          <thead>
+            <tr>
+              {heads[page].map((h: string) => (
+                <th key={h}>{h}</th>
+              ))}
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={heads[page].length + 1}>No records yet.</td>
+              </tr>
+            ) : (
+              rows.map((r: any) => (
+                <tr key={r.id}>
+                  {salesCellsV2(page, r)}
+                  <td>
+                    <div className="row-actions">
+                      {page === "Customer POs" && r.status === "draft" && (
+                        <button
+                          className="approve"
+                          onClick={async () => {
+                            try {
+                              await post(`customer-pos/${r.id}/convert`);
+                            } catch (e) {
+                              setError((e as Error).message);
+                            }
+                          }}
+                        >
+                          <Check /> Convert to invoice
+                        </button>
+                      )}
+                      <button
+                        className="icon-action view"
+                        onClick={() => setViewing(r)}
+                      >
+                        <Eye />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      {modal && (
+        <SalesCreateModalV2
+          type={modal}
+          data={data}
+          close={() => setModal("")}
+          save={async (path, body) => {
+            try {
+              setError("");
+              await post(path, body);
+              setModal("");
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        />
+      )}{" "}
+      {viewing && (
+        <RecordView page={page} row={viewing} close={() => setViewing(null)} />
+      )}
+    </>
+  );
 }
-function salesCells(page:string,r:any){if(page==="Customers")return <><td><b>{r.code}</b><br/>{r.name}</td><td>{r.phone||"—"}</td><td>{r.credit_days} days</td><td>{money(r.credit_limit)}</td><td>{status(r.status)}</td></>;if(page==="Salespersons")return <><td><b>{r.code}</b><br/>{r.name}</td><td>{r.manager_name||"—"}</td><td>{r.channel.replaceAll("_"," ")}</td><td>{money(r.default_commission_rate)}</td><td>{status(r.status)}</td></>;if(page==="Articles & Sets")return <><td><b>{r.code}</b><br/>{r.name}</td><td>{r.category}</td><td>{r.set_name}<br/><small>{r.pieces_per_set} pieces/set</small></td><td>{r.sizes.map((s:any)=>`${s.size_label}×${Number(s.pieces_per_set)}`).join(", ")}</td><td>{money(r.selling_price)}</td><td>{money(r.commission_rate)} / piece</td></>;if(page==="Customer POs")return <><td><b>{r.number}</b><br/><small>{r.customer_po_reference||"No customer reference"}</small></td><td>{r.customer_name}</td><td>{r.rep_name}</td><td>{r.po_date}</td><td>{r.sale_type}</td><td>{money(r.total)}</td><td>{status(r.status)}</td></>;if(page==="Sales Orders")return <><td><b>{r.number}</b></td><td>{r.customer_name}</td><td>{r.rep_name}</td><td>{r.order_date}</td><td>{money(r.total)}</td><td>{status(r.status)}</td></>;if(page==="Invoices")return <><td><b>{r.number}</b></td><td>{r.customer_name}</td><td>{r.rep_name}</td><td>{r.invoice_date}<br/><small>Due {r.due_date}</small></td><td>{r.sale_type}</td><td>{money(r.total)}</td><td>{money(r.received_amount)}</td><td>{money(r.outstanding)}</td><td>{status(r.status)}</td></>;if(page==="Collections")return <><td><b>{r.number}</b></td><td>{r.customer_name}</td><td>{r.rep_name}</td><td>{r.receipt_date}</td><td>{r.payment_method.replaceAll("_"," ")}</td><td>{money(r.amount)}</td></>;if(page==="Receivables Aging")return <><td><b>{r.number}</b></td><td>{r.customer_name}</td><td>{r.rep_name}</td><td>{r.due_date}</td><td>{r.days_overdue}</td><td>{status(r.bucket)}</td><td>{money(r.outstanding)}</td></>;return <><td>{r.rep_name}</td><td>{r.customer_name}</td><td>{r.invoice_number}</td><td>{r.receipt_number}<br/><small>{r.receipt_date}</small></td><td>{money(r.amount)}</td><td>{r.days_taken}</td><td>{status(r.commission_status)}</td><td><b>{money(r.commission_amount)}</b></td></>}
-function SalesCreateModal({type,data,close,save}:{type:string;data:any;close:()=>void;save:(path:string,body:any)=>Promise<void>}){const [busy,setBusy]=useState(false);const submit=async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setBusy(true);const f=new FormData(e.currentTarget);let path="",body:any={};if(type==="customer"){path="customers";body={code:f.get("code"),name:f.get("name"),tin:f.get("tin"),phone:f.get("phone"),address:f.get("address"),credit_days:Number(f.get("credit_days")),credit_limit:Number(f.get("credit_limit"))};}else if(type==="rep"){path="sales-reps";body={code:f.get("code"),name:f.get("name"),manager_name:f.get("manager_name"),channel:f.get("channel"),default_commission_rate:Number(f.get("default_commission_rate"))};}else if(type==="article"){path="articles";const labels=String(f.get("sizes")).split(",").map(x=>x.trim()).filter(Boolean);body={code:f.get("code"),name:f.get("name"),category:f.get("category"),set_name:f.get("set_name"),selling_price:Number(f.get("selling_price")),commission_rate:Number(f.get("commission_rate")),sizes:labels.map(label=>({label,pieces:Number(f.get("pieces_per_size"))}))};}else if(type==="po"){path="customer-pos";body={customer_id:Number(f.get("customer_id")),sales_rep_id:Number(f.get("sales_rep_id")),customer_po_reference:f.get("customer_po_reference"),po_date:f.get("po_date"),sale_type:f.get("sale_type"),lines:[{article_id:Number(f.get("article_id")),sets:Number(f.get("sets"))}]};}else{path="customer-receipts";body={invoice_id:Number(f.get("invoice_id")),receipt_date:f.get("receipt_date"),payment_method:f.get("payment_method"),reference:f.get("reference"),amount:Number(f.get("amount"))};}try{await save(path,body);}finally{setBusy(false);}};return <div className="backdrop" onMouseDown={close}><form className="modal" onSubmit={submit} onMouseDown={e=>e.stopPropagation()}><button type="button" className="close" onClick={close}><X/></button><span>SALES MASTER AND TRANSACTION</span><h2>{type==="po"?"New Customer PO":type==="receipt"?"Record Customer Collection":`Add ${type}`}</h2>{type==="customer"?<><div className="form-row"><label>Customer code<input name="code" required/></label><label>Customer name<input name="name" required/></label><label>TIN<input name="tin"/></label><label>Phone<input name="phone"/></label><label>Credit days<input name="credit_days" type="number" defaultValue="30" required/></label><label>Credit limit<input name="credit_limit" type="number" defaultValue="0" required/></label></div><label>Address<input name="address"/></label></>:type==="rep"?<><div className="form-row"><label>Rep code<input name="code" required/></label><label>Name<input name="name" required/></label><label>Sales manager<input name="manager_name"/></label><label>Channel<select name="channel"><option value="direct_sales">Direct Sales</option><option value="head_office">Head Office</option><option value="future_channel">Future Channel</option></select></label></div><label>Default commission rate per piece<input name="default_commission_rate" type="number" step=".01" defaultValue="0" required/></label></>:type==="article"?<><div className="form-row"><label>Article code<input name="code" required/></label><label>Article name<input name="name" required/></label><label>Category<input name="category" required/></label><label>Set template name<input name="set_name" defaultValue="5 Size Standard Set" required/></label><label>Selling price per piece<input name="selling_price" type="number" step=".01" required/></label><label>Commission per piece<input name="commission_rate" type="number" step=".01" required/></label></div><label>Size labels separated by commas<input name="sizes" placeholder="6, 7, 8, 9, 10" required/></label><label>Pieces per size in one set<input name="pieces_per_size" type="number" defaultValue="2" required/></label></>:type==="po"?<><div className="form-row"><label>Customer<select name="customer_id">{data.customers.map((x:any)=><option value={x.id} key={x.id}>{x.code} — {x.name}</option>)}</select></label><label>Salesperson<select name="sales_rep_id">{data.reps.map((x:any)=><option value={x.id} key={x.id}>{x.code} — {x.name}</option>)}</select></label><label>Customer PO reference<input name="customer_po_reference"/></label><label>PO date<input name="po_date" type="date" required/></label><label>Sale type<select name="sale_type"><option value="credit">Credit sale</option><option value="cash">Cash sale</option><option value="mixed">Part cash / credit</option></select></label><label>Article<select name="article_id">{data.articles.map((x:any)=><option value={x.id} key={x.id}>{x.code} — {x.name} ({x.pieces_per_set} pcs/set)</option>)}</select></label></div><label>Number of sets<input name="sets" type="number" step="1" min="1" required/></label></>:<><label>Outstanding invoice<select name="invoice_id">{data.invoices.filter((x:any)=>Number(x.outstanding)>0).map((x:any)=><option value={x.id} key={x.id}>{x.number} — {x.customer_name} — {money(x.outstanding)}</option>)}</select></label><div className="form-row"><label>Receipt date<input name="receipt_date" type="date" required/></label><label>Payment method<select name="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="cheque">Cheque</option><option value="card">Card</option></select></label><label>Amount<input name="amount" type="number" step=".01" min=".01" required/></label><label>Reference<input name="reference"/></label></div></>}<div className="actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy?<Loader2/>:<Check/>} Save</button></div></form></div>}
+function salesCells(page: string, r: any) {
+  if (page === "Customers")
+    return (
+      <>
+        <td>
+          <b>{r.code}</b>
+          <br />
+          {r.name}
+        </td>
+        <td>{r.phone || "—"}</td>
+        <td>{r.credit_days} days</td>
+        <td>{money(r.credit_limit)}</td>
+        <td>{status(r.status)}</td>
+      </>
+    );
+  if (page === "Salespersons")
+    return (
+      <>
+        <td>
+          <b>{r.code}</b>
+          <br />
+          {r.name}
+        </td>
+        <td>{r.manager_name || "—"}</td>
+        <td>{r.channel.replaceAll("_", " ")}</td>
+        <td>{money(r.default_commission_rate)}</td>
+        <td>{status(r.status)}</td>
+      </>
+    );
+  if (page === "Articles & Sets")
+    return (
+      <>
+        <td>
+          <b>{r.code}</b>
+          <br />
+          {r.name}
+        </td>
+        <td>{r.category}</td>
+        <td>
+          {r.set_name}
+          <br />
+          <small>{r.pieces_per_set} pieces/set</small>
+        </td>
+        <td>
+          {r.sizes
+            .map((s: any) => `${s.size_label}×${Number(s.pieces_per_set)}`)
+            .join(", ")}
+        </td>
+        <td>{money(r.selling_price)}</td>
+        <td>{money(r.commission_rate)} / piece</td>
+      </>
+    );
+  if (page === "Customer POs")
+    return (
+      <>
+        <td>
+          <b>{r.number}</b>
+          <br />
+          <small>{r.customer_po_reference || "No customer reference"}</small>
+        </td>
+        <td>{r.customer_name}</td>
+        <td>{r.rep_name}</td>
+        <td>{r.po_date}</td>
+        <td>{r.sale_type}</td>
+        <td>{money(r.total)}</td>
+        <td>{status(r.status)}</td>
+      </>
+    );
+  if (page === "Sales Orders")
+    return (
+      <>
+        <td>
+          <b>{r.number}</b>
+        </td>
+        <td>{r.customer_name}</td>
+        <td>{r.rep_name}</td>
+        <td>{r.order_date}</td>
+        <td>{money(r.total)}</td>
+        <td>{status(r.status)}</td>
+      </>
+    );
+  if (page === "Invoices")
+    return (
+      <>
+        <td>
+          <b>{r.number}</b>
+        </td>
+        <td>{r.customer_name}</td>
+        <td>{r.rep_name}</td>
+        <td>
+          {r.invoice_date}
+          <br />
+          <small>Due {r.due_date}</small>
+        </td>
+        <td>{r.sale_type}</td>
+        <td>{money(r.total)}</td>
+        <td>{money(r.received_amount)}</td>
+        <td>{money(r.outstanding)}</td>
+        <td>{status(r.status)}</td>
+      </>
+    );
+  if (page === "Collections")
+    return (
+      <>
+        <td>
+          <b>{r.number}</b>
+        </td>
+        <td>{r.customer_name}</td>
+        <td>{r.rep_name}</td>
+        <td>{r.receipt_date}</td>
+        <td>{r.payment_method.replaceAll("_", " ")}</td>
+        <td>{money(r.amount)}</td>
+      </>
+    );
+  if (page === "Receivables Aging")
+    return (
+      <>
+        <td>
+          <b>{r.number}</b>
+        </td>
+        <td>{r.customer_name}</td>
+        <td>{r.rep_name}</td>
+        <td>{r.due_date}</td>
+        <td>{r.days_overdue}</td>
+        <td>{status(r.bucket)}</td>
+        <td>{money(r.outstanding)}</td>
+      </>
+    );
+  return (
+    <>
+      <td>{r.rep_name}</td>
+      <td>{r.customer_name}</td>
+      <td>{r.invoice_number}</td>
+      <td>
+        {r.receipt_number}
+        <br />
+        <small>{r.receipt_date}</small>
+      </td>
+      <td>{money(r.amount)}</td>
+      <td>{r.days_taken}</td>
+      <td>{status(r.commission_status)}</td>
+      <td>
+        <b>{money(r.commission_amount)}</b>
+      </td>
+    </>
+  );
+}
+function SalesCreateModal({
+  type,
+  data,
+  close,
+  save,
+}: {
+  type: string;
+  data: any;
+  close: () => void;
+  save: (path: string, body: any) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setBusy(true);
+    const f = new FormData(e.currentTarget);
+    let path = "",
+      body: any = {};
+    if (type === "customer") {
+      path = "customers";
+      body = {
+        code: f.get("code"),
+        name: f.get("name"),
+        tin: f.get("tin"),
+        phone: f.get("phone"),
+        address: f.get("address"),
+        credit_days: Number(f.get("credit_days")),
+        credit_limit: Number(f.get("credit_limit")),
+      };
+    } else if (type === "rep") {
+      path = "sales-reps";
+      body = {
+        code: f.get("code"),
+        name: f.get("name"),
+        manager_name: f.get("manager_name"),
+        channel: f.get("channel"),
+        default_commission_rate: Number(f.get("default_commission_rate")),
+      };
+    } else if (type === "article") {
+      path = "articles";
+      const labels = String(f.get("sizes"))
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+      body = {
+        code: f.get("code"),
+        name: f.get("name"),
+        category: f.get("category"),
+        set_name: f.get("set_name"),
+        selling_price: Number(f.get("selling_price")),
+        commission_rate: Number(f.get("commission_rate")),
+        sizes: labels.map((label) => ({
+          label,
+          pieces: Number(f.get("pieces_per_size")),
+        })),
+      };
+    } else if (type === "po") {
+      path = "customer-pos";
+      body = {
+        customer_id: Number(f.get("customer_id")),
+        sales_rep_id: Number(f.get("sales_rep_id")),
+        customer_po_reference: f.get("customer_po_reference"),
+        po_date: f.get("po_date"),
+        sale_type: f.get("sale_type"),
+        lines: [
+          {
+            article_id: Number(f.get("article_id")),
+            sets: Number(f.get("sets")),
+          },
+        ],
+      };
+    } else {
+      path = "customer-receipts";
+      body = {
+        invoice_id: Number(f.get("invoice_id")),
+        receipt_date: f.get("receipt_date"),
+        payment_method: f.get("payment_method"),
+        reference: f.get("reference"),
+        amount: Number(f.get("amount")),
+      };
+    }
+    try {
+      await save(path, body);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="backdrop" onMouseDown={close}>
+      <form
+        className="modal"
+        onSubmit={submit}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <button type="button" className="close" onClick={close}>
+          <X />
+        </button>
+        <span>SALES MASTER AND TRANSACTION</span>
+        <h2>
+          {type === "po"
+            ? "New Customer PO"
+            : type === "receipt"
+              ? "Record Customer Collection"
+              : `Add ${type}`}
+        </h2>
+        {type === "customer" ? (
+          <>
+            <div className="form-row">
+              <label>
+                Customer code
+                <input name="code" required />
+              </label>
+              <label>
+                Customer name
+                <input name="name" required />
+              </label>
+              <label>
+                TIN
+                <input name="tin" />
+              </label>
+              <label>
+                Phone
+                <input name="phone" />
+              </label>
+              <label>
+                Credit days
+                <input
+                  name="credit_days"
+                  type="number"
+                  defaultValue="30"
+                  required
+                />
+              </label>
+              <label>
+                Credit limit
+                <input
+                  name="credit_limit"
+                  type="number"
+                  defaultValue="0"
+                  required
+                />
+              </label>
+            </div>
+            <label>
+              Address
+              <input name="address" />
+            </label>
+          </>
+        ) : type === "rep" ? (
+          <>
+            <div className="form-row">
+              <label>
+                Rep code
+                <input name="code" required />
+              </label>
+              <label>
+                Name
+                <input name="name" required />
+              </label>
+              <label>
+                Sales manager
+                <input name="manager_name" />
+              </label>
+              <label>
+                Channel
+                <select name="channel">
+                  <option value="direct_sales">Direct Sales</option>
+                  <option value="head_office">Head Office</option>
+                  <option value="future_channel">Future Channel</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              Default commission rate per piece
+              <input
+                name="default_commission_rate"
+                type="number"
+                step=".01"
+                defaultValue="0"
+                required
+              />
+            </label>
+          </>
+        ) : type === "article" ? (
+          <>
+            <div className="form-row">
+              <label>
+                Article code
+                <input name="code" required />
+              </label>
+              <label>
+                Article name
+                <input name="name" required />
+              </label>
+              <label>
+                Category
+                <input name="category" required />
+              </label>
+              <label>
+                Set template name
+                <input
+                  name="set_name"
+                  defaultValue="5 Size Standard Set"
+                  required
+                />
+              </label>
+              <label>
+                Selling price per piece
+                <input name="selling_price" type="number" step=".01" required />
+              </label>
+              <label>
+                Commission per piece
+                <input
+                  name="commission_rate"
+                  type="number"
+                  step=".01"
+                  required
+                />
+              </label>
+            </div>
+            <label>
+              Size labels separated by commas
+              <input name="sizes" placeholder="6, 7, 8, 9, 10" required />
+            </label>
+            <label>
+              Pieces per size in one set
+              <input
+                name="pieces_per_size"
+                type="number"
+                defaultValue="2"
+                required
+              />
+            </label>
+          </>
+        ) : type === "po" ? (
+          <>
+            <div className="form-row">
+              <label>
+                Customer
+                <select name="customer_id">
+                  {data.customers.map((x: any) => (
+                    <option value={x.id} key={x.id}>
+                      {x.code} — {x.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Salesperson
+                <select name="sales_rep_id">
+                  {data.reps.map((x: any) => (
+                    <option value={x.id} key={x.id}>
+                      {x.code} — {x.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Customer PO reference
+                <input name="customer_po_reference" />
+              </label>
+              <label>
+                PO date
+                <input name="po_date" type="date" required />
+              </label>
+              <label>
+                Sale type
+                <select name="sale_type">
+                  <option value="credit">Credit sale</option>
+                  <option value="cash">Cash sale</option>
+                  <option value="mixed">Part cash / credit</option>
+                </select>
+              </label>
+              <label>
+                Article
+                <select name="article_id">
+                  {data.articles.map((x: any) => (
+                    <option value={x.id} key={x.id}>
+                      {x.code} — {x.name} ({x.pieces_per_set} pcs/set)
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label>
+              Number of sets
+              <input name="sets" type="number" step="1" min="1" required />
+            </label>
+          </>
+        ) : (
+          <>
+            <label>
+              Outstanding invoice
+              <select name="invoice_id">
+                {data.invoices
+                  .filter((x: any) => Number(x.outstanding) > 0)
+                  .map((x: any) => (
+                    <option value={x.id} key={x.id}>
+                      {x.number} — {x.customer_name} — {money(x.outstanding)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="form-row">
+              <label>
+                Receipt date
+                <input name="receipt_date" type="date" required />
+              </label>
+              <label>
+                Payment method
+                <select name="payment_method">
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="card">Card</option>
+                </select>
+              </label>
+              <label>
+                Amount
+                <input
+                  name="amount"
+                  type="number"
+                  step=".01"
+                  min=".01"
+                  required
+                />
+              </label>
+              <label>
+                Reference
+                <input name="reference" />
+              </label>
+            </div>
+          </>
+        )}
+        <div className="actions">
+          <button type="button" onClick={close}>
+            Cancel
+          </button>
+          <button className="primary" disabled={busy}>
+            {busy ? <Loader2 /> : <Check />} Save
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
 function Dashboard({ data, go }: { data: Workspace; go: (x: string) => void }) {
   const approved = data.purchase_orders.filter(
     (x) => x.status === "approved" || x.status === "part_received",
@@ -1388,54 +2257,344 @@ function ModuleHeader({ title, back }: { title: string; back: () => void }) {
   );
 }
 function EmployeesPage({ token }: { token: string }) {
-  const [data, setData] = useState<any>(null), [error, setError] = useState(""), [editing, setEditing] = useState<any>(null), [viewing, setViewing] = useState<any>(null), [settingsOpen, setSettingsOpen] = useState(false);
+  const [data, setData] = useState<any>(null),
+    [error, setError] = useState(""),
+    [editing, setEditing] = useState<any>(null),
+    [viewing, setViewing] = useState<any>(null),
+    [settingsOpen, setSettingsOpen] = useState(false);
   const loadEmployees = useCallback(() => {
     fetch(`${API}/payroll`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((response) => (response.ok ? response.json() : Promise.reject()))
       .then(setData)
       .catch(() => setError("Unable to load employees."));
   }, [token]);
   useEffect(loadEmployees, [loadEmployees]);
   const remove = async (employee: any) => {
     if (!window.confirm(`Delete employee ${employee.name}?`)) return;
-    const response = await fetch(`${API}/employees/${employee.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+    const response = await fetch(`${API}/employees/${employee.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
     const json = await response.json();
-    if (!response.ok) { setError(json.message || "Delete failed."); return; }
+    if (!response.ok) {
+      setError(json.message || "Delete failed.");
+      return;
+    }
     loadEmployees();
   };
-  const historyFor = (employee: any) => data.runs.flatMap((run: any) => run.items.filter((item: any) => item.employee_id === employee.id).map((item: any) => ({ ...item, payroll_number: run.number, period_start: run.period_start, period_end: run.period_end, payroll_status: run.status })));
+  const historyFor = (employee: any) =>
+    data.runs.flatMap((run: any) =>
+      run.items
+        .filter((item: any) => item.employee_id === employee.id)
+        .map((item: any) => ({
+          ...item,
+          payroll_number: run.number,
+          period_start: run.period_start,
+          period_end: run.period_end,
+          payroll_status: run.status,
+        })),
+    );
   return (
     <>
       <div className="heading">
-        <div><span>HUMAN RESOURCES</span><h1>Employees</h1><p>Employee profiles, salary settings and complete payroll history.</p></div>
-        <button className="primary" onClick={() => setEditing({ employee_no: "", name: "", department: "", designation: "", basic_salary: 0, status: "active" })}><Plus /> Add employee</button>
+        <div>
+          <span>HUMAN RESOURCES</span>
+          <h1>Employees</h1>
+          <p>
+            Employee profiles, salary settings and complete payroll history.
+          </p>
+        </div>
+        <button
+          className="primary"
+          onClick={() =>
+            setEditing({
+              employee_no: "",
+              name: "",
+              department: "",
+              designation: "",
+              basic_salary: 0,
+              status: "active",
+            })
+          }
+        >
+          <Plus /> Add employee
+        </button>
       </div>
       {error && <div className="error">{error}</div>}
-      {!data ? <div className="loading"><Loader2 /> Loading employees...</div> : <>
-        <div className="kpis">
-          <article><span>Total employees</span><b>{data.employees.length}</b><small>All employee master records</small></article>
-          <article><span>Active employees</span><b>{data.employees.filter((item: any) => item.status === "active").length}</b><small>Included in payroll processing</small></article>
-          <article><span>Monthly basic salaries</span><b>{money(data.employees.reduce((sum: number, item: any) => sum + Number(item.basic_salary), 0))}</b><small>Current active salary master</small></article>
-          <article><span>Payroll history</span><b>{data.runs.length}</b><small>Recorded payroll periods</small></article>
+      {!data ? (
+        <div className="loading">
+          <Loader2 /> Loading employees...
         </div>
-        <div className="table-card"><table><thead><tr><th>Employee</th><th>Department</th><th>Designation</th><th>Basic salary</th><th>Fixed gross</th><th>History</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-          {data.employees.map((employee: any) => <tr key={employee.id}>
-            <td><b>{employee.employee_no}</b><br />{employee.name}</td><td>{employee.department}</td><td>{employee.designation}</td><td>{money(employee.basic_salary)}</td><td>{money(Number(employee.basic_salary) + Number(employee.fixed_allowance || 0) + Number(employee.fixed_incentive || 0))}</td><td>{historyFor(employee).length} payroll records</td><td>{status(employee.status)}</td>
-            <td><div className="row-actions"><button className="icon-action view" title="View employee and salary history" onClick={() => setViewing({ employee, history: historyFor(employee) })}><Eye /></button><button className="icon-action download" title="Payroll settings" onClick={() => { setEditing(employee); setSettingsOpen(true); }}><Settings /></button><button className="icon-action edit" title="Edit employee" onClick={() => setEditing(employee)}><Pencil /></button><button className="icon-action delete" title="Delete employee" onClick={() => remove(employee)}><Trash2 /></button></div></td>
-          </tr>)}
-        </tbody></table></div>
-      </>}
-      {viewing && <EmployeeProfileModal employee={viewing.employee} history={viewing.history} close={() => setViewing(null)} />}
-      {editing && !settingsOpen && <PayrollEditModal type="employee" row={editing} token={token} close={() => setEditing(null)} saved={() => { setEditing(null); loadEmployees(); }} />}
-      {settingsOpen && data && <PayrollSettingsModal employees={[editing, ...data.employees.filter((item: any) => item.id !== editing?.id)]} token={token} close={() => { setSettingsOpen(false); setEditing(null); }} saved={() => { setSettingsOpen(false); setEditing(null); loadEmployees(); }} />}
+      ) : (
+        <>
+          <div className="kpis">
+            <article>
+              <span>Total employees</span>
+              <b>{data.employees.length}</b>
+              <small>All employee master records</small>
+            </article>
+            <article>
+              <span>Active employees</span>
+              <b>
+                {
+                  data.employees.filter((item: any) => item.status === "active")
+                    .length
+                }
+              </b>
+              <small>Included in payroll processing</small>
+            </article>
+            <article>
+              <span>Monthly basic salaries</span>
+              <b>
+                {money(
+                  data.employees.reduce(
+                    (sum: number, item: any) => sum + Number(item.basic_salary),
+                    0,
+                  ),
+                )}
+              </b>
+              <small>Current active salary master</small>
+            </article>
+            <article>
+              <span>Payroll history</span>
+              <b>{data.runs.length}</b>
+              <small>Recorded payroll periods</small>
+            </article>
+          </div>
+          <div className="table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Department</th>
+                  <th>Designation</th>
+                  <th>Basic salary</th>
+                  <th>Fixed gross</th>
+                  <th>History</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.employees.map((employee: any) => (
+                  <tr key={employee.id}>
+                    <td>
+                      <b>{employee.employee_no}</b>
+                      <br />
+                      {employee.name}
+                    </td>
+                    <td>{employee.department}</td>
+                    <td>{employee.designation}</td>
+                    <td>{money(employee.basic_salary)}</td>
+                    <td>
+                      {money(
+                        Number(employee.basic_salary) +
+                          Number(employee.fixed_allowance || 0) +
+                          Number(employee.fixed_incentive || 0),
+                      )}
+                    </td>
+                    <td>{historyFor(employee).length} payroll records</td>
+                    <td>{status(employee.status)}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          className="icon-action view"
+                          title="View employee and salary history"
+                          onClick={() =>
+                            setViewing({
+                              employee,
+                              history: historyFor(employee),
+                            })
+                          }
+                        >
+                          <Eye />
+                        </button>
+                        <button
+                          className="icon-action download"
+                          title="Payroll settings"
+                          onClick={() => {
+                            setEditing(employee);
+                            setSettingsOpen(true);
+                          }}
+                        >
+                          <Settings />
+                        </button>
+                        <button
+                          className="icon-action edit"
+                          title="Edit employee"
+                          onClick={() => setEditing(employee)}
+                        >
+                          <Pencil />
+                        </button>
+                        <button
+                          className="icon-action delete"
+                          title="Delete employee"
+                          onClick={() => remove(employee)}
+                        >
+                          <Trash2 />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {viewing && (
+        <EmployeeProfileModal
+          employee={viewing.employee}
+          history={viewing.history}
+          close={() => setViewing(null)}
+        />
+      )}
+      {editing && !settingsOpen && (
+        <PayrollEditModal
+          type="employee"
+          row={editing}
+          token={token}
+          close={() => setEditing(null)}
+          saved={() => {
+            setEditing(null);
+            loadEmployees();
+          }}
+        />
+      )}
+      {settingsOpen && data && (
+        <PayrollSettingsModal
+          employees={[
+            editing,
+            ...data.employees.filter((item: any) => item.id !== editing?.id),
+          ]}
+          token={token}
+          close={() => {
+            setSettingsOpen(false);
+            setEditing(null);
+          }}
+          saved={() => {
+            setSettingsOpen(false);
+            setEditing(null);
+            loadEmployees();
+          }}
+        />
+      )}
     </>
   );
 }
-function EmployeeProfileModal({ employee, history, close }: { employee: any; history: any[]; close: () => void }) {
-  return <div className="backdrop" onMouseDown={close}><div className="modal employee-profile-modal" onMouseDown={(event) => event.stopPropagation()}><button className="close" onClick={close}><X /></button><span>EMPLOYEE PROFILE</span><h2>{employee.name}</h2><p>{employee.employee_no} · {employee.department} · {employee.designation}</p>
-    <div className="detail-grid"><div><small>Basic salary</small><b>{money(employee.basic_salary)}</b></div><div><small>Fixed allowance</small><b>{money(employee.fixed_allowance || 0)}</b></div><div><small>Fixed incentive</small><b>{money(employee.fixed_incentive || 0)}</b></div><div><small>Fixed deduction</small><b>{money(employee.fixed_deduction || 0)}</b></div><div><small>EPF rate</small><b>{employee.epf_rate}%</b></div><div><small>Working days</small><b>{employee.monthly_working_days}</b></div><div><small>Monthly hours</small><b>{employee.standard_month_hours}</b></div><div><small>OT multiplier</small><b>{employee.overtime_multiplier}x</b></div></div>
-    <h3>Salary history</h3><div className="table-card employee-history"><table><thead><tr><th>Payroll</th><th>Period</th><th>Basic</th><th>Allowances</th><th>OT</th><th>Deductions</th><th>Net salary</th><th>Status</th></tr></thead><tbody>{history.length === 0 ? <tr><td colSpan={8}>No payroll history yet.</td></tr> : history.map((item) => <tr key={item.id}><td>{item.payroll_number}</td><td>{item.period_start} to {item.period_end}</td><td>{money(item.basic_salary)}</td><td>{money(Number(item.allowances) + Number(item.incentive))}</td><td>{money(item.overtime)}</td><td>{money(Number(item.epf_employee) + Number(item.other_deductions) + Number(item.no_pay_amount || 0))}</td><td><b>{money(item.net_salary)}</b></td><td>{status(item.payroll_status)}</td></tr>)}</tbody></table></div><div className="actions"><button onClick={close}>Close</button></div>
-  </div></div>;
+function EmployeeProfileModal({
+  employee,
+  history,
+  close,
+}: {
+  employee: any;
+  history: any[];
+  close: () => void;
+}) {
+  return (
+    <div className="backdrop" onMouseDown={close}>
+      <div
+        className="modal employee-profile-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button className="close" onClick={close}>
+          <X />
+        </button>
+        <span>EMPLOYEE PROFILE</span>
+        <h2>{employee.name}</h2>
+        <p>
+          {employee.employee_no} · {employee.department} ·{" "}
+          {employee.designation}
+        </p>
+        <div className="detail-grid">
+          <div>
+            <small>Basic salary</small>
+            <b>{money(employee.basic_salary)}</b>
+          </div>
+          <div>
+            <small>Fixed allowance</small>
+            <b>{money(employee.fixed_allowance || 0)}</b>
+          </div>
+          <div>
+            <small>Fixed incentive</small>
+            <b>{money(employee.fixed_incentive || 0)}</b>
+          </div>
+          <div>
+            <small>Fixed deduction</small>
+            <b>{money(employee.fixed_deduction || 0)}</b>
+          </div>
+          <div>
+            <small>EPF rate</small>
+            <b>{employee.epf_rate}%</b>
+          </div>
+          <div>
+            <small>Working days</small>
+            <b>{employee.monthly_working_days}</b>
+          </div>
+          <div>
+            <small>Monthly hours</small>
+            <b>{employee.standard_month_hours}</b>
+          </div>
+          <div>
+            <small>OT multiplier</small>
+            <b>{employee.overtime_multiplier}x</b>
+          </div>
+        </div>
+        <h3>Salary history</h3>
+        <div className="table-card employee-history">
+          <table>
+            <thead>
+              <tr>
+                <th>Payroll</th>
+                <th>Period</th>
+                <th>Basic</th>
+                <th>Allowances</th>
+                <th>OT</th>
+                <th>Deductions</th>
+                <th>Net salary</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.length === 0 ? (
+                <tr>
+                  <td colSpan={8}>No payroll history yet.</td>
+                </tr>
+              ) : (
+                history.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.payroll_number}</td>
+                    <td>
+                      {item.period_start} to {item.period_end}
+                    </td>
+                    <td>{money(item.basic_salary)}</td>
+                    <td>
+                      {money(Number(item.allowances) + Number(item.incentive))}
+                    </td>
+                    <td>{money(item.overtime)}</td>
+                    <td>
+                      {money(
+                        Number(item.epf_employee) +
+                          Number(item.other_deductions) +
+                          Number(item.no_pay_amount || 0),
+                      )}
+                    </td>
+                    <td>
+                      <b>{money(item.net_salary)}</b>
+                    </td>
+                    <td>{status(item.payroll_status)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="actions">
+          <button onClick={close}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 function PayrollPage({ token }: { token: string }) {
   const [data, setData] = useState<any>(null),
@@ -1483,7 +2642,8 @@ function PayrollPage({ token }: { token: string }) {
         body: JSON.stringify({ attendance_import_id: attendanceImportId }),
       });
       const json = await response.json();
-      if (!response.ok) throw new Error(json.message || "Payroll calculation failed.");
+      if (!response.ok)
+        throw new Error(json.message || "Payroll calculation failed.");
       loadPayroll();
     } catch (exception) {
       setError((exception as Error).message);
@@ -1522,10 +2682,16 @@ function PayrollPage({ token }: { token: string }) {
           <p>Employee salaries, earnings, deductions and net-pay history.</p>
         </div>
         <div className="heading-actions">
-          <button className="secondary-action" onClick={() => setAttendanceHistoryOpen(true)}>
+          <button
+            className="secondary-action"
+            onClick={() => setAttendanceHistoryOpen(true)}
+          >
             <ClipboardCheck /> Attendance files
           </button>
-          <button className="secondary-action" onClick={() => setSettingsOpen(true)}>
+          <button
+            className="secondary-action"
+            onClick={() => setSettingsOpen(true)}
+          >
             <Settings /> Payroll settings
           </button>
           <button className="primary" onClick={() => setAttendanceOpen(true)}>
@@ -1656,7 +2822,12 @@ function PayrollPage({ token }: { token: string }) {
                         </button>
                         <button
                           className="icon-action download"
-                          onClick={() => downloadPayrollReport(`payroll-runs/${r.id}/excel`, `Payroll_${r.number}.xls`)}
+                          onClick={() =>
+                            downloadPayrollReport(
+                              `payroll-runs/${r.id}/excel`,
+                              `Payroll_${r.number}.xls`,
+                            )
+                          }
                           title="Download payroll register"
                         >
                           <FileText />
@@ -1747,57 +2918,176 @@ function PayrollPage({ token }: { token: string }) {
     </>
   );
 }
-function AttendanceFilesModal({ imports, calculating, close, upload, view, calculate, download }: { imports: any[]; calculating: number | null; close: () => void; upload: () => void; view: (item: any) => void; calculate: (id: number) => void; download: (path: string, fileName: string) => void }) {
+function AttendanceFilesModal({
+  imports,
+  calculating,
+  close,
+  upload,
+  view,
+  calculate,
+  download,
+}: {
+  imports: any[];
+  calculating: number | null;
+  close: () => void;
+  upload: () => void;
+  view: (item: any) => void;
+  calculate: (id: number) => void;
+  download: (path: string, fileName: string) => void;
+}) {
   return (
     <div className="backdrop" onMouseDown={close}>
-      <div className="modal attendance-history-modal" onMouseDown={(event) => event.stopPropagation()}>
-        <button type="button" className="close" onClick={close}><X /></button>
+      <div
+        className="modal attendance-history-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="close" onClick={close}>
+          <X />
+        </button>
         <span>ATTENDANCE MANAGEMENT</span>
         <div className="attendance-modal-heading">
-          <div><h2>Attendance files</h2><p>Review imported attendance separately before creating payroll.</p></div>
-          <button type="button" className="primary" onClick={upload}><FileUp /> Upload attendance</button>
+          <div>
+            <h2>Attendance files</h2>
+            <p>
+              Review imported attendance separately before creating payroll.
+            </p>
+          </div>
+          <button type="button" className="primary" onClick={upload}>
+            <FileUp /> Upload attendance
+          </button>
         </div>
         <div className="table-card">
           <table>
-            <thead><tr><th>Attendance file</th><th>Period</th><th>Employees</th><th>Paid days</th><th>No-pay days</th><th>OT hours</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Attendance file</th>
+                <th>Period</th>
+                <th>Employees</th>
+                <th>Paid days</th>
+                <th>No-pay days</th>
+                <th>OT hours</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
             <tbody>
-              {imports.length === 0 ? <tr><td colSpan={8}>No attendance sheets uploaded yet.</td></tr> : imports.map((item) => (
-                <tr key={item.id}>
-                  <td><b>{item.file_name}</b><br /><small>{item.record_count} valid records</small></td>
-                  <td>{item.period_start} to {item.period_end}</td><td>{item.employees}</td><td>{item.paid_days}</td><td>{item.no_pay_days}</td><td>{item.overtime_hours}</td><td>{status(item.status)}</td>
-                  <td><div className="row-actions">
-                    <button className="icon-action view" onClick={() => view(item)} title="View validation summary"><Eye /></button>
-                    <button className="icon-action download" onClick={() => download(`attendance/${item.id}/excel`, `Attendance_${item.period_end}.xls`)} title="Download attendance report"><FileText /></button>
-                    {item.status === "validated" && <button className="approve" disabled={calculating === item.id} onClick={() => calculate(item.id)}>{calculating === item.id ? <Loader2 /> : <Check />} Calculate payroll</button>}
-                  </div></td>
+              {imports.length === 0 ? (
+                <tr>
+                  <td colSpan={8}>No attendance sheets uploaded yet.</td>
                 </tr>
-              ))}
+              ) : (
+                imports.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <b>{item.file_name}</b>
+                      <br />
+                      <small>{item.record_count} valid records</small>
+                    </td>
+                    <td>
+                      {item.period_start} to {item.period_end}
+                    </td>
+                    <td>{item.employees}</td>
+                    <td>{item.paid_days}</td>
+                    <td>{item.no_pay_days}</td>
+                    <td>{item.overtime_hours}</td>
+                    <td>{status(item.status)}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          className="icon-action view"
+                          onClick={() => view(item)}
+                          title="View validation summary"
+                        >
+                          <Eye />
+                        </button>
+                        <button
+                          className="icon-action download"
+                          onClick={() =>
+                            download(
+                              `attendance/${item.id}/excel`,
+                              `Attendance_${item.period_end}.xls`,
+                            )
+                          }
+                          title="Download attendance report"
+                        >
+                          <FileText />
+                        </button>
+                        {item.status === "validated" && (
+                          <button
+                            className="approve"
+                            disabled={calculating === item.id}
+                            onClick={() => calculate(item.id)}
+                          >
+                            {calculating === item.id ? <Loader2 /> : <Check />}{" "}
+                            Calculate payroll
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-        <div className="actions"><button type="button" onClick={close}>Close</button></div>
+        <div className="actions">
+          <button type="button" onClick={close}>
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
 }
-function PayrollSettingsModal({ employees, token, close, saved }: { employees: any[]; token: string; close: () => void; saved: () => void }) {
+function PayrollSettingsModal({
+  employees,
+  token,
+  close,
+  saved,
+}: {
+  employees: any[];
+  token: string;
+  close: () => void;
+  saved: () => void;
+}) {
   const [employeeId, setEmployeeId] = useState(String(employees[0]?.id || ""));
-  const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const employee = employees.find((item) => String(item.id) === employeeId) || employees[0];
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  const employee =
+    employees.find((item) => String(item.id) === employeeId) || employees[0];
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
     setError("");
     const form = new FormData(event.currentTarget);
-    const body = Object.fromEntries(["basic_salary", "fixed_allowance", "fixed_incentive", "fixed_deduction", "epf_rate", "monthly_working_days", "standard_month_hours", "overtime_multiplier"].map((key) => [key, Number(form.get(key))]));
+    const body = Object.fromEntries(
+      [
+        "basic_salary",
+        "fixed_allowance",
+        "fixed_incentive",
+        "fixed_deduction",
+        "epf_rate",
+        "monthly_working_days",
+        "standard_month_hours",
+        "overtime_multiplier",
+      ].map((key) => [key, Number(form.get(key))]),
+    );
     try {
-      const response = await fetch(`${API}/employees/${employeeId}/payroll-settings`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(body),
-      });
+      const response = await fetch(
+        `${API}/employees/${employeeId}/payroll-settings`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(body),
+        },
+      );
       const json = await response.json();
-      if (!response.ok) throw new Error(json.message || "Unable to save payroll settings.");
+      if (!response.ok)
+        throw new Error(json.message || "Unable to save payroll settings.");
       saved();
     } catch (exception) {
       setError((exception as Error).message);
@@ -1807,31 +3097,160 @@ function PayrollSettingsModal({ employees, token, close, saved }: { employees: a
   };
   return (
     <div className="backdrop" onMouseDown={close}>
-      <form key={employeeId} className="modal payroll-settings-modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
-        <button type="button" className="close" onClick={close}><X /></button>
+      <form
+        key={employeeId}
+        className="modal payroll-settings-modal"
+        onSubmit={submit}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="close" onClick={close}>
+          <X />
+        </button>
         <span>MANUAL SALARY MASTER</span>
         <h2>Payroll settings</h2>
-        <p>Maintain salary values manually. Attendance uploads provide only paid days, no-pay days and overtime hours.</p>
+        <p>
+          Maintain salary values manually. Attendance uploads provide only paid
+          days, no-pay days and overtime hours.
+        </p>
         {error && <div className="error">{error}</div>}
-        <label>Employee<select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>{employees.map((item) => <option key={item.id} value={item.id}>{item.employee_no} — {item.name}</option>)}</select></label>
+        <label>
+          Employee
+          <select
+            value={employeeId}
+            onChange={(event) => setEmployeeId(event.target.value)}
+          >
+            {employees.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.employee_no} — {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="form-row">
-          <label>Basic salary (LKR)<input type="number" step="0.01" min="0" name="basic_salary" required defaultValue={employee?.basic_salary || 0} /></label>
-          <label>Fixed allowance (LKR)<input type="number" step="0.01" min="0" name="fixed_allowance" required defaultValue={employee?.fixed_allowance || 0} /></label>
-          <label>Fixed incentive (LKR)<input type="number" step="0.01" min="0" name="fixed_incentive" required defaultValue={employee?.fixed_incentive || 0} /></label>
-          <label>Other fixed deduction (LKR)<input type="number" step="0.01" min="0" name="fixed_deduction" required defaultValue={employee?.fixed_deduction || 0} /></label>
-          <label>Employee EPF rate (%)<input type="number" step="0.01" min="0" max="100" name="epf_rate" required defaultValue={employee?.epf_rate ?? 8} /></label>
-          <label>Monthly working days<input type="number" step="0.5" min="1" max="31" name="monthly_working_days" required defaultValue={employee?.monthly_working_days ?? 26} /></label>
-          <label>Standard monthly hours<input type="number" step="0.5" min="1" name="standard_month_hours" required defaultValue={employee?.standard_month_hours ?? 240} /></label>
-          <label>Overtime multiplier<input type="number" step="0.01" min="0" name="overtime_multiplier" required defaultValue={employee?.overtime_multiplier ?? 1.5} /></label>
+          <label>
+            Basic salary (LKR)
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              name="basic_salary"
+              required
+              defaultValue={employee?.basic_salary || 0}
+            />
+          </label>
+          <label>
+            Fixed allowance (LKR)
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              name="fixed_allowance"
+              required
+              defaultValue={employee?.fixed_allowance || 0}
+            />
+          </label>
+          <label>
+            Fixed incentive (LKR)
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              name="fixed_incentive"
+              required
+              defaultValue={employee?.fixed_incentive || 0}
+            />
+          </label>
+          <label>
+            Other fixed deduction (LKR)
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              name="fixed_deduction"
+              required
+              defaultValue={employee?.fixed_deduction || 0}
+            />
+          </label>
+          <label>
+            Employee EPF rate (%)
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              name="epf_rate"
+              required
+              defaultValue={employee?.epf_rate ?? 8}
+            />
+          </label>
+          <label>
+            Monthly working days
+            <input
+              type="number"
+              step="0.5"
+              min="1"
+              max="31"
+              name="monthly_working_days"
+              required
+              defaultValue={employee?.monthly_working_days ?? 26}
+            />
+          </label>
+          <label>
+            Standard monthly hours
+            <input
+              type="number"
+              step="0.5"
+              min="1"
+              name="standard_month_hours"
+              required
+              defaultValue={employee?.standard_month_hours ?? 240}
+            />
+          </label>
+          <label>
+            Overtime multiplier
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              name="overtime_multiplier"
+              required
+              defaultValue={employee?.overtime_multiplier ?? 1.5}
+            />
+          </label>
         </div>
-        <div className="salary-preview"><span>Current fixed gross</span><b>{money(Number(employee?.basic_salary || 0) + Number(employee?.fixed_allowance || 0) + Number(employee?.fixed_incentive || 0))}</b></div>
-        <div className="actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy ? <Loader2 /> : <Check />} Save settings</button></div>
+        <div className="salary-preview">
+          <span>Current fixed gross</span>
+          <b>
+            {money(
+              Number(employee?.basic_salary || 0) +
+                Number(employee?.fixed_allowance || 0) +
+                Number(employee?.fixed_incentive || 0),
+            )}
+          </b>
+        </div>
+        <div className="actions">
+          <button type="button" onClick={close}>
+            Cancel
+          </button>
+          <button className="primary" disabled={busy}>
+            {busy ? <Loader2 /> : <Check />} Save settings
+          </button>
+        </div>
       </form>
     </div>
   );
 }
-function AttendanceUploadModal({ token, close, saved }: { token: string; close: () => void; saved: () => void }) {
-  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+function AttendanceUploadModal({
+  token,
+  close,
+  saved,
+}: {
+  token: string;
+  close: () => void;
+  saved: () => void;
+}) {
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
@@ -1840,13 +3259,22 @@ function AttendanceUploadModal({ token, close, saved }: { token: string; close: 
       const body = new FormData(event.currentTarget);
       const response = await fetch(`${API}/attendance/import`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
         body,
       });
       const json = await response.json();
       if (!response.ok) {
-        const firstValidationError = json.errors ? Object.values(json.errors).flat()[0] : null;
-        throw new Error(String(firstValidationError || json.message || "Attendance upload failed."));
+        const firstValidationError = json.errors
+          ? Object.values(json.errors).flat()[0]
+          : null;
+        throw new Error(
+          String(
+            firstValidationError || json.message || "Attendance upload failed.",
+          ),
+        );
       }
       saved();
     } catch (exception) {
@@ -1857,21 +3285,48 @@ function AttendanceUploadModal({ token, close, saved }: { token: string; close: 
   };
   return (
     <div className="backdrop" onMouseDown={close}>
-      <form className="modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
-        <button type="button" className="close" onClick={close}><X /></button>
+      <form
+        className="modal"
+        onSubmit={submit}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="close" onClick={close}>
+          <X />
+        </button>
         <span>ATTENDANCE IMPORT</span>
         <h2>Upload attendance sheet</h2>
-        <p>Upload CSV, XLS or XLSX from the attendance system. Required columns: <b>employee_no</b>, <b>date</b>, <b>status</b>. Optional: <b>overtime_hours</b>.</p>
+        <p>
+          Upload CSV, XLS or XLSX from the attendance system. Required columns:{" "}
+          <b>employee_no</b>, <b>date</b>, <b>status</b>. Optional:{" "}
+          <b>overtime_hours</b>.
+        </p>
         {error && <div className="error">{error}</div>}
         <div className="form-row">
-          <label>Period start<input type="date" name="period_start" required /></label>
-          <label>Period end<input type="date" name="period_end" required /></label>
+          <label>
+            Period start
+            <input type="date" name="period_start" required />
+          </label>
+          <label>
+            Period end
+            <input type="date" name="period_end" required />
+          </label>
         </div>
-        <label>Attendance sheet<input type="file" name="file" accept=".csv,.xls,.xlsx" required /></label>
-        <p>Accepted statuses: present, absent, paid_leave, holiday, off, half_day and no_pay.</p>
+        <label>
+          Attendance sheet
+          <input type="file" name="file" accept=".csv,.xls,.xlsx" required />
+        </label>
+        <p>
+          Accepted statuses: present, absent, paid_leave, holiday, off, half_day
+          and no_pay.
+        </p>
         <div className="actions">
-          <button type="button" onClick={close}>Cancel</button>
-          <button className="primary" disabled={busy}>{busy ? <Loader2 /> : <FileUp />} {busy ? "Validating..." : "Upload and validate"}</button>
+          <button type="button" onClick={close}>
+            Cancel
+          </button>
+          <button className="primary" disabled={busy}>
+            {busy ? <Loader2 /> : <FileUp />}{" "}
+            {busy ? "Validating..." : "Upload and validate"}
+          </button>
         </div>
       </form>
     </div>
@@ -1915,7 +3370,9 @@ function PayrollEditModal({
       const creatingEmployee = type === "employee" && !row.id;
       const path =
           type === "employee"
-            ? creatingEmployee ? "employees" : `employees/${row.id}`
+            ? creatingEmployee
+              ? "employees"
+              : `employees/${row.id}`
             : `payroll-runs/${row.id}`,
         r = await fetch(`${API}/${path}`, {
           method: creatingEmployee ? "POST" : "PUT",
@@ -1946,7 +3403,11 @@ function PayrollEditModal({
           <X />
         </button>
         <span>PAYROLL RECORD</span>
-        <h2>{type === "employee" && !row.id ? "Add Employee" : `Edit ${type === "employee" ? "Employee" : "Payroll Run"}`}</h2>
+        <h2>
+          {type === "employee" && !row.id
+            ? "Add Employee"
+            : `Edit ${type === "employee" ? "Employee" : "Payroll Run"}`}
+        </h2>
         {error && <div className="error">{error}</div>}
         {type === "employee" ? (
           <>
@@ -2039,7 +3500,11 @@ function PayrollEditModal({
             Cancel
           </button>
           <button className="primary" disabled={busy}>
-            {busy ? "Saving…" : type === "employee" && !row.id ? "Add employee" : "Save changes"}
+            {busy
+              ? "Saving…"
+              : type === "employee" && !row.id
+                ? "Add employee"
+                : "Save changes"}
           </button>
         </div>
       </form>
@@ -2080,7 +3545,9 @@ function ReportsPage({ token }: { token: string }) {
   const download = async (report = selected) => {
     const isAging = report === "aging";
     const r = await fetch(
-      isAging ? `${API}/reports/aging/excel?as_of=${to}` : `${API}/reports/financial-statements/excel?from=${from}&to=${to}&report=${report}`,
+      isAging
+        ? `${API}/reports/aging/excel?as_of=${to}`
+        : `${API}/reports/financial-statements/excel?from=${from}&to=${to}&report=${report}`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!r.ok) {
@@ -2091,7 +3558,9 @@ function ReportsPage({ token }: { token: string }) {
       url = URL.createObjectURL(blob),
       a = document.createElement("a");
     a.href = url;
-    a.download = isAging ? `Accounts_Payable_Aging_${to}.xls` : `AeroSoft360_${report}_${to}.xls`;
+    a.download = isAging
+      ? `Accounts_Payable_Aging_${to}.xls`
+      : `AeroSoft360_${report}_${to}.xls`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -2178,7 +3647,11 @@ function ReportsPage({ token }: { token: string }) {
               <small>Cash and bank accounts</small>
             </article>
           </div>
-          {selected === "aging" ? <AgingReportView aging={aging} /> : <FinancialReportView selected={selected} financial={financial} />}
+          {selected === "aging" ? (
+            <AgingReportView aging={aging} />
+          ) : (
+            <FinancialReportView selected={selected} financial={financial} />
+          )}
           <div className="panels">
             <section>
               <div className="panel-head">
@@ -2211,11 +3684,83 @@ function ReportsPage({ token }: { token: string }) {
 }
 function AgingReportView({ aging }: { aging: any }) {
   const totals = aging.totals;
-  return <div className="aging-report">
-    <div className="aging-summary"><article><span>Current</span><b>{money(totals.current)}</b></article><article><span>1–30 days</span><b>{money(totals.days_1_30)}</b></article><article><span>31–60 days</span><b>{money(totals.days_31_60)}</b></article><article><span>61–90 days</span><b>{money(totals.days_61_90)}</b></article><article><span>90+ days</span><b>{money(totals.days_90_plus)}</b></article><article className="aging-total"><span>Total outstanding</span><b>{money(totals.total)}</b></article></div>
-    <div className="table-card"><table><thead><tr><th>Supplier</th><th>Invoice</th><th>Invoice date</th><th>Due date</th><th>Days overdue</th><th>Aging bucket</th><th>Outstanding</th></tr></thead><tbody>{aging.rows.length === 0 ? <tr><td colSpan={7}>No outstanding supplier invoices as of {aging.as_of}.</td></tr> : aging.rows.map((row: any) => <tr key={row.id}><td><b>{row.supplier_code}</b><br />{row.supplier}</td><td>{row.invoice}</td><td>{row.invoice_date}</td><td>{row.due_date}</td><td>{row.days_overdue}</td><td>{status(row.bucket.replace("days_", ""))}</td><td><b>{money(row.outstanding)}</b></td></tr>)}</tbody></table></div>
-    <p className="report-note">Based on posted goods receipts and each supplier’s payment terms. Recorded supplier payments will require payment-allocation entries when that module is added.</p>
-  </div>;
+  return (
+    <div className="aging-report">
+      <div className="aging-summary">
+        <article>
+          <span>Current</span>
+          <b>{money(totals.current)}</b>
+        </article>
+        <article>
+          <span>1–30 days</span>
+          <b>{money(totals.days_1_30)}</b>
+        </article>
+        <article>
+          <span>31–60 days</span>
+          <b>{money(totals.days_31_60)}</b>
+        </article>
+        <article>
+          <span>61–90 days</span>
+          <b>{money(totals.days_61_90)}</b>
+        </article>
+        <article>
+          <span>90+ days</span>
+          <b>{money(totals.days_90_plus)}</b>
+        </article>
+        <article className="aging-total">
+          <span>Total outstanding</span>
+          <b>{money(totals.total)}</b>
+        </article>
+      </div>
+      <div className="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Supplier</th>
+              <th>Invoice</th>
+              <th>Invoice date</th>
+              <th>Due date</th>
+              <th>Days overdue</th>
+              <th>Aging bucket</th>
+              <th>Outstanding</th>
+            </tr>
+          </thead>
+          <tbody>
+            {aging.rows.length === 0 ? (
+              <tr>
+                <td colSpan={7}>
+                  No outstanding supplier invoices as of {aging.as_of}.
+                </td>
+              </tr>
+            ) : (
+              aging.rows.map((row: any) => (
+                <tr key={row.id}>
+                  <td>
+                    <b>{row.supplier_code}</b>
+                    <br />
+                    {row.supplier}
+                  </td>
+                  <td>{row.invoice}</td>
+                  <td>{row.invoice_date}</td>
+                  <td>{row.due_date}</td>
+                  <td>{row.days_overdue}</td>
+                  <td>{status(row.bucket.replace("days_", ""))}</td>
+                  <td>
+                    <b>{money(row.outstanding)}</b>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="report-note">
+        Based on posted goods receipts and each supplier’s payment terms.
+        Recorded supplier payments will require payment-allocation entries when
+        that module is added.
+      </p>
+    </div>
+  );
 }
 function FinancialReportView({
   selected,
@@ -2243,24 +3788,36 @@ function FinancialReportView({
         <Statement
           title="Assets"
           rows={[
-            ...financial.balance_sheet.assets.map((x:any)=>[`${x.code} ${x.account}`,x.amount] as [string,number]),
+            ...financial.balance_sheet.assets.map(
+              (x: any) =>
+                [`${x.code} ${x.account}`, x.amount] as [string, number],
+            ),
             ["Total assets", financial.balance_sheet.assets_total],
           ]}
         />
         <Statement
           title="Liabilities"
           rows={[
-            ...financial.balance_sheet.liabilities.map((x:any)=>[`${x.code} ${x.account}`,x.amount] as [string,number]),
+            ...financial.balance_sheet.liabilities.map(
+              (x: any) =>
+                [`${x.code} ${x.account}`, x.amount] as [string, number],
+            ),
             ["Total liabilities", financial.balance_sheet.liabilities_total],
           ]}
         />
         <Statement
           title="Equity"
           rows={[
-            ...financial.balance_sheet.equity.map((x:any)=>[`${x.code} ${x.account}`,x.amount] as [string,number]),
+            ...financial.balance_sheet.equity.map(
+              (x: any) =>
+                [`${x.code} ${x.account}`, x.amount] as [string, number],
+            ),
             ["Current-period profit", financial.balance_sheet.current_profit],
             ["Total equity", financial.balance_sheet.equity_total],
-            ["Liabilities plus equity", financial.balance_sheet.liabilities_equity_total],
+            [
+              "Liabilities plus equity",
+              financial.balance_sheet.liabilities_equity_total,
+            ],
             ["Difference", financial.balance_sheet.difference],
           ]}
         />
@@ -2325,7 +3882,10 @@ function FinancialReportView({
           ["Total assets", financial.balance_sheet.assets_total],
           ["Total liabilities", financial.balance_sheet.liabilities_total],
           ["Total equity", financial.balance_sheet.equity_total],
-          ["Liabilities plus equity", financial.balance_sheet.liabilities_equity_total],
+          [
+            "Liabilities plus equity",
+            financial.balance_sheet.liabilities_equity_total,
+          ],
           ["Difference", financial.balance_sheet.difference],
         ]}
       />
