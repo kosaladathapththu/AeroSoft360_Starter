@@ -1365,6 +1365,7 @@ function PayrollPage({ token }: { token: string }) {
     [editing, setEditing] = useState<any>(null),
     [editType, setEditType] = useState(""),
     [attendanceOpen, setAttendanceOpen] = useState(false),
+    [attendanceHistoryOpen, setAttendanceHistoryOpen] = useState(false),
     [settingsOpen, setSettingsOpen] = useState(false),
     [calculating, setCalculating] = useState<number | null>(null);
   const loadPayroll = useCallback(() => {
@@ -1442,6 +1443,9 @@ function PayrollPage({ token }: { token: string }) {
           <p>Employee salaries, earnings, deductions and net-pay history.</p>
         </div>
         <div className="heading-actions">
+          <button className="secondary-action" onClick={() => setAttendanceHistoryOpen(true)}>
+            <ClipboardCheck /> Attendance files
+          </button>
           <button className="secondary-action" onClick={() => setSettingsOpen(true)}>
             <Settings /> Payroll settings
           </button>
@@ -1478,48 +1482,6 @@ function PayrollPage({ token }: { token: string }) {
               <b>{money(data.runs[0]?.net_total || 0)}</b>
               <small>Employee take-home total</small>
             </article>
-          </div>
-          <div className="table-card">
-            <table>
-              <thead>
-                <tr>
-                  <th>Attendance file</th>
-                  <th>Period</th>
-                  <th>Employees</th>
-                  <th>Paid days</th>
-                  <th>No-pay days</th>
-                  <th>OT hours</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.imports.length === 0 ? (
-                  <tr><td colSpan={8}>No attendance sheets uploaded yet.</td></tr>
-                ) : data.imports.map((item: any) => (
-                  <tr key={item.id}>
-                    <td><b>{item.file_name}</b><br /><small>{item.record_count} valid records</small></td>
-                    <td>{item.period_start} to {item.period_end}</td>
-                    <td>{item.employees}</td>
-                    <td>{item.paid_days}</td>
-                    <td>{item.no_pay_days}</td>
-                    <td>{item.overtime_hours}</td>
-                    <td>{status(item.status)}</td>
-                    <td>
-                      <div className="row-actions">
-                        <button className="icon-action view" onClick={() => setViewing(item)} title="View validation summary"><Eye /></button>
-                        <button className="icon-action download" onClick={() => downloadPayrollReport(`attendance/${item.id}/excel`, `Attendance_${item.period_end}.xls`)} title="Download attendance report"><FileText /></button>
-                        {item.status === "validated" && (
-                          <button className="approve" disabled={calculating === item.id} onClick={() => calculatePayroll(item.id)}>
-                            {calculating === item.id ? <Loader2 /> : <Check />} Calculate payroll
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
           <div className="table-card">
             <table>
@@ -1675,6 +1637,19 @@ function PayrollPage({ token }: { token: string }) {
           }}
         />
       )}
+      {attendanceHistoryOpen && data && (
+        <AttendanceFilesModal
+          imports={data.imports}
+          calculating={calculating}
+          close={() => setAttendanceHistoryOpen(false)}
+          view={(item) => {
+            setAttendanceHistoryOpen(false);
+            setViewing(item);
+          }}
+          calculate={calculatePayroll}
+          download={downloadPayrollReport}
+        />
+      )}
       {settingsOpen && data && (
         <PayrollSettingsModal
           employees={data.employees}
@@ -1687,6 +1662,37 @@ function PayrollPage({ token }: { token: string }) {
         />
       )}
     </>
+  );
+}
+function AttendanceFilesModal({ imports, calculating, close, view, calculate, download }: { imports: any[]; calculating: number | null; close: () => void; view: (item: any) => void; calculate: (id: number) => void; download: (path: string, fileName: string) => void }) {
+  return (
+    <div className="backdrop" onMouseDown={close}>
+      <div className="modal attendance-history-modal" onMouseDown={(event) => event.stopPropagation()}>
+        <button type="button" className="close" onClick={close}><X /></button>
+        <span>ATTENDANCE MANAGEMENT</span>
+        <h2>Attendance files</h2>
+        <p>Review imported attendance separately before creating payroll.</p>
+        <div className="table-card">
+          <table>
+            <thead><tr><th>Attendance file</th><th>Period</th><th>Employees</th><th>Paid days</th><th>No-pay days</th><th>OT hours</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              {imports.length === 0 ? <tr><td colSpan={8}>No attendance sheets uploaded yet.</td></tr> : imports.map((item) => (
+                <tr key={item.id}>
+                  <td><b>{item.file_name}</b><br /><small>{item.record_count} valid records</small></td>
+                  <td>{item.period_start} to {item.period_end}</td><td>{item.employees}</td><td>{item.paid_days}</td><td>{item.no_pay_days}</td><td>{item.overtime_hours}</td><td>{status(item.status)}</td>
+                  <td><div className="row-actions">
+                    <button className="icon-action view" onClick={() => view(item)} title="View validation summary"><Eye /></button>
+                    <button className="icon-action download" onClick={() => download(`attendance/${item.id}/excel`, `Attendance_${item.period_end}.xls`)} title="Download attendance report"><FileText /></button>
+                    {item.status === "validated" && <button className="approve" disabled={calculating === item.id} onClick={() => calculate(item.id)}>{calculating === item.id ? <Loader2 /> : <Check />} Calculate payroll</button>}
+                  </div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="actions"><button type="button" onClick={close}>Close</button></div>
+      </div>
+    </div>
   );
 }
 function PayrollSettingsModal({ employees, token, close, saved }: { employees: any[]; token: string; close: () => void; saved: () => void }) {
