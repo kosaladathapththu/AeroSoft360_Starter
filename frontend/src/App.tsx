@@ -552,12 +552,14 @@ function Records({
   page,
   rows,
   approve,
+  view,
   edit,
   remove,
 }: {
   page: string;
   rows: RecordRow[];
   approve: (id: number) => void;
+  view: (row: RecordRow) => void;
   edit: (row: RecordRow) => void;
   remove: (row: RecordRow) => void;
 }) {
@@ -685,6 +687,7 @@ function Records({
                       row.status === "part_received") && (
                       <span className="ready">Ready</span>
                     )}
+                  <button className="icon-action view" title="View" onClick={()=>view(row)}><Eye/></button>
                   <button
                     className="icon-action edit"
                     title="Edit"
@@ -708,6 +711,8 @@ function Records({
     </div>
   );
 }
+
+function RecordView({page,row,close}:{page:string;row:any;close:()=>void}){const hidden=['id','lines','created_at','updated_at'];return <div className="backdrop" onMouseDown={close}><div className="modal" onMouseDown={e=>e.stopPropagation()}><button className="close" onClick={close}><X/></button><span>RECORD DETAILS</span><h2>{page}</h2><div className="detail-grid">{Object.entries(row).filter(([k])=>!hidden.includes(k)).map(([k,v])=><div key={k}><small>{k.replaceAll('_',' ')}</small><b>{typeof v==='number'&&['total','unit_cost','debit','credit'].some(x=>k.includes(x))?money(v):String(v??'—')}</b></div>)}</div>{row.lines?.length>0&&<div className="detail-lines"><h3>Lines</h3>{row.lines.map((line:any)=><div key={line.id}><span>{line.material_name||line.account_name}</span><b>{line.quantity?`${line.quantity} × ${money(line.unit_cost)}`:`Dr ${money(line.debit)} / Cr ${money(line.credit)}`}</b></div>)}</div>}<div className="actions"><button type="button" onClick={close}>Close</button></div></div></div>}
 
 function CreateModal({
   type,
