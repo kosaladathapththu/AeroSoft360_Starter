@@ -8,7 +8,7 @@ The current milestone implements the first controlled transaction flow:
 
 ## Local setup
 
-Backend requirements: PHP 8.3+, Composer and MySQL 8.
+Backend requirements for the current XAMPP development environment: PHP 8.0+, Composer and MariaDB/MySQL.
 
 ```powershell
 cd backend
@@ -30,6 +30,17 @@ npm run dev
 ```
 
 Open the URL shown by Vite, normally `http://127.0.0.1:5173`.
+
+## Development access profiles
+
+| Profile | Email | Password | Access |
+|---|---|---|---|
+| Administrator | `admin@aerosoft360.lk` | `Admin@123` | All current actions |
+| Reporting | `reports@aerosoft360.lk` | `Report@123` | View and reporting only |
+| Stock operator | `stock@aerosoft360.lk` | `Stock@123` | View, GRN and stock updates |
+| System viewer | `viewer@aerosoft360.lk` | `Viewer@123` | Full-system read-only view |
+
+These are local development credentials and must be replaced before production deployment.
 
 ## Verification
 

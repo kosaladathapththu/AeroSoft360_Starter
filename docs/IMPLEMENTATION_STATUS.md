@@ -1,6 +1,6 @@
 # AeroSoft360 implementation status
 
-## Implemented and awaiting backend execution verification
+## Implemented and verified locally
 
 - Clean Laravel 13 and React application structure
 - MySQL environment baseline and API CORS configuration
@@ -16,10 +16,13 @@
 - Transaction audit events
 - Responsive, readable procurement workspace without fictional dashboard figures
 - Feature tests for the successful partial-GRN flow and rejected over-receipt flow
+- Token-based sign-in and sign-out
+- Four supplied access profiles with normalized role permissions
+- Server-side enforcement for supplier, purchase, approval, GRN, stock and accounting actions
+- Twelve-hour local sessions and disabled-user checks
 
 ## Next milestones
 
-- Authentication, API tokens, four supplied access profiles, action permissions and separation of duties
 - Purchase request and configurable approval rules
 - Supplier invoice, three-way matching, accounts payable and supplier payment
 - Expanded chart of accounts from the supplied document

@@ -8,5 +8,5 @@ class Kernel extends HttpKernel
         'web' => [\Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class, \Illuminate\Session\Middleware\StartSession::class, \Illuminate\View\Middleware\ShareErrorsFromSession::class, \Illuminate\Routing\Middleware\SubstituteBindings::class],
         'api' => ['throttle:api', \Illuminate\Routing\Middleware\SubstituteBindings::class],
     ];
-    protected $routeMiddleware = ['auth' => \Illuminate\Auth\Middleware\Authenticate::class, 'can' => \Illuminate\Auth\Middleware\Authorize::class, 'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class, 'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class];
+    protected $routeMiddleware = ['auth' => \Illuminate\Auth\Middleware\Authenticate::class, 'token.auth' => \App\Http\Middleware\TokenAuthenticate::class, 'permission' => \App\Http\Middleware\RequirePermission::class, 'can' => \Illuminate\Auth\Middleware\Authorize::class, 'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class, 'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class];
 }
