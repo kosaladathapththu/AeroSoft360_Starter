@@ -1159,7 +1159,15 @@ function SalesCreateModal({
   const firstArticleId = Number(data.articles?.[0]?.id || 0);
   const firstItemId = Number(data.articles?.[0]?.sets?.[0]?.items?.[0]?.id || 0);
   const [poLines, setPoLines] = useState<any[]>([
-    { article_id: firstArticleId, order_mode: "badge", set_template_id: firstSetId, set_item_id: firstItemId, quantity: 1 },
+    ...(initial?.lines?.length
+      ? initial.lines.map((line: any) => ({
+          article_id: Number(line.article_id),
+          order_mode: line.order_mode || "badge",
+          set_template_id: Number(line.set_template_id || 0),
+          set_item_id: Number(line.set_item_id || 0),
+          quantity: Number((line.order_mode || "badge") === "badge" ? line.sets : line.pieces),
+        }))
+      : [{ article_id: firstArticleId, order_mode: "badge", set_template_id: firstSetId, set_item_id: firstItemId, quantity: 1 }]),
   ]);
   const availableSets = (data.articles || []).flatMap((article: any) =>
     article.sets
@@ -1212,7 +1220,7 @@ function SalesCreateModal({
         sets: setTypes,
       };
     } else if (type === "po") {
-      path = "customer-pos";
+      path = initial ? `customer-pos/${initial.id}` : "customer-pos";
       body = {
         customer_id: Number(f.get("customer_id")),
         sales_rep_id: Number(f.get("sales_rep_id")),
@@ -1234,7 +1242,7 @@ function SalesCreateModal({
       };
     }
     try {
-      await save(path, body, initial && type === "article" ? "PUT" : "POST");
+      await save(path, body, initial && (type === "article" || type === "po") ? "PUT" : "POST");
     } finally {
       setBusy(false);
     }
@@ -1252,7 +1260,7 @@ function SalesCreateModal({
         <span>SALES MASTER AND TRANSACTION</span>
         <h2>
           {type === "po"
-            ? "New Customer PO"
+            ? initial ? `Manage ${initial.number}` : "New Customer PO"
             : type === "receipt"
               ? "Record Customer Collection"
               : initial && type === "article"
@@ -1540,7 +1548,7 @@ function SalesCreateModal({
             <div className="form-row">
               <label>
                 Customer
-                <select name="customer_id">
+                <select name="customer_id" defaultValue={initial?.customer_id}>
                   {data.customers.map((x: any) => (
                     <option value={x.id} key={x.id}>
                       {x.code} — {x.name}
@@ -1550,7 +1558,7 @@ function SalesCreateModal({
               </label>
               <label>
                 Salesperson
-                <select name="sales_rep_id">
+                <select name="sales_rep_id" defaultValue={initial?.sales_rep_id}>
                   {data.reps.map((x: any) => (
                     <option value={x.id} key={x.id}>
                       {x.code} — {x.name}
@@ -1560,15 +1568,15 @@ function SalesCreateModal({
               </label>
               <label>
                 Customer PO reference
-                <input name="customer_po_reference" />
+                <input name="customer_po_reference" defaultValue={initial?.customer_po_reference} />
               </label>
               <label>
                 PO date
-                <input name="po_date" type="date" required />
+                <input name="po_date" type="date" defaultValue={initial?.po_date} required />
               </label>
               <label>
                 Sale type
-                <select name="sale_type">
+                <select name="sale_type" defaultValue={initial?.sale_type || "credit"}>
                   <option value="credit">Credit sale</option>
                   <option value="cash">Cash sale</option>
                   <option value="mixed">Part cash / credit</option>
@@ -2015,10 +2023,14 @@ function RecordView({
             {(row.lines || row.items).map((line: any) => (
               <div key={line.id}>
                 <span>
-                  {line.material_name || line.account_name || line.name}
+                  {line.article_name
+                    ? `${line.article_code} — ${line.article_name}${line.set_name ? ` — ${line.set_name}` : ""}`
+                    : line.material_name || line.account_name || line.name}
                 </span>
                 <b>
-                  {line.net_salary
+                  {line.article_name
+                    ? `${line.order_mode === "size" ? `${Number(line.pieces)} pieces` : `${Number(line.sets)} badges / ${Number(line.pieces)} pieces`} · ${money(line.line_total)}`
+                    : line.net_salary
                     ? `Net ${money(line.net_salary)}`
                     : line.quantity
                       ? `${line.quantity} × ${money(line.unit_cost)}`
