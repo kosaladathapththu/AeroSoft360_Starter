@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Trash2,
   Truck,
+  Users,
   Warehouse,
   X,
 } from "lucide-react";
@@ -199,6 +200,7 @@ export default function App() {
     ["Receive Goods", ClipboardCheck],
     ["Raw Material Stock", Warehouse],
     ["General Ledger", ShieldCheck],
+    ["Employees", Users],
     ["Payroll", Building2],
     ["Reports", FileText],
   ] as const;
@@ -344,7 +346,9 @@ export default function App() {
           </button>
         </header>
         <section className="content">
-          {page === "Payroll" ? (
+          {page === "Employees" ? (
+            <EmployeesPage token={token() || ""} />
+          ) : page === "Payroll" ? (
             <PayrollPage token={token() || ""} />
           ) : page === "Reports" ? (
             <ReportsPage token={token() || ""} />
@@ -1358,6 +1362,56 @@ function ModuleHeader({ title, back }: { title: string; back: () => void }) {
     </header>
   );
 }
+function EmployeesPage({ token }: { token: string }) {
+  const [data, setData] = useState<any>(null), [error, setError] = useState(""), [editing, setEditing] = useState<any>(null), [viewing, setViewing] = useState<any>(null), [settingsOpen, setSettingsOpen] = useState(false);
+  const loadEmployees = useCallback(() => {
+    fetch(`${API}/payroll`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then(setData)
+      .catch(() => setError("Unable to load employees."));
+  }, [token]);
+  useEffect(loadEmployees, [loadEmployees]);
+  const remove = async (employee: any) => {
+    if (!window.confirm(`Delete employee ${employee.name}?`)) return;
+    const response = await fetch(`${API}/employees/${employee.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+    const json = await response.json();
+    if (!response.ok) { setError(json.message || "Delete failed."); return; }
+    loadEmployees();
+  };
+  const historyFor = (employee: any) => data.runs.flatMap((run: any) => run.items.filter((item: any) => item.employee_id === employee.id).map((item: any) => ({ ...item, payroll_number: run.number, period_start: run.period_start, period_end: run.period_end, payroll_status: run.status })));
+  return (
+    <>
+      <div className="heading">
+        <div><span>HUMAN RESOURCES</span><h1>Employees</h1><p>Employee profiles, salary settings and complete payroll history.</p></div>
+        <button className="primary" onClick={() => setEditing({ employee_no: "", name: "", department: "", designation: "", basic_salary: 0, status: "active" })}><Plus /> Add employee</button>
+      </div>
+      {error && <div className="error">{error}</div>}
+      {!data ? <div className="loading"><Loader2 /> Loading employees...</div> : <>
+        <div className="kpis">
+          <article><span>Total employees</span><b>{data.employees.length}</b><small>All employee master records</small></article>
+          <article><span>Active employees</span><b>{data.employees.filter((item: any) => item.status === "active").length}</b><small>Included in payroll processing</small></article>
+          <article><span>Monthly basic salaries</span><b>{money(data.employees.reduce((sum: number, item: any) => sum + Number(item.basic_salary), 0))}</b><small>Current active salary master</small></article>
+          <article><span>Payroll history</span><b>{data.runs.length}</b><small>Recorded payroll periods</small></article>
+        </div>
+        <div className="table-card"><table><thead><tr><th>Employee</th><th>Department</th><th>Designation</th><th>Basic salary</th><th>Fixed gross</th><th>History</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+          {data.employees.map((employee: any) => <tr key={employee.id}>
+            <td><b>{employee.employee_no}</b><br />{employee.name}</td><td>{employee.department}</td><td>{employee.designation}</td><td>{money(employee.basic_salary)}</td><td>{money(Number(employee.basic_salary) + Number(employee.fixed_allowance || 0) + Number(employee.fixed_incentive || 0))}</td><td>{historyFor(employee).length} payroll records</td><td>{status(employee.status)}</td>
+            <td><div className="row-actions"><button className="icon-action view" title="View employee and salary history" onClick={() => setViewing({ employee, history: historyFor(employee) })}><Eye /></button><button className="icon-action download" title="Payroll settings" onClick={() => { setEditing(employee); setSettingsOpen(true); }}><Settings /></button><button className="icon-action edit" title="Edit employee" onClick={() => setEditing(employee)}><Pencil /></button><button className="icon-action delete" title="Delete employee" onClick={() => remove(employee)}><Trash2 /></button></div></td>
+          </tr>)}
+        </tbody></table></div>
+      </>}
+      {viewing && <EmployeeProfileModal employee={viewing.employee} history={viewing.history} close={() => setViewing(null)} />}
+      {editing && !settingsOpen && <PayrollEditModal type="employee" row={editing} token={token} close={() => setEditing(null)} saved={() => { setEditing(null); loadEmployees(); }} />}
+      {settingsOpen && data && <PayrollSettingsModal employees={[editing, ...data.employees.filter((item: any) => item.id !== editing?.id)]} token={token} close={() => { setSettingsOpen(false); setEditing(null); }} saved={() => { setSettingsOpen(false); setEditing(null); loadEmployees(); }} />}
+    </>
+  );
+}
+function EmployeeProfileModal({ employee, history, close }: { employee: any; history: any[]; close: () => void }) {
+  return <div className="backdrop" onMouseDown={close}><div className="modal employee-profile-modal" onMouseDown={(event) => event.stopPropagation()}><button className="close" onClick={close}><X /></button><span>EMPLOYEE PROFILE</span><h2>{employee.name}</h2><p>{employee.employee_no} · {employee.department} · {employee.designation}</p>
+    <div className="detail-grid"><div><small>Basic salary</small><b>{money(employee.basic_salary)}</b></div><div><small>Fixed allowance</small><b>{money(employee.fixed_allowance || 0)}</b></div><div><small>Fixed incentive</small><b>{money(employee.fixed_incentive || 0)}</b></div><div><small>Fixed deduction</small><b>{money(employee.fixed_deduction || 0)}</b></div><div><small>EPF rate</small><b>{employee.epf_rate}%</b></div><div><small>Working days</small><b>{employee.monthly_working_days}</b></div><div><small>Monthly hours</small><b>{employee.standard_month_hours}</b></div><div><small>OT multiplier</small><b>{employee.overtime_multiplier}x</b></div></div>
+    <h3>Salary history</h3><div className="table-card employee-history"><table><thead><tr><th>Payroll</th><th>Period</th><th>Basic</th><th>Allowances</th><th>OT</th><th>Deductions</th><th>Net salary</th><th>Status</th></tr></thead><tbody>{history.length === 0 ? <tr><td colSpan={8}>No payroll history yet.</td></tr> : history.map((item) => <tr key={item.id}><td>{item.payroll_number}</td><td>{item.period_start} to {item.period_end}</td><td>{money(item.basic_salary)}</td><td>{money(Number(item.allowances) + Number(item.incentive))}</td><td>{money(item.overtime)}</td><td>{money(Number(item.epf_employee) + Number(item.other_deductions) + Number(item.no_pay_amount || 0))}</td><td><b>{money(item.net_salary)}</b></td><td>{status(item.payroll_status)}</td></tr>)}</tbody></table></div><div className="actions"><button onClick={close}>Close</button></div>
+  </div></div>;
+}
 function PayrollPage({ token }: { token: string }) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
@@ -1642,6 +1696,10 @@ function PayrollPage({ token }: { token: string }) {
           imports={data.imports}
           calculating={calculating}
           close={() => setAttendanceHistoryOpen(false)}
+          upload={() => {
+            setAttendanceHistoryOpen(false);
+            setAttendanceOpen(true);
+          }}
           view={(item) => {
             setAttendanceHistoryOpen(false);
             setViewing(item);
@@ -1664,14 +1722,16 @@ function PayrollPage({ token }: { token: string }) {
     </>
   );
 }
-function AttendanceFilesModal({ imports, calculating, close, view, calculate, download }: { imports: any[]; calculating: number | null; close: () => void; view: (item: any) => void; calculate: (id: number) => void; download: (path: string, fileName: string) => void }) {
+function AttendanceFilesModal({ imports, calculating, close, upload, view, calculate, download }: { imports: any[]; calculating: number | null; close: () => void; upload: () => void; view: (item: any) => void; calculate: (id: number) => void; download: (path: string, fileName: string) => void }) {
   return (
     <div className="backdrop" onMouseDown={close}>
       <div className="modal attendance-history-modal" onMouseDown={(event) => event.stopPropagation()}>
         <button type="button" className="close" onClick={close}><X /></button>
         <span>ATTENDANCE MANAGEMENT</span>
-        <h2>Attendance files</h2>
-        <p>Review imported attendance separately before creating payroll.</p>
+        <div className="attendance-modal-heading">
+          <div><h2>Attendance files</h2><p>Review imported attendance separately before creating payroll.</p></div>
+          <button type="button" className="primary" onClick={upload}><FileUp /> Upload attendance</button>
+        </div>
         <div className="table-card">
           <table>
             <thead><tr><th>Attendance file</th><th>Period</th><th>Employees</th><th>Paid days</th><th>No-pay days</th><th>OT hours</th><th>Status</th><th>Actions</th></tr></thead>
@@ -1827,12 +1887,13 @@ function PayrollEditModal({
               status: f.get("status"),
             };
     try {
+      const creatingEmployee = type === "employee" && !row.id;
       const path =
           type === "employee"
-            ? `employees/${row.id}`
+            ? creatingEmployee ? "employees" : `employees/${row.id}`
             : `payroll-runs/${row.id}`,
         r = await fetch(`${API}/${path}`, {
-          method: "PUT",
+          method: creatingEmployee ? "POST" : "PUT",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
@@ -1860,7 +1921,7 @@ function PayrollEditModal({
           <X />
         </button>
         <span>PAYROLL RECORD</span>
-        <h2>Edit {type === "employee" ? "Employee" : "Payroll Run"}</h2>
+        <h2>{type === "employee" && !row.id ? "Add Employee" : `Edit ${type === "employee" ? "Employee" : "Payroll Run"}`}</h2>
         {error && <div className="error">{error}</div>}
         {type === "employee" ? (
           <>
@@ -1953,7 +2014,7 @@ function PayrollEditModal({
             Cancel
           </button>
           <button className="primary" disabled={busy}>
-            {busy ? "Saving…" : "Save changes"}
+            {busy ? "Saving…" : type === "employee" && !row.id ? "Add employee" : "Save changes"}
           </button>
         </div>
       </form>
