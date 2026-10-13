@@ -1,17 +1,41 @@
-# AeroSoft360_Starter
+# AeroSoft360
 
-## Local demonstration data
+AeroSoft360 is being rebuilt as a database-backed finance, manufacturing and management ERP for Supun AeroSoft (Pvt) Ltd.
 
-The frontend includes clearly fictional KPI and module records. Records added with **New Demo Record** last only for the current browser session and are not posted to accounting.
+The current milestone implements the first controlled transaction flow:
 
-After copying `backend-overlay/` into a full Laravel application and configuring its database, local developers may load the matching backend dataset:
+`Supplier -> Purchase Order -> Approval -> GRN -> Raw Material Batch Stock -> General Ledger`
+
+## Local setup
+
+Backend requirements: PHP 8.3+, Composer and MySQL 8.
 
 ```powershell
-php artisan migrate
-php artisan db:seed --class=AeroSoftDemoSeeder
+cd backend
+composer install
+Copy-Item .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+php artisan serve --host=127.0.0.1 --port=8000
 ```
 
-The seeder creates fictional masters, stock, a PO/GRN, invoice/receipt, commission and balanced journal. It also creates `demo.admin@example.test` with the local-only password `AeroSoft360-Demo!`. The seeder refuses to run when Laravel is in the `production` environment.
+Set the MySQL connection in `backend/.env` before migration.
 
-Never use the demonstration records as production opening balances or migrate them into the live company database.
+Frontend:
 
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open the URL shown by Vite, normally `http://127.0.0.1:5173`.
+
+## Verification
+
+```powershell
+cd backend
+php artisan test --filter=ProcureToStockTest
+```
+
+The test verifies partial receipt, batch stock, balanced accounting, and rollback when received quantity exceeds the PO balance.

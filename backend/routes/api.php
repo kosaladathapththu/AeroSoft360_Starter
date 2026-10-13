@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\ProcurementController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\SystemStatusController;
-use App\Http\Controllers\Api\ProductionBatchController;
-use App\Models\Product;
 
-Route::get('/v1/status', [SystemStatusController::class, 'show']);
-Route::get('/v1/products', fn () => Product::query()->select('id', 'code', 'name')->where('is_active', true)->orderBy('name')->get());
-Route::apiResource('/v1/production-batches', ProductionBatchController::class)->except('show');
+Route::prefix('v1')->group(function (): void {
+    Route::get('/workspace', [ProcurementController::class, 'workspace']);
+    Route::post('/suppliers', [ProcurementController::class, 'storeSupplier']);
+    Route::post('/purchase-orders', [ProcurementController::class, 'storePurchaseOrder']);
+    Route::post('/purchase-orders/{purchaseOrder}/approve', [ProcurementController::class, 'approvePurchaseOrder']);
+    Route::post('/purchase-orders/{purchaseOrder}/receive', [ProcurementController::class, 'receivePurchaseOrder']);
+});
