@@ -2,6 +2,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProcurementController;
 use App\Http\Controllers\Api\PayrollReportController;
+use App\Http\Controllers\Api\SalesController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function ():void {
@@ -10,6 +11,16 @@ Route::prefix('v1')->group(function ():void {
   Route::get('/auth/me',[AuthController::class,'me']);
   Route::post('/auth/logout',[AuthController::class,'logout']);
   Route::get('/workspace',[ProcurementController::class,'workspace'])->middleware('permission:workspace.view');
+  Route::get('/sales/workspace',[SalesController::class,'workspace'])->middleware('permission:workspace.view');
+  Route::post('/customers',[SalesController::class,'storeCustomer'])->middleware('permission:accounting.manage');
+  Route::put('/customers/{id}',[SalesController::class,'updateCustomer'])->middleware('permission:accounting.manage');
+  Route::post('/sales-reps',[SalesController::class,'storeRep'])->middleware('permission:accounting.manage');
+  Route::put('/sales-reps/{id}',[SalesController::class,'updateRep'])->middleware('permission:accounting.manage');
+  Route::post('/articles',[SalesController::class,'storeArticle'])->middleware('permission:accounting.manage');
+  Route::post('/customer-pos',[SalesController::class,'storePo'])->middleware('permission:accounting.manage');
+  Route::post('/customer-pos/{id}/convert',[SalesController::class,'convert'])->middleware('permission:accounting.manage');
+  Route::post('/customer-receipts',[SalesController::class,'receipt'])->middleware('permission:accounting.manage');
+  Route::get('/sales/aging',[SalesController::class,'aging'])->middleware('permission:workspace.view');
   Route::post('/suppliers',[ProcurementController::class,'storeSupplier'])->middleware('permission:suppliers.manage');
   Route::put('/suppliers/{supplier}',[ProcurementController::class,'updateSupplier'])->middleware('permission:suppliers.manage');
   Route::delete('/suppliers/{supplier}',[ProcurementController::class,'deleteSupplier'])->middleware('permission:suppliers.manage');

@@ -195,14 +195,23 @@ export default function App() {
   };
   const nav = [
     ["Dashboard", LayoutDashboard],
+    ["Customers", Building2],
+    ["Salespersons", Users],
+    ["Articles & Sets", PackagePlus],
+    ["Customer POs", ClipboardCheck],
+    ["Sales Orders", FileText],
+    ["Invoices", FileText],
+    ["Collections", Check],
+    ["Receivables Aging", ShieldCheck],
+    ["Commissions", FileText],
+    ["Employees", Users],
+    ["Payroll", Building2],
+    ["Reports", FileText],
     ["Suppliers", Building2],
     ["Purchase Orders", FileText],
     ["Receive Goods", ClipboardCheck],
     ["Raw Material Stock", Warehouse],
     ["General Ledger", ShieldCheck],
-    ["Employees", Users],
-    ["Payroll", Building2],
-    ["Reports", FileText],
   ] as const;
   const rows = useMemo(() => {
     const q = search.toLowerCase();
@@ -346,7 +355,9 @@ export default function App() {
           </button>
         </header>
         <section className="content">
-          {page === "Employees" ? (
+          {["Dashboard", "Customers", "Salespersons", "Articles & Sets", "Customer POs", "Sales Orders", "Invoices", "Collections", "Receivables Aging", "Commissions"].includes(page) ? (
+            <SalesPage token={token() || ""} page={page} go={setPage} />
+          ) : page === "Employees" ? (
             <EmployeesPage token={token() || ""} />
           ) : page === "Payroll" ? (
             <PayrollPage token={token() || ""} />
