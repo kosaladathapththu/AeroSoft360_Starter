@@ -23,6 +23,7 @@ import {
 import "./styles.css";
 import "./actions.css";
 import "./reports.css";
+import "./tables.css";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api/v1";
 type Supplier = {
@@ -712,7 +713,7 @@ function Records({
   );
 }
 
-function RecordView({page,row,close}:{page:string;row:any;close:()=>void}){const hidden=['id','lines','created_at','updated_at'];return <div className="backdrop" onMouseDown={close}><div className="modal" onMouseDown={e=>e.stopPropagation()}><button className="close" onClick={close}><X/></button><span>RECORD DETAILS</span><h2>{page}</h2><div className="detail-grid">{Object.entries(row).filter(([k])=>!hidden.includes(k)).map(([k,v])=><div key={k}><small>{k.replaceAll('_',' ')}</small><b>{typeof v==='number'&&['total','unit_cost','debit','credit'].some(x=>k.includes(x))?money(v):String(v??'—')}</b></div>)}</div>{row.lines?.length>0&&<div className="detail-lines"><h3>Lines</h3>{row.lines.map((line:any)=><div key={line.id}><span>{line.material_name||line.account_name}</span><b>{line.quantity?`${line.quantity} × ${money(line.unit_cost)}`:`Dr ${money(line.debit)} / Cr ${money(line.credit)}`}</b></div>)}</div>}<div className="actions"><button type="button" onClick={close}>Close</button></div></div></div>}
+function RecordView({page,row,close}:{page:string;row:any;close:()=>void}){const hidden=['id','lines','items','created_at','updated_at'];return <div className="backdrop" onMouseDown={close}><div className="modal" onMouseDown={e=>e.stopPropagation()}><button className="close" onClick={close}><X/></button><span>RECORD DETAILS</span><h2>{page}</h2><div className="detail-grid">{Object.entries(row).filter(([k])=>!hidden.includes(k)).map(([k,v])=><div key={k}><small>{k.replace(/_/g,' ')}</small><b>{typeof v==='number'&&['total','salary','cost','debit','credit'].some(x=>k.includes(x))?money(v):String(v??'—')}</b></div>)}</div>{(row.lines||row.items)?.length>0&&<div className="detail-lines"><h3>Lines</h3>{(row.lines||row.items).map((line:any)=><div key={line.id}><span>{line.material_name||line.account_name||line.name}</span><b>{line.net_salary?`Net ${money(line.net_salary)}`:line.quantity?`${line.quantity} × ${money(line.unit_cost)}`:`Dr ${money(line.debit)} / Cr ${money(line.credit)}`}</b></div>)}</div>}<div className="actions"><button type="button" onClick={close}>Close</button></div></div></div>}
 
 function CreateModal({
   type,
@@ -1283,13 +1284,15 @@ function ModuleHeader({ title, back }: { title: string; back: () => void }) {
 }
 function PayrollPage({ token }: { token: string }) {
   const [data, setData] = useState<any>(null),
-    [error, setError] = useState("");
-  useEffect(() => {
+    [error, setError] = useState(""),[viewing,setViewing]=useState<any>(null),[editing,setEditing]=useState<any>(null),[editType,setEditType]=useState('');
+  const loadPayroll=useCallback(()=>{
     fetch(`${API}/payroll`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(setData)
       .catch(() => setError("Unable to load payroll."));
-  }, [token]);
+  },[token]);
+  useEffect(loadPayroll,[loadPayroll]);
+  const remove=async(type:string,row:any)=>{if(!window.confirm(`Delete ${type} ${row.name||row.number}?`))return;const path=type==='employee'?`employees/${row.id}`:`payroll-runs/${row.id}`;const r=await fetch(`${API}/${path}`,{method:'DELETE',headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const json=await r.json();if(!r.ok){setError(json.message||'Delete failed.');return}loadPayroll()};
   return (
     <>
       <div className="heading">
@@ -1337,6 +1340,7 @@ function PayrollPage({ token }: { token: string }) {
                   <th>Designation</th>
                   <th>Basic salary</th>
                   <th>Status</th>
+                    <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1351,6 +1355,7 @@ function PayrollPage({ token }: { token: string }) {
                     <td>{e.designation}</td>
                     <td>{money(e.basic_salary)}</td>
                     <td>{status(e.status)}</td>
+                      <td><div className="row-actions"><button className="icon-action view" onClick={()=>setViewing(e)} title="View"><Eye/></button><button className="icon-action edit" onClick={()=>{setEditing(e);setEditType('employee')}} title="Edit"><Pencil/></button><button className="icon-action delete" onClick={()=>remove('employee',e)} title="Delete"><Trash2/></button></div></td>
                   </tr>
                 ))}
               </tbody>
@@ -1366,6 +1371,7 @@ function PayrollPage({ token }: { token: string }) {
                   <th>Deductions</th>
                   <th>Net pay</th>
                   <th>Status</th>
+                    <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1381,6 +1387,7 @@ function PayrollPage({ token }: { token: string }) {
                     <td>{money(r.deduction_total)}</td>
                     <td>{money(r.net_total)}</td>
                     <td>{status(r.status)}</td>
+                      <td><div className="row-actions"><button className="icon-action view" onClick={()=>setViewing(r)} title="View"><Eye/></button><button className="icon-action edit" onClick={()=>{setEditing(r);setEditType('payroll')}} title="Edit"><Pencil/></button><button className="icon-action delete" onClick={()=>remove('payroll',r)} title="Delete"><Trash2/></button></div></td>
                   </tr>
                 ))}
               </tbody>
@@ -1388,9 +1395,11 @@ function PayrollPage({ token }: { token: string }) {
           </div>
         </>
       )}
+      {viewing&&<RecordView page="Payroll" row={viewing} close={()=>setViewing(null)}/>} {editing&&<PayrollEditModal type={editType} row={editing} token={token} close={()=>setEditing(null)} saved={()=>{setEditing(null);loadPayroll()}}/>}
     </>
   );
 }
+function PayrollEditModal({type,row,token,close,saved}:{type:string;row:any;token:string;close:()=>void;saved:()=>void}){const[busy,setBusy]=useState(false),[error,setError]=useState('');const submit=async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setBusy(true);const f=new FormData(e.currentTarget),body=type==='employee'?{employee_no:f.get('employee_no'),name:f.get('name'),department:f.get('department'),designation:f.get('designation'),basic_salary:Number(f.get('basic_salary')),status:f.get('status')}:{period_start:f.get('period_start'),period_end:f.get('period_end'),status:f.get('status')};try{const path=type==='employee'?`employees/${row.id}`:`payroll-runs/${row.id}`,r=await fetch(`${API}/${path}`,{method:'PUT',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(body)}),json=await r.json();if(!r.ok)throw new Error(json.message||'Update failed.');saved()}catch(x){setError((x as Error).message)}finally{setBusy(false)}};return <div className="backdrop" onMouseDown={close}><form className="modal" onSubmit={submit} onMouseDown={e=>e.stopPropagation()}><button type="button" className="close" onClick={close}><X/></button><span>PAYROLL RECORD</span><h2>Edit {type==='employee'?'Employee':'Payroll Run'}</h2>{error&&<div className="error">{error}</div>}{type==='employee'?<><label>Employee number<input name="employee_no" required defaultValue={row.employee_no}/></label><label>Name<input name="name" required defaultValue={row.name}/></label><div className="form-row"><label>Department<input name="department" required defaultValue={row.department}/></label><label>Designation<input name="designation" required defaultValue={row.designation}/></label></div><div className="form-row"><label>Basic salary<input name="basic_salary" type="number" min="0" step="0.01" required defaultValue={row.basic_salary}/></label><label>Status<select name="status" defaultValue={row.status}><option value="active">Active</option><option value="inactive">Inactive</option></select></label></div></>:<><div className="form-row"><label>Period start<input name="period_start" type="date" required defaultValue={row.period_start}/></label><label>Period end<input name="period_end" type="date" required defaultValue={row.period_end}/></label></div><label>Status<select name="status" defaultValue={row.status}><option value="draft">Draft</option><option value="approved">Approved</option><option value="posted">Posted</option><option value="void">Void</option></select></label></>}<div className="actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy?'Saving…':'Save changes'}</button></div></form></div>}
 function ReportsPage({ token }: { token: string }) {
   const now = new Date(),
     [from, setFrom] = useState(`${now.getFullYear()}-01-01`),
