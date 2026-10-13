@@ -1268,7 +1268,7 @@ function ModuleHeader({ title, back }: { title: string; back: () => void }) {
     </header>
   );
 }
-function PayrollPage({ token, back }: { token: string; back: () => void }) {
+function PayrollPage({ token }: { token: string }) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState("");
   useEffect(() => {
@@ -1278,9 +1278,7 @@ function PayrollPage({ token, back }: { token: string; back: () => void }) {
       .catch(() => setError("Unable to load payroll."));
   }, [token]);
   return (
-    <div className="module-page">
-      <ModuleHeader title="Payroll" back={back} />
-      <section className="module-content">
+    <>
         <div className="heading">
           <div>
             <span>HUMAN RESOURCES AND PAYROLL</span>
@@ -1377,20 +1375,17 @@ function PayrollPage({ token, back }: { token: string; back: () => void }) {
             </div>
           </>
         )}
-      </section>
-    </div>
+    </>
   );
 }
-function ReportsPage({ token, back }: { token: string; back: () => void }) {
+function ReportsPage({ token }: { token: string }) {
   const now=new Date(), [from,setFrom]=useState(`${now.getFullYear()}-01-01`),[to,setTo]=useState(now.toISOString().slice(0,10));
   const [data,setData]=useState<any>(null),[financial,setFinancial]=useState<any>(null),[error,setError]=useState("");
   const load=useCallback(()=>{setError("");Promise.all([fetch(`${API}/reports/management`,{headers:{Authorization:`Bearer ${token}`}}),fetch(`${API}/reports/financial-statements?from=${from}&to=${to}`,{headers:{Authorization:`Bearer ${token}`}})]).then(async([a,b])=>{if(!a.ok||!b.ok)throw new Error();setData(await a.json());setFinancial(await b.json())}).catch(()=>setError("Unable to load financial reports."))},[token,from,to]);
   useEffect(load,[load]);
   const download=async()=>{const r=await fetch(`${API}/reports/financial-statements/excel?from=${from}&to=${to}`,{headers:{Authorization:`Bearer ${token}`}});if(!r.ok){setError("Excel export failed.");return}const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`AeroSoft360_Financial_Statements_${to}.xls`;a.click();URL.revokeObjectURL(url)};
   return (
-    <div className="module-page">
-      <ModuleHeader title="Management Reports" back={back} />
-      <section className="module-content">
+    <>
         <div className="heading">
           <div>
             <span>FINANCE AND MANAGEMENT ACCOUNTING</span>
@@ -1449,8 +1444,7 @@ function ReportsPage({ token, back }: { token: string; back: () => void }) {
             </div>
           </>
         )}
-      </section>
-    </div>
+    </>
   );
 }
 function Statement({title,rows}:{title:string;rows:[string,number][]}){return <section className="statement"><h2>{title}</h2>{rows.map(([label,value],i)=><div className={i===rows.length-1?'statement-total':''} key={label}><span>{label}</span><b>{money(value)}</b></div>)}</section>}
