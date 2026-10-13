@@ -24,12 +24,15 @@ Route::prefix('v1')->group(function ():void {
   Route::delete('/journals/{journal}',[ProcurementController::class,'deleteJournal'])->middleware('permission:accounting.manage');
   Route::get('/payroll',[PayrollReportController::class,'payroll'])->middleware('permission:workspace.view');
   Route::post('/attendance/import',[PayrollReportController::class,'importAttendance'])->middleware('permission:accounting.manage');
+  Route::get('/attendance/{attendanceImport}/excel',[PayrollReportController::class,'exportAttendance'])->middleware('permission:workspace.view');
   Route::post('/payroll/calculate',[PayrollReportController::class,'calculatePayroll'])->middleware('permission:accounting.manage');
   Route::post('/employees',[PayrollReportController::class,'storeEmployee'])->middleware('permission:accounting.manage');
   Route::put('/employees/{employee}',[PayrollReportController::class,'updateEmployee'])->middleware('permission:accounting.manage');
+  Route::put('/employees/{employee}/payroll-settings',[PayrollReportController::class,'updatePayrollSettings'])->middleware('permission:accounting.manage');
   Route::delete('/employees/{employee}',[PayrollReportController::class,'deleteEmployee'])->middleware('permission:accounting.manage');
   Route::put('/payroll-runs/{payrollRun}',[PayrollReportController::class,'updatePayrollRun'])->middleware('permission:accounting.manage');
   Route::delete('/payroll-runs/{payrollRun}',[PayrollReportController::class,'deletePayrollRun'])->middleware('permission:accounting.manage');
+  Route::get('/payroll-runs/{payrollRun}/excel',[PayrollReportController::class,'exportPayroll'])->middleware('permission:workspace.view');
   Route::get('/reports/management',[PayrollReportController::class,'reports'])->middleware('permission:workspace.view');
   Route::get('/reports/financial-statements',[PayrollReportController::class,'financialStatements'])->middleware('permission:workspace.view');
   Route::get('/reports/financial-statements/excel',[PayrollReportController::class,'exportFinancialStatements'])->middleware('permission:workspace.view');

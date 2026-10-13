@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Settings,
   ShieldCheck,
   Trash2,
   Truck,
@@ -1364,6 +1365,7 @@ function PayrollPage({ token }: { token: string }) {
     [editing, setEditing] = useState<any>(null),
     [editType, setEditType] = useState(""),
     [attendanceOpen, setAttendanceOpen] = useState(false),
+    [settingsOpen, setSettingsOpen] = useState(false),
     [calculating, setCalculating] = useState<number | null>(null);
   const loadPayroll = useCallback(() => {
     fetch(`${API}/payroll`, { headers: { Authorization: `Bearer ${token}` } })
@@ -1409,6 +1411,28 @@ function PayrollPage({ token }: { token: string }) {
       setCalculating(null);
     }
   };
+  const downloadPayrollReport = async (path: string, fileName: string) => {
+    setError("");
+    try {
+      const response = await fetch(`${API}/${path}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.ms-excel",
+        },
+      });
+      if (!response.ok) throw new Error("Report download failed.");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (exception) {
+      setError((exception as Error).message);
+    }
+  };
   return (
     <>
       <div className="heading">
@@ -1417,9 +1441,14 @@ function PayrollPage({ token }: { token: string }) {
           <h1>Payroll</h1>
           <p>Employee salaries, earnings, deductions and net-pay history.</p>
         </div>
-        <button className="primary" onClick={() => setAttendanceOpen(true)}>
-          <FileUp /> Upload attendance
-        </button>
+        <div className="heading-actions">
+          <button className="secondary-action" onClick={() => setSettingsOpen(true)}>
+            <Settings /> Payroll settings
+          </button>
+          <button className="primary" onClick={() => setAttendanceOpen(true)}>
+            <FileUp /> Upload attendance
+          </button>
+        </div>
       </div>
       {error && <div className="error">{error}</div>}
       {!data ? (
@@ -1479,6 +1508,7 @@ function PayrollPage({ token }: { token: string }) {
                     <td>
                       <div className="row-actions">
                         <button className="icon-action view" onClick={() => setViewing(item)} title="View validation summary"><Eye /></button>
+                        <button className="icon-action download" onClick={() => downloadPayrollReport(`attendance/${item.id}/excel`, `Attendance_${item.period_end}.xls`)} title="Download attendance report"><FileText /></button>
                         {item.status === "validated" && (
                           <button className="approve" disabled={calculating === item.id} onClick={() => calculatePayroll(item.id)}>
                             {calculating === item.id ? <Loader2 /> : <Check />} Calculate payroll
@@ -1584,6 +1614,13 @@ function PayrollPage({ token }: { token: string }) {
                           <Eye />
                         </button>
                         <button
+                          className="icon-action download"
+                          onClick={() => downloadPayrollReport(`payroll-runs/${r.id}/excel`, `Payroll_${r.number}.xls`)}
+                          title="Download payroll register"
+                        >
+                          <FileText />
+                        </button>
+                        <button
                           className="icon-action edit"
                           onClick={() => {
                             setEditing(r);
@@ -1638,7 +1675,68 @@ function PayrollPage({ token }: { token: string }) {
           }}
         />
       )}
+      {settingsOpen && data && (
+        <PayrollSettingsModal
+          employees={data.employees}
+          token={token}
+          close={() => setSettingsOpen(false)}
+          saved={() => {
+            setSettingsOpen(false);
+            loadPayroll();
+          }}
+        />
+      )}
     </>
+  );
+}
+function PayrollSettingsModal({ employees, token, close, saved }: { employees: any[]; token: string; close: () => void; saved: () => void }) {
+  const [employeeId, setEmployeeId] = useState(String(employees[0]?.id || ""));
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const employee = employees.find((item) => String(item.id) === employeeId) || employees[0];
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    const form = new FormData(event.currentTarget);
+    const body = Object.fromEntries(["basic_salary", "fixed_allowance", "fixed_incentive", "fixed_deduction", "epf_rate", "monthly_working_days", "standard_month_hours", "overtime_multiplier"].map((key) => [key, Number(form.get(key))]));
+    try {
+      const response = await fetch(`${API}/employees/${employeeId}/payroll-settings`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.message || "Unable to save payroll settings.");
+      saved();
+    } catch (exception) {
+      setError((exception as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="backdrop" onMouseDown={close}>
+      <form key={employeeId} className="modal payroll-settings-modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+        <button type="button" className="close" onClick={close}><X /></button>
+        <span>MANUAL SALARY MASTER</span>
+        <h2>Payroll settings</h2>
+        <p>Maintain salary values manually. Attendance uploads provide only paid days, no-pay days and overtime hours.</p>
+        {error && <div className="error">{error}</div>}
+        <label>Employee<select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>{employees.map((item) => <option key={item.id} value={item.id}>{item.employee_no} — {item.name}</option>)}</select></label>
+        <div className="form-row">
+          <label>Basic salary (LKR)<input type="number" step="0.01" min="0" name="basic_salary" required defaultValue={employee?.basic_salary || 0} /></label>
+          <label>Fixed allowance (LKR)<input type="number" step="0.01" min="0" name="fixed_allowance" required defaultValue={employee?.fixed_allowance || 0} /></label>
+          <label>Fixed incentive (LKR)<input type="number" step="0.01" min="0" name="fixed_incentive" required defaultValue={employee?.fixed_incentive || 0} /></label>
+          <label>Other fixed deduction (LKR)<input type="number" step="0.01" min="0" name="fixed_deduction" required defaultValue={employee?.fixed_deduction || 0} /></label>
+          <label>Employee EPF rate (%)<input type="number" step="0.01" min="0" max="100" name="epf_rate" required defaultValue={employee?.epf_rate ?? 8} /></label>
+          <label>Monthly working days<input type="number" step="0.5" min="1" max="31" name="monthly_working_days" required defaultValue={employee?.monthly_working_days ?? 26} /></label>
+          <label>Standard monthly hours<input type="number" step="0.5" min="1" name="standard_month_hours" required defaultValue={employee?.standard_month_hours ?? 240} /></label>
+          <label>Overtime multiplier<input type="number" step="0.01" min="0" name="overtime_multiplier" required defaultValue={employee?.overtime_multiplier ?? 1.5} /></label>
+        </div>
+        <div className="salary-preview"><span>Current fixed gross</span><b>{money(Number(employee?.basic_salary || 0) + Number(employee?.fixed_allowance || 0) + Number(employee?.fixed_incentive || 0))}</b></div>
+        <div className="actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy ? <Loader2 /> : <Check />} Save settings</button></div>
+      </form>
+    </div>
   );
 }
 function AttendanceUploadModal({ token, close, saved }: { token: string; close: () => void; saved: () => void }) {
