@@ -270,14 +270,6 @@ export default function App() {
         }}
       />
     );
-  if (page === "Payroll")
-    return (
-      <PayrollPage token={token() || ""} back={() => setPage("Dashboard")} />
-    );
-  if (page === "Reports")
-    return (
-      <ReportsPage token={token() || ""} back={() => setPage("Dashboard")} />
-    );
   return (
     <div className="shell">
       {menu && <button className="scrim" onClick={() => setMenu(false)} />}
@@ -346,6 +338,12 @@ export default function App() {
           </button>
         </header>
         <section className="content">
+          {page === "Payroll" ? (
+            <PayrollPage token={token() || ""} />
+          ) : page === "Reports" ? (
+            <ReportsPage token={token() || ""} />
+          ) : (
+          <>
           <div className="heading">
             <div>
               <span>SUPUN AEROSOFT (PVT) LTD</span>
@@ -393,6 +391,8 @@ export default function App() {
               edit={setEditing}
               remove={remove}
             />
+          )}
+          </>
           )}
         </section>
       </main>
@@ -1382,16 +1382,11 @@ function PayrollPage({ token, back }: { token: string; back: () => void }) {
   );
 }
 function ReportsPage({ token, back }: { token: string; back: () => void }) {
-  const [data, setData] = useState<any>(null),
-    [error, setError] = useState("");
-  useEffect(() => {
-    fetch(`${API}/reports/management`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then(setData)
-      .catch(() => setError("Unable to load reports."));
-  }, [token]);
+  const now=new Date(), [from,setFrom]=useState(`${now.getFullYear()}-01-01`),[to,setTo]=useState(now.toISOString().slice(0,10));
+  const [data,setData]=useState<any>(null),[financial,setFinancial]=useState<any>(null),[error,setError]=useState("");
+  const load=useCallback(()=>{setError("");Promise.all([fetch(`${API}/reports/management`,{headers:{Authorization:`Bearer ${token}`}}),fetch(`${API}/reports/financial-statements?from=${from}&to=${to}`,{headers:{Authorization:`Bearer ${token}`}})]).then(async([a,b])=>{if(!a.ok||!b.ok)throw new Error();setData(await a.json());setFinancial(await b.json())}).catch(()=>setError("Unable to load financial reports."))},[token,from,to]);
+  useEffect(load,[load]);
+  const download=async()=>{const r=await fetch(`${API}/reports/financial-statements/excel?from=${from}&to=${to}`,{headers:{Authorization:`Bearer ${token}`}});if(!r.ok){setError("Excel export failed.");return}const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`AeroSoft360_Financial_Statements_${to}.xls`;a.click();URL.revokeObjectURL(url)};
   return (
     <div className="module-page">
       <ModuleHeader title="Management Reports" back={back} />
@@ -1399,14 +1394,14 @@ function ReportsPage({ token, back }: { token: string; back: () => void }) {
         <div className="heading">
           <div>
             <span>FINANCE AND MANAGEMENT ACCOUNTING</span>
-            <h1>Reports</h1>
-            <p>
-              Live operational and financial summaries from posted ERP records.
-            </p>
+            <h1>Financial Reports</h1>
+            <p>Profit and loss, balance sheet, cash flow, trial balance and management summaries.</p>
           </div>
+          <button className="primary" onClick={download}><FileText/> Download Excel</button>
         </div>
+        <div className="report-filters"><label>From<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>To<input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label><button onClick={load}>Apply period</button></div>
         {error && <div className="error">{error}</div>}
-        {!data ? (
+        {!data||!financial ? (
           <div className="loading">
             <Loader2 /> Loading reports…
           </div>
@@ -1414,26 +1409,19 @@ function ReportsPage({ token, back }: { token: string; back: () => void }) {
           <>
             <div className="kpis">
               <article>
-                <span>Purchase value</span>
-                <b>{money(data.summary.purchase_value)}</b>
-                <small>{data.summary.purchase_orders} purchase orders</small>
+                <span>Revenue</span><b>{money(financial.profit_loss.revenue)}</b><small>Posted income</small>
               </article>
               <article>
-                <span>Stock value</span>
-                <b>{money(data.summary.stock_value)}</b>
-                <small>Current batch balances</small>
+                <span>Net profit</span><b>{money(financial.profit_loss.net_profit)}</b><small>Revenue less expenses</small>
               </article>
               <article>
-                <span>Latest payroll</span>
-                <b>{money(data.summary.latest_payroll)}</b>
-                <small>{data.summary.employees} active employees</small>
+                <span>Total assets</span><b>{money(financial.balance_sheet.assets_total)}</b><small>Balance sheet assets</small>
               </article>
               <article>
-                <span>Posted journals</span>
-                <b>{data.summary.journals}</b>
-                <small>Accounting records</small>
+                <span>Net cash change</span><b>{money(financial.cash_flow.net_change)}</b><small>Cash and bank accounts</small>
               </article>
             </div>
+            <div className="statement-grid"><Statement title="Profit and Loss" rows={[['Revenue',financial.profit_loss.revenue],['Expenses',financial.profit_loss.expenses_total],['Net profit',financial.profit_loss.net_profit]]}/><Statement title="Balance Sheet" rows={[['Assets',financial.balance_sheet.assets_total],['Liabilities and equity',financial.balance_sheet.liabilities_equity_total],['Difference',financial.balance_sheet.difference]]}/><Statement title="Cash Flow" rows={[['Operating activities',financial.cash_flow.operating],['Investing activities',financial.cash_flow.investing],['Financing activities',financial.cash_flow.financing],['Net cash change',financial.cash_flow.net_change]]}/></div>
             <div className="panels">
               <section>
                 <div className="panel-head">
@@ -1465,3 +1453,4 @@ function ReportsPage({ token, back }: { token: string; back: () => void }) {
     </div>
   );
 }
+function Statement({title,rows}:{title:string;rows:[string,number][]}){return <section className="statement"><h2>{title}</h2>{rows.map(([label,value],i)=><div className={i===rows.length-1?'statement-total':''} key={label}><span>{label}</span><b>{money(value)}</b></div>)}</section>}
