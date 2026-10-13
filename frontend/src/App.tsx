@@ -195,15 +195,15 @@ export default function App() {
   };
   const nav = [
     ["Dashboard", LayoutDashboard],
-    ["Customers", Building2],
-    ["Salespersons", Users],
-    ["Articles & Sets", PackagePlus],
     ["Customer POs", ClipboardCheck],
     ["Sales Orders", FileText],
     ["Invoices", FileText],
     ["Collections", Check],
     ["Receivables Aging", ShieldCheck],
     ["Commissions", FileText],
+    ["Customers", Building2],
+    ["Salespersons", Users],
+    ["Articles & Sets", PackagePlus],
     ["Employees", Users],
     ["Payroll", Building2],
     ["Reports", FileText],
@@ -489,8 +489,10 @@ function SalesPage({
     [aging, setAging] = useState<any>(null),
     [error, setError] = useState(""),
     [modal, setModal] = useState(""),
+    [editingArticle, setEditingArticle] = useState<any>(null),
     [viewing, setViewing] = useState<any>(null);
   const loadSales = useCallback(() => {
+    setError("");
     Promise.all([
       fetch(`${API}/sales/workspace`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -503,13 +505,14 @@ function SalesPage({
         if (!a.ok || !b.ok) throw new Error();
         setData(await a.json());
         setAging(await b.json());
+        setError("");
       })
       .catch(() => setError("Unable to load sales workspace."));
   }, [token]);
   useEffect(loadSales, [loadSales]);
-  const post = async (path: string, body?: any) => {
+  const post = async (path: string, body?: any, method = "POST") => {
     const response = await fetch(`${API}/${path}`, {
-      method: "POST",
+      method,
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -802,7 +805,7 @@ function SalesPage({
             ) : (
               rows.map((r: any) => (
                 <tr key={r.id}>
-                  {salesCellsV2(page, r)}
+                  {salesCells(page, r)}
                   <td>
                     <div className="row-actions">
                       {page === "Customer POs" && r.status === "draft" && (
@@ -825,6 +828,15 @@ function SalesPage({
                       >
                         <Eye />
                       </button>
+                      {page === "Articles & Sets" && (
+                        <button
+                          className="icon-action edit"
+                          title="Edit article, set types and sizes"
+                          onClick={() => setEditingArticle(r)}
+                        >
+                          <Pencil />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -834,7 +846,7 @@ function SalesPage({
         </table>
       </div>
       {modal && (
-        <SalesCreateModalV2
+        <SalesCreateModal
           type={modal}
           data={data}
           close={() => setModal("")}
@@ -849,6 +861,23 @@ function SalesPage({
           }}
         />
       )}{" "}
+      {editingArticle && (
+        <SalesCreateModal
+          type="article"
+          data={data}
+          initial={editingArticle}
+          close={() => setEditingArticle(null)}
+          save={async (path, body, method) => {
+            try {
+              setError("");
+              await post(path, body, method);
+              setEditingArticle(null);
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        />
+      )}
       {viewing && (
         <RecordView page={page} row={viewing} close={() => setViewing(null)} />
       )}
@@ -894,17 +923,29 @@ function salesCells(page: string, r: any) {
         </td>
         <td>{r.category}</td>
         <td>
-          {r.set_name}
-          <br />
-          <small>{r.pieces_per_set} pieces/set</small>
+          {r.sets.map((set: any) => (
+            <div key={set.id}>
+              <b>{set.name}</b>
+              <br />
+              <small>
+                {set.pieces} pieces · {money(set.set_price)} per set
+              </small>
+            </div>
+          ))}
         </td>
         <td>
-          {r.sizes
-            .map((s: any) => `${s.size_label}×${Number(s.pieces_per_set)}`)
-            .join(", ")}
+          {r.sets.map((set: any) => (
+            <div key={set.id}>
+              <b>{set.name}:</b>{" "}
+              {set.items
+                .map(
+                  (item: any) =>
+                    `${item.size_label} × ${Number(item.quantity)} @ ${money(item.unit_price)}`,
+                )
+                .join(", ")}
+            </div>
+          ))}
         </td>
-        <td>{money(r.selling_price)}</td>
-        <td>{money(r.commission_rate)} / piece</td>
       </>
     );
   if (page === "Customer POs")
@@ -995,6 +1036,7 @@ function salesCells(page: string, r: any) {
       </td>
       <td>{money(r.amount)}</td>
       <td>{r.days_taken}</td>
+      <td>{money(r.commission_rate)} / piece</td>
       <td>{status(r.commission_status)}</td>
       <td>
         <b>{money(r.commission_amount)}</b>
@@ -1005,15 +1047,34 @@ function salesCells(page: string, r: any) {
 function SalesCreateModal({
   type,
   data,
+  initial,
   close,
   save,
 }: {
   type: string;
   data: any;
+  initial?: any;
   close: () => void;
-  save: (path: string, body: any) => Promise<void>;
+  save: (path: string, body: any, method?: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [setTypes, setSetTypes] = useState<any[]>([
+    ...(initial?.sets?.length
+      ? initial.sets.map((set: any) => ({
+          ...set,
+          items: set.items.map((item: any) => ({ ...item })),
+        }))
+      : [
+          {
+            name: "Standard Set",
+            items: [{ size_label: "", quantity: 2, unit_price: 0 }],
+          },
+        ]),
+  ]);
+  const firstSetId = Number(data.articles?.[0]?.sets?.[0]?.id || 0);
+  const [poLines, setPoLines] = useState<any[]>([
+    { set_template_id: firstSetId, sets: 1 },
+  ]);
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setBusy(true);
@@ -1041,22 +1102,13 @@ function SalesCreateModal({
         default_commission_rate: Number(f.get("default_commission_rate")),
       };
     } else if (type === "article") {
-      path = "articles";
-      const labels = String(f.get("sizes"))
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean);
+      path = initial ? `articles/${initial.id}` : "articles";
       body = {
         code: f.get("code"),
         name: f.get("name"),
         category: f.get("category"),
-        set_name: f.get("set_name"),
-        selling_price: Number(f.get("selling_price")),
-        commission_rate: Number(f.get("commission_rate")),
-        sizes: labels.map((label) => ({
-          label,
-          pieces: Number(f.get("pieces_per_size")),
-        })),
+        status: initial?.status || "active",
+        sets: setTypes,
       };
     } else if (type === "po") {
       path = "customer-pos";
@@ -1066,25 +1118,22 @@ function SalesCreateModal({
         customer_po_reference: f.get("customer_po_reference"),
         po_date: f.get("po_date"),
         sale_type: f.get("sale_type"),
-        lines: [
-          {
-            article_id: Number(f.get("article_id")),
-            sets: Number(f.get("sets")),
-          },
-        ],
+        lines: poLines,
       };
     } else {
       path = "customer-receipts";
       body = {
         invoice_id: Number(f.get("invoice_id")),
+        sales_rep_id: Number(f.get("sales_rep_id")),
         receipt_date: f.get("receipt_date"),
         payment_method: f.get("payment_method"),
         reference: f.get("reference"),
         amount: Number(f.get("amount")),
+        commission_rate: Number(f.get("commission_rate")),
       };
     }
     try {
-      await save(path, body);
+      await save(path, body, initial && type === "article" ? "PUT" : "POST");
     } finally {
       setBusy(false);
     }
@@ -1105,7 +1154,9 @@ function SalesCreateModal({
             ? "New Customer PO"
             : type === "receipt"
               ? "Record Customer Collection"
-              : `Add ${type}`}
+              : initial && type === "article"
+                ? "Edit article and set types"
+                : `Add ${type}`}
         </h2>
         {type === "customer" ? (
           <>
@@ -1190,51 +1241,198 @@ function SalesCreateModal({
             <div className="form-row">
               <label>
                 Article code
-                <input name="code" required />
+                <input name="code" defaultValue={initial?.code} required />
               </label>
               <label>
                 Article name
-                <input name="name" required />
+                <input name="name" defaultValue={initial?.name} required />
               </label>
               <label>
                 Category
-                <input name="category" required />
-              </label>
-              <label>
-                Set template name
-                <input
-                  name="set_name"
-                  defaultValue="5 Size Standard Set"
-                  required
-                />
-              </label>
-              <label>
-                Selling price per piece
-                <input name="selling_price" type="number" step=".01" required />
-              </label>
-              <label>
-                Commission per piece
-                <input
-                  name="commission_rate"
-                  type="number"
-                  step=".01"
-                  required
-                />
+                <input name="category" defaultValue={initial?.category} required />
               </label>
             </div>
-            <label>
-              Size labels separated by commas
-              <input name="sizes" placeholder="6, 7, 8, 9, 10" required />
-            </label>
-            <label>
-              Pieces per size in one set
-              <input
-                name="pieces_per_size"
-                type="number"
-                defaultValue="2"
-                required
-              />
-            </label>
+            <div className="set-builder">
+              {setTypes.map((set, setIndex) => (
+                <section key={setIndex}>
+                  <div className="set-builder-head">
+                    <label>
+                      Set type name
+                      <input
+                        value={set.name}
+                        onChange={(e) =>
+                          setSetTypes((all) =>
+                            all.map((x, i) =>
+                              i === setIndex
+                                ? { ...x, name: e.target.value }
+                                : x,
+                            ),
+                          )
+                        }
+                        required
+                      />
+                    </label>
+                    {setTypes.length > 1 && (
+                      <button
+                        type="button"
+                        className="icon-action delete"
+                        onClick={() =>
+                          setSetTypes((all) =>
+                            all.filter((_, i) => i !== setIndex),
+                          )
+                        }
+                      >
+                        <Trash2 />
+                      </button>
+                    )}
+                  </div>
+                  <div className="set-size-head">
+                    <span>Size</span>
+                    <span>Pieces in set</span>
+                    <span>Price per piece</span>
+                    <span></span>
+                  </div>
+                  {set.items.map((item: any, itemIndex: number) => (
+                    <div className="set-size-row" key={itemIndex}>
+                      <input
+                        placeholder="Size"
+                        value={item.size_label}
+                        onChange={(e) =>
+                          setSetTypes((all) =>
+                            all.map((x, i) =>
+                              i === setIndex
+                                ? {
+                                    ...x,
+                                    items: x.items.map((v: any, j: number) =>
+                                      j === itemIndex
+                                        ? { ...v, size_label: e.target.value }
+                                        : v,
+                                    ),
+                                  }
+                                : x,
+                            ),
+                          )
+                        }
+                        required
+                      />
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={item.quantity}
+                        onChange={(e) =>
+                          setSetTypes((all) =>
+                            all.map((x, i) =>
+                              i === setIndex
+                                ? {
+                                    ...x,
+                                    items: x.items.map((v: any, j: number) =>
+                                      j === itemIndex
+                                        ? {
+                                            ...v,
+                                            quantity: Number(e.target.value),
+                                          }
+                                        : v,
+                                    ),
+                                  }
+                                : x,
+                            ),
+                          )
+                        }
+                        required
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.unit_price}
+                        onChange={(e) =>
+                          setSetTypes((all) =>
+                            all.map((x, i) =>
+                              i === setIndex
+                                ? {
+                                    ...x,
+                                    items: x.items.map((v: any, j: number) =>
+                                      j === itemIndex
+                                        ? {
+                                            ...v,
+                                            unit_price: Number(e.target.value),
+                                          }
+                                        : v,
+                                    ),
+                                  }
+                                : x,
+                            ),
+                          )
+                        }
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="icon-action delete"
+                        disabled={set.items.length === 1}
+                        onClick={() =>
+                          setSetTypes((all) =>
+                            all.map((x, i) =>
+                              i === setIndex
+                                ? {
+                                    ...x,
+                                    items: x.items.filter(
+                                      (_: any, j: number) => j !== itemIndex,
+                                    ),
+                                  }
+                                : x,
+                            ),
+                          )
+                        }
+                      >
+                        <Trash2 />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="add-row"
+                    onClick={() =>
+                      setSetTypes((all) =>
+                        all.map((x, i) =>
+                          i === setIndex
+                            ? {
+                                ...x,
+                                items: [
+                                  ...x.items,
+                                  {
+                                    size_label: "",
+                                    quantity: 1,
+                                    unit_price: 0,
+                                  },
+                                ],
+                              }
+                            : x,
+                        ),
+                      )
+                    }
+                  >
+                    <Plus /> Add size
+                  </button>
+                </section>
+              ))}
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() =>
+                  setSetTypes((all) => [
+                    ...all,
+                    {
+                      name: `Set Type ${all.length + 1}`,
+                      items: [{ size_label: "", quantity: 1, unit_price: 0 }],
+                    },
+                  ])
+                }
+              >
+                <Plus /> Add another set type
+              </button>
+            </div>
           </>
         ) : type === "po" ? (
           <>
@@ -1275,21 +1473,28 @@ function SalesCreateModal({
                   <option value="mixed">Part cash / credit</option>
                 </select>
               </label>
-              <label>
-                Article
-                <select name="article_id">
-                  {data.articles.map((x: any) => (
-                    <option value={x.id} key={x.id}>
-                      {x.code} — {x.name} ({x.pieces_per_set} pcs/set)
-                    </option>
-                  ))}
-                </select>
-              </label>
             </div>
-            <label>
-              Number of sets
-              <input name="sets" type="number" step="1" min="1" required />
-            </label>
+            <div className="po-lines">
+              <div className="po-lines-head">
+                <div><b>PO articles</b><small>Select every article/set requested by the customer.</small></div>
+                <button type="button" className="secondary-action" onClick={() => setPoLines((lines) => [...lines, { set_template_id: firstSetId, sets: 1 }])}><Plus /> Add article</button>
+              </div>
+              {poLines.map((line, index) => (
+                <div className="po-line" key={index}>
+                  <label>Article and set type
+                    <select value={line.set_template_id} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, set_template_id: Number(e.target.value) } : x))} required>
+                      {data.articles.flatMap((article: any) => article.sets.filter((set: any) => set.status !== "inactive").map((set: any) => (
+                        <option value={set.id} key={set.id}>{article.code} — {article.name} — {set.name} ({set.pieces} pcs, {money(set.set_price)})</option>
+                      )))}
+                    </select>
+                  </label>
+                  <label>Number of sets
+                    <input type="number" step="1" min="1" value={line.sets} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, sets: Number(e.target.value) } : x))} required />
+                  </label>
+                  <button type="button" className="icon-action delete" title="Remove article" disabled={poLines.length === 1} onClick={() => setPoLines((lines) => lines.filter((_, i) => i !== index))}><Trash2 /></button>
+                </div>
+              ))}
+            </div>
           </>
         ) : (
           <>
@@ -1306,6 +1511,16 @@ function SalesCreateModal({
               </select>
             </label>
             <div className="form-row">
+              <label>
+                Cash collected by
+                <select name="sales_rep_id">
+                  {data.reps.map((rep: any) => (
+                    <option value={rep.id} key={rep.id}>
+                      {rep.code} — {rep.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label>
                 Receipt date
                 <input name="receipt_date" type="date" required />
@@ -1332,6 +1547,17 @@ function SalesCreateModal({
               <label>
                 Reference
                 <input name="reference" />
+              </label>
+              <label>
+                Approved commission rate per piece
+                <input
+                  name="commission_rate"
+                  type="number"
+                  min="0"
+                  step=".01"
+                  defaultValue="0"
+                  required
+                />
               </label>
             </div>
           </>

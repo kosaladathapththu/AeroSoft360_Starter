@@ -17,6 +17,7 @@ Route::prefix('v1')->group(function ():void {
   Route::post('/sales-reps',[SalesController::class,'storeRep'])->middleware('permission:accounting.manage');
   Route::put('/sales-reps/{id}',[SalesController::class,'updateRep'])->middleware('permission:accounting.manage');
   Route::post('/articles',[SalesController::class,'storeArticle'])->middleware('permission:accounting.manage');
+  Route::put('/articles/{id}',[SalesController::class,'updateArticle'])->middleware('permission:accounting.manage');
   Route::post('/customer-pos',[SalesController::class,'storePo'])->middleware('permission:accounting.manage');
   Route::post('/customer-pos/{id}/convert',[SalesController::class,'convert'])->middleware('permission:accounting.manage');
   Route::post('/customer-receipts',[SalesController::class,'receipt'])->middleware('permission:accounting.manage');
