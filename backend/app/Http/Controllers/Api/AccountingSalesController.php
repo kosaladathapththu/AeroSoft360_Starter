@@ -260,9 +260,46 @@ final class AccountingSalesController extends Controller
 
     public function updateInvoice(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate(['due_date'=>['required','date'], 'sale_type'=>['required','in:cash,credit,mixed']]);
-        abort_unless(DB::table('sales_invoices')->where('id', $id)->update($data + ['updated_at'=>now()]) === 1, 404, 'Invoice not found.');
-        return response()->json(DB::table('sales_invoices')->find($id));
+        $data = $request->validate([
+            'customer_id'=>['required','integer','exists:customers,id'], 'sales_rep_id'=>['required','integer','exists:sales_representatives,id'],
+            'invoice_date'=>['required','date'], 'due_date'=>['required','date','after_or_equal:invoice_date'], 'sale_type'=>['required','in:cash,credit,mixed'],
+            'reference'=>['nullable','string','max:80'], 'discount'=>['nullable','numeric','gte:0'], 'tax'=>['nullable','numeric','gte:0'],
+            'lines'=>['required','array','min:1'], 'lines.*.article_id'=>['required','integer','exists:articles,id'],
+            'lines.*.size_label'=>['required','string','max:30'], 'lines.*.quantity'=>['required','numeric','gt:0'], 'lines.*.rate'=>['required','numeric','gte:0'],
+        ]);
+        return DB::transaction(function () use ($data, $id) {
+            $invoice = DB::table('sales_invoices')->lockForUpdate()->find($id);
+            abort_unless($invoice, 404, 'Invoice not found.');
+            abort_if(DB::table('receipt_allocations')->where('invoice_id', $id)->exists(), 422, 'This invoice has collections. Delete the collections before changing customer, salesperson, amounts or item lines.');
+            $subtotal = round(collect($data['lines'])->sum(fn ($line) => $line['quantity'] * $line['rate']), 2);
+            $discount = round((float) ($data['discount'] ?? 0), 2); $tax = round((float) ($data['tax'] ?? 0), 2);
+            abort_if($discount > $subtotal, 422, 'Discount cannot exceed the invoice subtotal.');
+            $total = round($subtotal - $discount + $tax, 2); abort_if($total <= 0, 422, 'Invoice total must be greater than zero.');
+            if (Schema::hasTable('finished_goods_movements')) app(FinishedGoodsInventoryService::class)->restoreInvoice($id, $data['invoice_date']);
+            $oldLines = DB::table('sales_invoice_lines')->where('sales_invoice_id', $id)->get();
+            foreach ($oldLines as $line) if ($line->sales_order_size_line_id) DB::table('sales_order_size_lines')->where('id', $line->sales_order_size_line_id)->decrement('invoiced_quantity', $line->quantity, ['updated_at'=>now()]);
+            DB::table('sales_invoice_lines')->where('sales_invoice_id', $id)->delete();
+            $manualOrder = str_starts_with((string) DB::table('sales_orders')->where('id', $invoice->sales_order_id)->value('number'), 'SO-MAN-');
+            foreach ($data['lines'] as $line) {
+                $orderLine = DB::table('sales_order_size_lines')->where('sales_order_id', $invoice->sales_order_id)->where('article_id', $line['article_id'])->where('size_label', $line['size_label'])->first();
+                if (! $orderLine) {
+                    abort_unless($manualOrder, 422, 'The selected article and size are not part of the linked sales order.');
+                    $orderLineId = DB::table('sales_order_size_lines')->insertGetId(['sales_order_id'=>$invoice->sales_order_id,'article_id'=>$line['article_id'],'size_label'=>$line['size_label'],'quantity'=>$line['quantity'],'invoiced_quantity'=>$line['quantity'],'rate'=>$line['rate'],'created_at'=>now(),'updated_at'=>now()]);
+                } else {
+                    $available = (float) $orderLine->quantity - (float) $orderLine->invoiced_quantity;
+                    abort_if(! $manualOrder && (float) $line['quantity'] > $available + .0001, 422, "Quantity for size {$line['size_label']} exceeds the remaining sales-order quantity.");
+                    $orderLineId = $orderLine->id;
+                    DB::table('sales_order_size_lines')->where('id', $orderLineId)->update(['quantity'=>$manualOrder?$line['quantity']:$orderLine->quantity,'invoiced_quantity'=>DB::raw('invoiced_quantity + '.(float)$line['quantity']),'rate'=>$line['rate'],'updated_at'=>now()]);
+                }
+                DB::table('sales_invoice_lines')->insert(['sales_invoice_id'=>$id,'sales_order_size_line_id'=>$orderLineId,'article_id'=>$line['article_id'],'size_label'=>$line['size_label'],'quantity'=>$line['quantity'],'rate'=>$line['rate'],'line_total'=>round($line['quantity']*$line['rate'],2),'created_at'=>now(),'updated_at'=>now()]);
+            }
+            DB::table('sales_invoices')->where('id', $id)->update(['customer_id'=>$data['customer_id'],'sales_rep_id'=>$data['sales_rep_id'],'invoice_date'=>$data['invoice_date'],'due_date'=>$data['due_date'],'sale_type'=>$data['sale_type'],'subtotal'=>$subtotal,'discount'=>$discount,'tax'=>$tax,'total'=>$total,'outstanding'=>$total,'status'=>'unpaid','updated_at'=>now()]);
+            DB::table('customer_pos')->where('id', DB::table('sales_orders')->where('id',$invoice->sales_order_id)->value('customer_po_id'))->update(['customer_po_reference'=>$data['reference']??null,'updated_at'=>now()]);
+            if (Schema::hasTable('finished_goods_movements')) app(FinishedGoodsInventoryService::class)->issueInvoice($id, $data['invoice_date']);
+            $journalId=DB::table('journal_entries')->where(['source_type'=>'sales_invoice','source_id'=>$id])->value('id');
+            if($journalId){DB::table('journal_lines')->where('journal_entry_id',$journalId)->delete();$lines=[['1100',$total,0,'Accounts receivable'],['4000',0,$subtotal-$discount,'Domestic sales revenue']];if($tax>0)$lines[]=['2300',0,$tax,'Sales tax payable'];foreach($lines as[$code,$debit,$credit,$description]){$account=DB::table('accounts')->where('code',$code)->value('id');if($account)DB::table('journal_lines')->insert(['journal_entry_id'=>$journalId,'account_id'=>$account,'debit'=>$debit,'credit'=>$credit,'description'=>$description,'created_at'=>now(),'updated_at'=>now()]);}DB::table('journal_entries')->where('id',$journalId)->update(['posting_date'=>$data['invoice_date'],'description'=>"Customer invoice {$invoice->number}",'updated_at'=>now()]);}
+            return response()->json(DB::table('sales_invoices')->find($id));
+        });
     }
 
     public function deleteInvoice(int $id): JsonResponse
@@ -284,10 +321,16 @@ final class AccountingSalesController extends Controller
 
     public function updateReceipt(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate(['receipt_date'=>['required','date'], 'payment_method'=>['required','in:cash,bank_transfer,cheque,card'], 'reference'=>['nullable','string','max:80']]);
+        $data = $request->validate(['receipt_date'=>['required','date'], 'collector_sales_rep_id'=>['required','integer','exists:sales_representatives,id'], 'collection_type'=>['required','in:regular,partial,final,recovery'], 'payment_method'=>['required','in:cash,bank_transfer,cheque,card'], 'commission_decision'=>['required','in:invoice_salesperson,collector,cancel'], 'reference'=>['nullable','string','max:80']]);
         return DB::transaction(function () use ($data, $id) {
-            abort_unless(DB::table('customer_receipts')->where('id', $id)->update($data + ['updated_at'=>now()]) === 1, 404, 'Collection not found.');
-            DB::table('journal_entries')->where(['source_type'=>'customer_receipt', 'source_id'=>$id])->update(['posting_date'=>$data['receipt_date'], 'updated_at'=>now()]);
+            $receipt=DB::table('customer_receipts')->find($id);abort_unless($receipt,404,'Collection not found.');
+            $allocation=DB::table('receipt_allocations')->where('receipt_id',$id)->first();abort_unless($allocation,422,'Collection allocation is missing.');
+            $invoice=DB::table('sales_invoices')->find($allocation->invoice_id);abort_unless($invoice,422,'Linked invoice is missing.');
+            $payeeId=$data['commission_decision']==='collector'?(int)$data['collector_sales_rep_id']:(int)$invoice->sales_rep_id;$payee=DB::table('sales_representatives')->find($payeeId);abort_unless($payee,422,'Commission recipient is missing.');
+            $days=max(0,(int)floor((strtotime($data['receipt_date'])-strtotime($invoice->invoice_date))/86400));$limit=(int)(DB::table('commission_settings')->value('max_collection_days')??100);$eligible=$days<=$limit;$cancelled=$data['commission_decision']==='cancel';$rate=(float)$payee->default_commission_rate;$commission=(!$cancelled&&$eligible)?round((float)$allocation->commission_pieces*$rate,2):0;
+            DB::table('customer_receipts')->where('id',$id)->update(['collector_sales_rep_id'=>$data['collector_sales_rep_id'],'receipt_date'=>$data['receipt_date'],'collection_type'=>$data['collection_type'],'payment_method'=>$data['payment_method'],'reference'=>$data['reference']??null,'updated_at'=>now()]);
+            DB::table('receipt_allocations')->where('id',$allocation->id)->update(['commission_payee_sales_rep_id'=>$cancelled?null:$payeeId,'days_taken'=>$days,'commission_rate'=>$rate,'commission_amount'=>$commission,'commission_status'=>$cancelled?'cancelled_by_management':($eligible?'eligible':'blocked_late'),'commission_decision'=>$data['commission_decision'],'updated_at'=>now()]);
+            $journalId=DB::table('journal_entries')->where(['source_type'=>'customer_receipt','source_id'=>$id])->value('id');if($journalId){DB::table('journal_lines')->where('journal_entry_id',$journalId)->delete();$lines=[['1000',$receipt->amount,0,'Customer collection received'],['1100',0,$receipt->amount,'Accounts receivable settled']];if($commission>0){$lines[]=['5300',$commission,0,'Sales commission expense'];$lines[]=['2260',0,$commission,'Commission payable'];}foreach($lines as[$code,$debit,$credit,$description]){$account=DB::table('accounts')->where('code',$code)->value('id');if($account)DB::table('journal_lines')->insert(['journal_entry_id'=>$journalId,'account_id'=>$account,'debit'=>$debit,'credit'=>$credit,'description'=>$description,'created_at'=>now(),'updated_at'=>now()]);}DB::table('journal_entries')->where('id',$journalId)->update(['posting_date'=>$data['receipt_date'],'updated_at'=>now()]);}
             return response()->json(DB::table('customer_receipts')->find($id));
         });
     }

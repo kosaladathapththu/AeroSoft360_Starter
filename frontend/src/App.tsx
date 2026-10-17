@@ -894,8 +894,10 @@ function SalesPage({
     Collections: [
       "Receipt",
       "Customer",
-      "Collected by",
+      "Invoice salesperson",
+      "Cash collector",
       "Date",
+      "Collection type",
       "Method",
       "Amount",
     ],
@@ -906,11 +908,12 @@ function SalesPage({
       "Due date",
       "Days overdue",
       "Bucket",
+      "Last collection",
       "Outstanding",
     ],
     Commissions: [
       "Source",
-      "Collected by",
+      "Commission paid to",
       "Customer",
       "Invoice",
       "Receipt",
@@ -1046,7 +1049,7 @@ function SalesPage({
                         }}><Trash2 /></button>
                       </>}
                       {["Sales Orders", "Invoices", "Collections"].includes(page) && <>
-                        <button className="icon-action edit" title={`Edit ${page}`} onClick={() => setEditingTransaction({ page, row: r })}><Pencil /></button>
+                        <button className="icon-action edit" title={`Edit ${page}`} onClick={() => page === "Invoices" ? setEditingMaster({ type: "invoice", row: r }) : setEditingTransaction({ page, row: r })}><Pencil /></button>
                         <button className="icon-action delete" title={`Delete ${page}`} onClick={async () => {
                           if (!confirm(`Delete ${r.number}? Related posted records will be checked first.`)) return;
                           const base = page === "Sales Orders" ? "sales-orders" : page === "Invoices" ? "sales-invoices" : "customer-receipts";
@@ -1135,6 +1138,7 @@ function SalesPage({
         <SalesTransactionEditModal
           page={editingTransaction.page}
           row={editingTransaction.row}
+          data={data}
           close={() => setEditingTransaction(null)}
           save={async (path, body) => {
             try { setError(""); await post(path, body, "PUT"); setEditingTransaction(null); }
@@ -1186,7 +1190,7 @@ function SalesPage({
     </>
   );
 }
-function SalesTransactionEditModal({ page, row, close, save }: { page: string; row: any; close: () => void; save: (path: string, body: any) => Promise<void> }) {
+function SalesTransactionEditModal({ page, row, data, close, save }: { page: string; row: any; data: any; close: () => void; save: (path: string, body: any) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   return (
     <ModalShell title={`Edit ${row.number}`} close={close} busy={busy} onSubmit={async (event) => {
@@ -1194,7 +1198,7 @@ function SalesTransactionEditModal({ page, row, close, save }: { page: string; r
       try {
         if (page === "Sales Orders") await save(`sales-orders/${row.id}`, { order_date: form.get("order_date"), status: form.get("status") });
         else if (page === "Invoices") await save(`sales-invoices/${row.id}`, { due_date: form.get("due_date"), sale_type: form.get("sale_type") });
-        else await save(`customer-receipts/${row.id}`, { receipt_date: form.get("receipt_date"), payment_method: form.get("payment_method"), reference: form.get("reference") });
+        else await save(`customer-receipts/${row.id}`, { receipt_date: form.get("receipt_date"), collector_sales_rep_id: Number(form.get("collector_sales_rep_id")), collection_type: form.get("collection_type"), payment_method: form.get("payment_method"), commission_decision: form.get("commission_decision"), reference: form.get("reference") });
       } finally { setBusy(false); }
     }}>
       {page === "Sales Orders" ? <div className="form-row">
@@ -1204,7 +1208,13 @@ function SalesTransactionEditModal({ page, row, close, save }: { page: string; r
         <label>Due date<input name="due_date" type="date" defaultValue={row.due_date} required /></label>
         <label>Sale type<select name="sale_type" defaultValue={row.sale_type}><option value="credit">Credit</option><option value="cash">Cash</option><option value="mixed">Mixed</option></select></label>
       </div> : <>
-        <div className="form-row"><label>Receipt date<input name="receipt_date" type="date" defaultValue={row.receipt_date} required /></label><label>Payment method<select name="payment_method" defaultValue={row.payment_method}><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="cheque">Cheque</option><option value="card">Card</option></select></label></div>
+        <div className="form-row">
+          <label>Cash collector<select name="collector_sales_rep_id" defaultValue={row.collector_sales_rep_id || row.sales_rep_id} required>{data.reps.map((rep: any) => <option value={rep.id} key={rep.id}>{rep.code} â€” {rep.name}</option>)}</select></label>
+          <label>Receipt date<input name="receipt_date" type="date" defaultValue={row.receipt_date} required /></label>
+          <label>Collection type<select name="collection_type" defaultValue={row.collection_type || "regular"}><option value="regular">Regular collection</option><option value="partial">Partial collection</option><option value="final">Final settlement</option><option value="recovery">Overdue debt recovery</option></select></label>
+          <label>Payment method<select name="payment_method" defaultValue={row.payment_method}><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="cheque">Cheque</option><option value="card">Card</option></select></label>
+          <label>Commission decision<select name="commission_decision" defaultValue={row.commission_decision || "invoice_salesperson"}><option value="invoice_salesperson">Pay original invoice salesperson</option><option value="collector">Pay cash collector</option><option value="cancel">No commission / cancel</option></select></label>
+        </div>
         <label>Reference<input name="reference" defaultValue={row.reference} /></label>
       </>}
     </ModalShell>
@@ -1323,8 +1333,10 @@ function salesCells(page: string, r: any) {
           <b>{r.number}</b>
         </td>
         <td>{r.customer_name}</td>
-        <td>{r.rep_name}</td>
+        <td>{r.invoice_rep_name}</td>
+        <td>{r.collector_name || r.invoice_rep_name}</td>
         <td>{r.receipt_date}</td>
+        <td>{(r.collection_type || "regular").replaceAll("_", " ")}</td>
         <td>{r.payment_method.replaceAll("_", " ")}</td>
         <td>{money(r.amount)}</td>
       </>
@@ -1340,6 +1352,7 @@ function salesCells(page: string, r: any) {
         <td>{r.due_date}</td>
         <td>{r.days_overdue}</td>
         <td>{status(r.bucket)}</td>
+        <td>{r.last_collection_date ? <>{r.last_collection_date}<br /><small>{r.last_collector || "Unknown collector"} Â· {(r.last_collection_type || "regular").replaceAll("_", " ")}</small></> : "No collection yet"}</td>
         <td>{money(r.outstanding)}</td>
       </>
     );
@@ -1455,14 +1468,14 @@ function SalesCreateModal({
       : [{ article_id: firstArticleId, order_mode: "badge", set_template_id: firstSetId, set_item_id: firstItemId, quantity: 1 }]),
   ]);
   const defaultInvoiceItem = data.articles?.[0]?.sets?.[0]?.items?.[0];
-  const [invoiceLines, setInvoiceLines] = useState<any[]>([
-    {
+  const [invoiceLines, setInvoiceLines] = useState<any[]>(
+    initial?.lines?.length ? initial.lines.map((line: any) => ({ article_id: Number(line.article_id), size_label: line.size_label, quantity: Number(line.quantity), rate: Number(line.rate) })) : [{
       article_id: Number(data.articles?.[0]?.id || 0),
       size_label: defaultInvoiceItem?.size_label || "",
       quantity: 1,
       rate: Number(defaultInvoiceItem?.unit_price || data.articles?.[0]?.selling_price || 0),
-    },
-  ]);
+    }],
+  );
   const availableSets = (data.articles || []).flatMap((article: any) =>
     article.sets
       .filter((set: any) => set.status !== "inactive")
@@ -1534,7 +1547,7 @@ function SalesCreateModal({
         lines: poLines,
       };
     } else if (type === "invoice") {
-      path = "sales-invoices/manual";
+      path = initial ? `sales-invoices/${initial.id}` : "sales-invoices/manual";
       body = {
         customer_id: Number(f.get("customer_id")),
         sales_rep_id: Number(f.get("sales_rep_id")),
@@ -1573,14 +1586,17 @@ function SalesCreateModal({
       path = "customer-receipts";
       body = {
         invoice_id: Number(f.get("invoice_id")),
+        collector_sales_rep_id: Number(f.get("collector_sales_rep_id")),
         receipt_date: f.get("receipt_date"),
+        collection_type: f.get("collection_type"),
         payment_method: f.get("payment_method"),
+        commission_decision: f.get("commission_decision"),
         reference: f.get("reference"),
         amount: Number(f.get("amount")),
       };
     }
     try {
-      await save(path, body, initial && ["article", "po", "customer", "rep", "commission"].includes(type) ? "PUT" : "POST");
+      await save(path, body, initial && ["article", "po", "customer", "rep", "commission", "invoice"].includes(type) ? "PUT" : "POST");
     } finally {
       setBusy(false);
     }
@@ -1602,7 +1618,7 @@ function SalesCreateModal({
             : type === "sales_order"
               ? "Create Sales Order"
             : type === "invoice"
-              ? "Create Manual Invoice"
+              ? initial ? `Edit ${initial.number}` : "Create Manual Invoice"
             : type === "commission"
               ? initial ? "Edit Commission" : "Add Manual Commission"
             : type === "finished_stock"
@@ -2019,15 +2035,15 @@ function SalesCreateModal({
           <>
             <div className="form-row">
               <label>Customer
-                <select name="customer_id" required>{data.customers.map((customer: any) => <option value={customer.id} key={customer.id}>{customer.code} — {customer.name}</option>)}</select>
+                <select name="customer_id" defaultValue={initial?.customer_id} required>{data.customers.map((customer: any) => <option value={customer.id} key={customer.id}>{customer.code} — {customer.name}</option>)}</select>
               </label>
               <label>Salesperson
-                <select name="sales_rep_id" required>{data.reps.map((rep: any) => <option value={rep.id} key={rep.id}>{rep.code} — {rep.name}</option>)}</select>
+                <select name="sales_rep_id" defaultValue={initial?.sales_rep_id} required>{data.reps.map((rep: any) => <option value={rep.id} key={rep.id}>{rep.code} — {rep.name}</option>)}</select>
               </label>
-              <label>Invoice date<input name="invoice_date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></label>
-              <label>Due date<input name="due_date" type="date" /></label>
-              <label>Sale type<select name="sale_type" defaultValue="credit"><option value="credit">Credit sale</option><option value="cash">Cash sale</option><option value="mixed">Mixed payment</option></select></label>
-              <label>Reference<input name="reference" placeholder="Customer reference / note" /></label>
+              <label>Invoice date<input name="invoice_date" type="date" required defaultValue={initial?.invoice_date || new Date().toISOString().slice(0, 10)} /></label>
+              <label>Due date<input name="due_date" type="date" defaultValue={initial?.due_date} /></label>
+              <label>Sale type<select name="sale_type" defaultValue={initial?.sale_type || "credit"}><option value="credit">Credit sale</option><option value="cash">Cash sale</option><option value="mixed">Mixed payment</option></select></label>
+              <label>Reference<input name="reference" defaultValue={initial?.reference} placeholder="Customer reference / note" /></label>
             </div>
             <div className="po-lines">
               <div className="po-lines-head"><div><b>Invoice items</b><small>Add one or more articles, sizes, quantities and selling rates.</small></div><button type="button" className="secondary-action" onClick={() => setInvoiceLines((lines) => [...lines, { article_id: Number(data.articles?.[0]?.id || 0), size_label: defaultInvoiceItem?.size_label || "", quantity: 1, rate: Number(defaultInvoiceItem?.unit_price || 0) }])}><Plus /> Add item</button></div>
@@ -2043,7 +2059,7 @@ function SalesCreateModal({
                   <button type="button" className="icon-action delete" disabled={invoiceLines.length === 1} onClick={() => setInvoiceLines((lines) => lines.filter((_, i) => i !== index))}><Trash2 /></button>
                 </div>;
               })}
-              <div className="form-row invoice-adjustments"><label>Discount<input name="discount" type="number" min="0" step="0.01" defaultValue="0" /></label><label>Tax<input name="tax" type="number" min="0" step="0.01" defaultValue="0" /></label></div>
+              <div className="form-row invoice-adjustments"><label>Discount<input name="discount" type="number" min="0" step="0.01" defaultValue={initial?.discount || 0} /></label><label>Tax<input name="tax" type="number" min="0" step="0.01" defaultValue={initial?.tax || 0} /></label></div>
               <div className="po-grand-total"><span>Invoice subtotal before discount and tax</span><strong>{money(invoiceSubtotal)}</strong></div>
             </div>
           </>
@@ -2079,8 +2095,23 @@ function SalesCreateModal({
             </label>
             <div className="form-row">
               <label>
+                Cash collector
+                <select name="collector_sales_rep_id" required>
+                  {data.reps.filter((rep: any) => rep.status === "active").map((rep: any) => <option value={rep.id} key={rep.id}>{rep.code} â€” {rep.name}</option>)}
+                </select>
+              </label>
+              <label>
                 Receipt date
                 <input name="receipt_date" type="date" required />
+              </label>
+              <label>
+                Collection type
+                <select name="collection_type" defaultValue="regular">
+                  <option value="regular">Regular collection</option>
+                  <option value="partial">Partial collection</option>
+                  <option value="final">Final settlement</option>
+                  <option value="recovery">Overdue debt recovery</option>
+                </select>
               </label>
               <label>
                 Payment method
@@ -2105,8 +2136,16 @@ function SalesCreateModal({
                 Reference
                 <input name="reference" />
               </label>
+              <label>
+                Commission decision
+                <select name="commission_decision" defaultValue="invoice_salesperson">
+                  <option value="invoice_salesperson">Pay original invoice salesperson</option>
+                  <option value="collector">Pay the selected cash collector</option>
+                  <option value="cancel">No commission / cancel commission</option>
+                </select>
+              </label>
             </div>
-            <p className="report-note">The salesperson and commission rate come from the selected invoice. Commission is earned only when collection is within the management policy of {data.commission_settings?.max_collection_days || 100} days.</p>
+            <p className="report-note">The invoice salesperson remains unchanged. Management can pay commission to that salesperson, transfer it to the actual collector, or cancel it. The {data.commission_settings?.max_collection_days || 100}-day eligibility policy still applies.</p>
           </>
         )}
         <div className="actions">
@@ -2114,7 +2153,7 @@ function SalesCreateModal({
             Cancel
           </button>
           <button className="primary" disabled={busy}>
-            {busy ? <Loader2 /> : <Check />} {type === "invoice" ? "Create invoice" : type === "sales_order" ? "Create sales order" : type === "commission" ? "Post commission" : "Save"}
+            {busy ? <Loader2 /> : <Check />} {type === "invoice" ? initial ? "Save invoice" : "Create invoice" : type === "sales_order" ? "Create sales order" : type === "commission" ? "Post commission" : "Save"}
           </button>
         </div>
       </form>
