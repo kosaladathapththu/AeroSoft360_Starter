@@ -561,6 +561,7 @@ function SalesPage({
 }) {
   const [data, setData] = useState<any>(null),
     [aging, setAging] = useState<any>(null),
+    [dashboard, setDashboard] = useState<any>(null),
     [error, setError] = useState(""),
     [modal, setModal] = useState(""),
     [editingMaster, setEditingMaster] = useState<{ type: string; row: any } | null>(null),
@@ -575,6 +576,12 @@ function SalesPage({
     [pricePreview, setPricePreview] = useState<any>(null),
     [expandedPriceArticles, setExpandedPriceArticles] = useState<Set<number>>(new Set());
   const priceFileRef = useRef<HTMLInputElement>(null);
+  const loadDashboard = useCallback(() => {
+    setError("");
+    fetch(`${API}/sales/dashboard`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (response) => { if (!response.ok) throw new Error(); setDashboard(await response.json()); })
+      .catch(() => setError("Unable to load sales dashboard."));
+  }, [token]);
   const loadSales = useCallback(() => {
     setError("");
     Promise.all([
@@ -593,7 +600,11 @@ function SalesPage({
       })
       .catch(() => setError("Unable to load sales workspace."));
   }, [token]);
-  useEffect(loadSales, [loadSales]);
+  useEffect(() => {
+    if (page === "Dashboard") {
+      if (!dashboard) loadDashboard();
+    } else if (!data || !aging) loadSales();
+  }, [page, dashboard, data, aging, loadDashboard, loadSales]);
   const post = async (path: string, body?: any, method = "POST") => {
     const response = await fetch(`${API}/${path}`, {
       method,
@@ -658,7 +669,13 @@ function SalesPage({
     } catch (e) { setError((e as Error).message); }
     finally { setPriceImporting(false); }
   };
-  if (!data || !aging)
+  if (error && page === "Dashboard" && !dashboard)
+    return <div className="error loading-failure"><b>{error}</b><button onClick={loadDashboard}>Try again</button></div>;
+  if (error && page !== "Dashboard" && (!data || !aging))
+    return <div className="error loading-failure"><b>{error}</b><button onClick={loadSales}>Try again</button></div>;
+  if (page === "Dashboard" && !dashboard)
+    return <div className="loading"><Loader2 /> Loading dashboard...</div>;
+  if (page !== "Dashboard" && (!data || !aging))
     return (
       <div className="loading">
         <Loader2 /> Loading sales workspace...
@@ -676,7 +693,7 @@ function SalesPage({
               one controlled flow.
             </p>
           </div>
-          <button className="primary" onClick={() => setModal("po")}>
+          <button className="primary" onClick={() => go("Customer POs")}>
             <Plus /> New customer PO
           </button>
         </div>
@@ -684,40 +701,27 @@ function SalesPage({
         <div className="kpis">
           <article>
             <span>Customers</span>
-            <b>{data.customers.length}</b>
+            <b>{dashboard.customers_count}</b>
             <small>Active customer accounts</small>
           </article>
           <article>
             <span>Open credit invoices</span>
             <b>
-              {
-                data.invoices.filter((x: any) => Number(x.outstanding) > 0)
-                  .length
-              }
+              {dashboard.open_invoices_count}
             </b>
-            <small>{money(aging.total)} outstanding</small>
+            <small>{money(dashboard.outstanding_total)} outstanding</small>
           </article>
           <article>
             <span>Collections received</span>
             <b>
-              {money(
-                data.receipts.reduce(
-                  (s: number, x: any) => s + Number(x.amount),
-                  0,
-                ),
-              )}
+              {money(dashboard.collections_total)}
             </b>
             <small>Allocated customer receipts</small>
           </article>
           <article>
             <span>Commission earned</span>
             <b>
-              {money(
-                data.commissions.reduce(
-                  (s: number, x: any) => s + Number(x.commission_amount),
-                  0,
-                ),
-              )}
+              {money(dashboard.commission_total)}
             </b>
             <small>Collection-based eligible commission</small>
           </article>
@@ -750,7 +754,7 @@ function SalesPage({
               <h2>Recent invoices</h2>
               <button onClick={() => go("Invoices")}>View all</button>
             </div>
-            {data.invoices.slice(0, 5).map((x: any) => (
+            {dashboard.recent_invoices.map((x: any) => (
               <div className="list-row" key={x.id}>
                 <FileText />
                 <span>
@@ -769,7 +773,7 @@ function SalesPage({
               <h2>Recent collections</h2>
               <button onClick={() => go("Collections")}>View all</button>
             </div>
-            {data.receipts.slice(0, 5).map((x: any) => (
+            {dashboard.recent_receipts.map((x: any) => (
               <div className="list-row" key={x.id}>
                 <Check />
                 <span>
@@ -1170,6 +1174,9 @@ function SalesPage({
 }
 function SalesTransactionEditModal({ page, row, close, save }: { page: string; row: any; close: () => void; save: (path: string, body: any) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
+  const [commissionBasis, setCommissionBasis] = useState(Number(initial?.amount ?? initial?.basis_amount ?? 0));
+  const [commissionRate, setCommissionRate] = useState(Number(initial?.commission_rate ?? 0));
+  const calculatedCommission = Math.round(commissionBasis * commissionRate * 100) / 100;
   return (
     <ModalShell title={`Edit ${row.number}`} close={close} busy={busy} onSubmit={async (event) => {
       event.preventDefault(); setBusy(true); const form = new FormData(event.currentTarget);
@@ -2022,9 +2029,9 @@ function SalesCreateModal({
               <label>Customer (optional)<select name="customer_id" defaultValue={initial?.customer_id || ""}><option value="">Not linked</option>{data.customers.map((customer: any) => <option value={customer.id} key={customer.id}>{customer.code} — {customer.name}</option>)}</select></label>
               <label>Invoice (optional)<select name="invoice_id" defaultValue={initial?.invoice_id || ""}><option value="">Not linked</option>{data.invoices.map((invoice: any) => <option value={invoice.id} key={invoice.id}>{invoice.number} — {invoice.customer_name}</option>)}</select></label>
               <label>Receipt (optional)<select name="receipt_id" defaultValue={initial?.receipt_id || ""}><option value="">Not linked</option>{data.receipts.map((receipt: any) => <option value={receipt.id} key={receipt.id}>{receipt.number} — {receipt.customer_name}</option>)}</select></label>
-              <label>Basis / collected amount<input name="basis_amount" type="number" min="0" step="0.01" defaultValue={initial?.amount ?? 0} required /></label>
-              <label>Rate per piece<input name="commission_rate" type="number" min="0" step="0.01" defaultValue={initial?.commission_rate ?? 0} required /></label>
-              <label>Commission amount<input name="commission_amount" type="number" min={initial?.source_type === "automatic" ? "0" : "0.01"} step="0.01" defaultValue={initial?.commission_amount} required /></label>
+              <label>Basis quantity / pieces<input name="basis_amount" type="number" min="0" step="0.01" value={commissionBasis} onChange={(event) => setCommissionBasis(Number(event.target.value))} required /></label>
+              <label>Rate per piece<input name="commission_rate" type="number" min="0" step="0.01" value={commissionRate} onChange={(event) => setCommissionRate(Number(event.target.value))} required /></label>
+              <label>Commission amount<input name="commission_amount" type="number" value={calculatedCommission} readOnly required /></label>
               {initial?.source_type === "automatic" && <label>Status<select name="commission_status" defaultValue={initial?.commission_status || "eligible"}><option value="eligible">Eligible</option><option value="blocked_late">Blocked late</option><option value="void">Void</option></select></label>}
             </div>
             <label>Notes<input name="notes" maxLength={255} defaultValue={initial?.notes} placeholder="Reason or approval reference" /></label>

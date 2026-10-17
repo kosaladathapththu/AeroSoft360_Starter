@@ -234,6 +234,21 @@
 }
 .payroll-breakdown-line small { display: block; margin-top: 3px; color: #71838c; font-size: 11px; }
 .payroll-empty { padding: 15px; color: #71838c; }
+.loading-failure {
+  min-height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.loading-failure button {
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  padding: 8px 14px;
+  background: white;
+  color: inherit;
+  cursor: pointer;
+}
 .salary-preview span {
   color: #4f6e72;
 }

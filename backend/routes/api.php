@@ -17,6 +17,7 @@ Route::prefix('v1')->group(function ():void {
   Route::post('/auth/logout',[AuthController::class,'logout']);
   Route::get('/workspace',[ProcurementController::class,'workspace'])->middleware('permission:workspace.view');
   Route::get('/sales/workspace',[AccountingSalesController::class,'workspace'])->middleware('permission:workspace.view');
+  Route::get('/sales/dashboard',[AccountingSalesController::class,'dashboard'])->middleware('permission:workspace.view');
   Route::post('/customers',[SalesController::class,'storeCustomer'])->middleware('permission:accounting.manage');
   Route::put('/customers/{id}',[SalesController::class,'updateCustomer'])->middleware('permission:accounting.manage');
   Route::delete('/customers/{id}',[AccountingSalesController::class,'deleteCustomer'])->middleware('permission:accounting.manage');

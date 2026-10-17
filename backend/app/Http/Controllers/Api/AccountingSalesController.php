@@ -8,9 +8,26 @@ use App\Services\Inventory\FinishedGoodsInventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class AccountingSalesController extends Controller
 {
+    public function dashboard(): JsonResponse
+    {
+        $recentInvoices = DB::table('sales_invoices as invoice')->join('customers as customer', 'customer.id', '=', 'invoice.customer_id')->join('sales_representatives as rep', 'rep.id', '=', 'invoice.sales_rep_id')->select('invoice.id', 'invoice.number', 'invoice.outstanding', 'invoice.status', 'customer.name as customer_name', 'rep.name as rep_name')->latest('invoice.id')->limit(5)->get();
+        $recentReceipts = DB::table('customer_receipts as receipt')->join('customers as customer', 'customer.id', '=', 'receipt.customer_id')->select('receipt.id', 'receipt.number', 'receipt.receipt_date', 'receipt.amount', 'customer.name as customer_name')->latest('receipt.id')->limit(5)->get();
+        $automaticCommission = (float) DB::table('receipt_allocations')->where('commission_status', 'eligible')->sum('commission_amount');
+        $manualCommission = (float) DB::table('manual_commissions')->where('status', 'eligible')->sum('commission_amount');
+        return response()->json([
+            'customers_count'=>DB::table('customers')->where('status', 'active')->count(),
+            'open_invoices_count'=>DB::table('sales_invoices')->where('outstanding', '>', 0)->count(),
+            'outstanding_total'=>(float) DB::table('sales_invoices')->sum('outstanding'),
+            'collections_total'=>(float) DB::table('customer_receipts')->sum('amount'),
+            'commission_total'=>$automaticCommission + $manualCommission,
+            'recent_invoices'=>$recentInvoices, 'recent_receipts'=>$recentReceipts,
+        ]);
+    }
+
     public function workspace(SalesController $sales): JsonResponse
     {
         $data = $sales->workspace()->getData(true);
@@ -25,10 +42,11 @@ final class AccountingSalesController extends Controller
                 'm.notes', DB::raw("'manual' as source_type"))
             ->latest('m.id')->get()->map(fn ($row) => (array) $row)->all();
         $data['commissions'] = array_values(array_merge($manual, $data['commissions'] ?? []));
-        $data['finished_stock'] = DB::table('finished_goods_stock as stock')
-            ->join('articles as article', 'article.id', '=', 'stock.article_id')
-            ->select('stock.*', 'article.code as article_code', 'article.name as article_name', 'article.category')
-            ->orderBy('article.code')->orderBy('stock.size_label')->get();
+        $data['finished_stock'] = Schema::hasTable('finished_goods_stock')
+            ? DB::table('finished_goods_stock as stock')->join('articles as article', 'article.id', '=', 'stock.article_id')
+                ->select('stock.*', 'article.code as article_code', 'article.name as article_name', 'article.category')
+                ->orderBy('article.code')->orderBy('stock.size_label')->get()
+            : [];
         return response()->json($data);
     }
 
@@ -39,9 +57,11 @@ final class AccountingSalesController extends Controller
             'customer_id'=>['nullable','integer','exists:customers,id'], 'invoice_id'=>['nullable','integer','exists:sales_invoices,id'],
             'receipt_id'=>['nullable','integer','exists:customer_receipts,id'], 'commission_date'=>['required','date'],
             'basis_amount'=>['required','numeric','gte:0'], 'commission_rate'=>['required','numeric','gte:0'],
-            'commission_amount'=>['required','numeric','gt:0'], 'notes'=>['nullable','string','max:255'],
+            'commission_amount'=>['nullable','numeric','gte:0'], 'notes'=>['nullable','string','max:255'],
         ]);
         return DB::transaction(function () use ($data, $posting) {
+            $data['commission_amount'] = round((float) $data['basis_amount'] * (float) $data['commission_rate'], 2);
+            abort_if($data['commission_amount'] <= 0, 422, 'Commission amount must be greater than zero.');
             $id = DB::table('manual_commissions')->insertGetId($data + ['status'=>'eligible', 'created_at'=>now(), 'updated_at'=>now()]);
             $amount = round((float) $data['commission_amount'], 2);
             $journalId = $posting->post('manual_commission', $id, $data['commission_date'], "Manual sales commission #{$id}", [
@@ -62,10 +82,12 @@ final class AccountingSalesController extends Controller
             'customer_id'=>['nullable','integer','exists:customers,id'], 'invoice_id'=>['nullable','integer','exists:sales_invoices,id'],
             'receipt_id'=>['nullable','integer','exists:customer_receipts,id'], 'commission_date'=>['required','date'],
             'basis_amount'=>['required','numeric','gte:0'], 'commission_rate'=>['required','numeric','gte:0'],
-            'commission_amount'=>['required','numeric','gt:0'], 'notes'=>['nullable','string','max:255'],
+            'commission_amount'=>['nullable','numeric','gte:0'], 'notes'=>['nullable','string','max:255'],
         ]);
         return DB::transaction(function () use ($data, $id) {
             abort_unless(DB::table('manual_commissions')->where('id', $id)->exists(), 404, 'Manual commission not found.');
+            $data['commission_amount'] = round((float) $data['basis_amount'] * (float) $data['commission_rate'], 2);
+            abort_if($data['commission_amount'] <= 0, 422, 'Commission amount must be greater than zero.');
             DB::table('manual_commissions')->where('id', $id)->update($data + ['updated_at'=>now()]);
             $journalId = DB::table('journal_entries')->where(['source_type'=>'manual_commission', 'source_id'=>$id])->value('id');
             if ($journalId) {
