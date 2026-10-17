@@ -16,6 +16,7 @@ final class ProcurementController extends Controller
         return response()->json([
             'suppliers' => DB::table('suppliers')->orderBy('name')->get(),
             'materials' => DB::table('materials')->orderBy('name')->get(),
+            'accounts' => DB::table('accounts')->where('is_postable', true)->orderBy('code')->get(),
             'purchase_orders' => DB::table('purchase_orders as po')
                 ->join('suppliers as s', 's.id', '=', 'po.supplier_id')
                 ->select('po.*', 's.name as supplier_name')->latest('po.id')->get()

@@ -45,6 +45,35 @@
   gap: 10px;
   align-items: center;
 }
+.table-view-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  border-bottom: 1px solid #cbd9df;
+}
+.table-view-tabs button {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: #637681;
+  padding: 9px 14px;
+  font-weight: 700;
+}
+.table-view-tabs button.active {
+  color: #08786f;
+  border-bottom-color: #0e9a8d;
+}
+.table-view-tabs button span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 5px;
+  padding: 0 6px;
+  border-radius: 12px;
+  background: #e4f3f1;
+  font-size: 11px;
+}
 .secondary-action {
   border: 1px solid #9fc8c5;
   background: #eef8f6;
@@ -59,6 +88,105 @@
 .secondary-action svg {
   width: 18px;
 }
+.secondary-action:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.secondary-action:disabled svg {
+  animation: spin 1s linear infinite;
+}
+.success-message {
+  background: #edf9f6;
+  border: 1px solid #b9ddd6;
+  color: #08786f;
+  border-radius: 9px;
+  padding: 13px 15px;
+  margin-bottom: 16px;
+}
+.price-validation-modal {
+  width: min(960px, 96vw);
+}
+.validation-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 18px 0;
+}
+.validation-summary article {
+  border: 1px solid #d8e3e6;
+  border-radius: 9px;
+  padding: 13px;
+  background: #f7fafb;
+}
+.validation-summary span,
+.validation-summary b {
+  display: block;
+}
+.validation-summary span {
+  color: #6f7f8b;
+  font-size: 12px;
+}
+.validation-summary b {
+  margin-top: 5px;
+  font-size: 20px;
+}
+.validation-warnings {
+  max-height: 180px;
+  overflow: auto;
+  padding: 14px 16px;
+  border: 1px solid #ead5a3;
+  background: #fff9eb;
+  border-radius: 9px;
+  color: #72551c;
+}
+.validation-warnings ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+.validation-preview {
+  margin-top: 18px;
+}
+.validation-preview .table-card {
+  overflow-x: auto;
+  max-height: 290px;
+}
+.validation-preview table {
+  min-width: 680px;
+}
+.price-detail-row > td {
+  padding: 0;
+  background: #f4faf9;
+}
+.price-variants {
+  padding: 14px 22px 18px 58px;
+}
+.price-variant-head,
+.price-variant-line {
+  display: grid;
+  grid-template-columns: 1fr .65fr 1.8fr 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+}
+.price-variant-head {
+  color: #657782;
+  font-size: 11px;
+  text-transform: uppercase;
+  padding: 8px 12px;
+}
+.price-variant-line {
+  background: white;
+  border: 1px solid #dbe6e8;
+  border-radius: 7px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+@media (max-width: 720px) {
+  .validation-summary { grid-template-columns: 1fr 1fr; }
+  .price-variants { padding-left: 14px; overflow-x: auto; }
+  .price-variant-head,
+  .price-variant-line { min-width: 700px; }
+}
 .salary-preview {
   margin-top: 18px;
   padding: 14px 16px;
@@ -68,6 +196,44 @@
   display: flex;
   justify-content: space-between;
 }
+.payroll-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.payroll-expand svg { width: 17px; height: 17px; color: #009688; }
+.payroll-detail-row > td { padding: 0; background: #f4faf9; }
+.payroll-breakdown { padding: 12px 18px 16px 46px; overflow-x: auto; }
+.payroll-breakdown-head,
+.payroll-breakdown-line {
+  min-width: 1100px;
+  display: grid;
+  grid-template-columns: 1.35fr repeat(6, 1fr) 1.1fr;
+  gap: 10px;
+  align-items: center;
+}
+.payroll-breakdown-head {
+  padding: 7px 11px;
+  color: #657782;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.payroll-breakdown-line {
+  margin-top: 6px;
+  padding: 10px 11px;
+  border: 1px solid #dbe6e8;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 13px;
+}
+.payroll-breakdown-line small { display: block; margin-top: 3px; color: #71838c; font-size: 11px; }
+.payroll-empty { padding: 15px; color: #71838c; }
 .salary-preview span {
   color: #4f6e72;
 }
@@ -117,6 +283,9 @@
   display: grid;
   gap: 14px;
 }
+.price-modal {
+  width: min(1100px, 96vw);
+}
 .set-builder section {
   border: 1px solid #cbdde1;
   background: #f6fafb;
@@ -151,6 +320,10 @@
   border: 1px solid #d6dfe5;
   border-radius: 7px;
   padding: 9px;
+}
+.set-size-head.price-list-grid,
+.set-size-row.price-list-grid {
+  grid-template-columns: .65fr 1fr 1.25fr .9fr .8fr .9fr 38px;
 }
 .add-row {
   margin-top: 9px;
@@ -440,6 +613,32 @@
 .sales-table-card { overflow-x: auto; }
 .sales-table-card th,
 .sales-table-card td { vertical-align: middle; }
+.pricing-table-card {
+  overflow-x: hidden;
+}
+.pricing-table-card table {
+  table-layout: fixed;
+  min-width: 0;
+  width: 100%;
+}
+.pricing-table-card th,
+.pricing-table-card td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.pricing-table-card th:nth-child(1) { width: 11%; }
+.pricing-table-card th:nth-child(2) { width: 12%; }
+.pricing-table-card th:nth-child(3) { width: 12%; }
+.pricing-table-card th:nth-child(4) { width: 15%; }
+.pricing-table-card th:nth-child(5) { width: 20%; }
+.pricing-table-card th:nth-child(6) { width: 11%; }
+.pricing-table-card th:nth-child(7) { width: 11%; }
+.pricing-table-card th:nth-child(8) { width: 128px; }
+.pricing-table-card .row-actions {
+  flex-wrap: nowrap;
+}
 .invoice-table-card table { min-width: 1240px; }
 .invoice-table-card th,
 .invoice-table-card td { padding-left: 13px; padding-right: 13px; }

@@ -22,11 +22,11 @@ class PayrollExcelExporter
     public function payroll(object $run, iterable $rows): string
     {
         $data = $this->heading('Payroll Register - '.$run->number, $run->period_start, $run->period_end);
-        $data[] = ['Employee No', 'Employee', 'Department', 'Paid Days', 'No-Pay Days', 'Basic Salary', 'OT Hours', 'OT Amount', 'No-Pay Deduction', 'EPF Employee', 'Other Deductions', 'Net Salary'];
+        $data[] = ['Employee No', 'Employee', 'Department', 'Paid Days', 'No-Pay Days', 'Basic Salary', 'Allowance', 'Incentive', 'Commission', 'OT Hours', 'OT Amount', 'No-Pay Deduction', 'EPF Employee', 'Other Deductions', 'Net Salary'];
         foreach ($rows as $row) {
-            $data[] = [$row->employee_no, $row->name, $row->department, $row->paid_days, $row->no_pay_days, $row->basic_salary, $row->overtime_hours, $row->overtime, $row->no_pay_amount, $row->epf_employee, $row->other_deductions, $row->net_salary];
+            $data[] = [$row->employee_no, $row->name, $row->department, $row->paid_days, $row->no_pay_days, $row->basic_salary, $row->allowances, $row->incentive, $row->commission ?? 0, $row->overtime_hours, $row->overtime, $row->no_pay_amount, $row->epf_employee, $row->other_deductions, $row->net_salary];
         }
-        $data[] = ['TOTAL', '', '', '', '', $run->gross_total, '', '', '', '', $run->deduction_total, $run->net_total];
+        $data[] = ['TOTAL', '', '', '', '', $run->gross_total, '', '', '', '', '', '', '', $run->deduction_total, $run->net_total];
         return $this->workbook('Payroll Register', $data, $run->period_start, $run->period_end);
     }
 
@@ -47,7 +47,7 @@ class PayrollExcelExporter
         $xml = '<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles>';
         $xml .= '<Style ss:ID="Default"><Font ss:FontName="Arial" ss:Size="10"/></Style><Style ss:ID="Title"><Font ss:Bold="1" ss:Size="14" ss:Color="#17365D"/></Style><Style ss:ID="Sub"><Font ss:Italic="1" ss:Color="#666666"/></Style><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#17365D" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style><Style ss:ID="Number"><NumberFormat ss:Format="#,##0.00;[Red](#,##0.00);-"/></Style><Style ss:ID="Total"><Font ss:Bold="1"/><Interior ss:Color="#DCEBED" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00;[Red](#,##0.00);-"/></Style></Styles>';
         $xml .= '<Worksheet ss:Name="'.$this->escape($sheetName).'"><Table>';
-        for ($column = 0; $column < 12; $column++) {
+        for ($column = 0; $column < 15; $column++) {
             $xml .= '<Column ss:Width="'.($column < 3 ? 120 : 92).'"/>';
         }
         $last = count($rows) - 1;

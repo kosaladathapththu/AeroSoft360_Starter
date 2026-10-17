@@ -1,9 +1,14 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
   Building2,
   Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ClipboardCheck,
   Factory,
+  FileDown,
   Eye,
   FileUp,
   FileText,
@@ -85,6 +90,7 @@ type JournalLine = {
 type Journal = {
   id: number;
   number: string;
+  source_type: string;
   posting_date: string;
   description: string;
   status: string;
@@ -94,6 +100,7 @@ type RecordRow = Supplier | Order | Stock | Journal;
 type Workspace = {
   suppliers: Supplier[];
   materials: Material[];
+  accounts: { id: number; code: string; name: string; type: string }[];
   purchase_orders: Order[];
   stock: Stock[];
   journals: Journal[];
@@ -111,6 +118,7 @@ type Profile = {
 const empty: Workspace = {
   suppliers: [],
   materials: [],
+  accounts: [],
   purchase_orders: [],
   stock: [],
   journals: [],
@@ -134,6 +142,7 @@ export default function App() {
     [editing, setEditing] = useState<RecordRow | null>(null),
     [viewing, setViewing] = useState<RecordRow | null>(null),
     [menu, setMenu] = useState(false),
+    [openNavGroup, setOpenNavGroup] = useState(""),
     [search, setSearch] = useState("");
   const token = () => localStorage.getItem("aerosoft_token");
   const load = useCallback(async () => {
@@ -193,26 +202,54 @@ export default function App() {
     await load();
     return json;
   };
-  const nav = [
-    ["Dashboard", LayoutDashboard],
-    ["Customer POs", ClipboardCheck],
-    ["Sales Orders", FileText],
-    ["Invoices", FileText],
-    ["Collections", Check],
-    ["Receivables Aging", ShieldCheck],
-    ["Commissions", FileText],
-    ["Customers", Building2],
-    ["Salespersons", Users],
-    ["Articles & Sets", PackagePlus],
-    ["Employees", Users],
-    ["Payroll", Building2],
-    ["Reports", FileText],
-    ["Suppliers", Building2],
-    ["Purchase Orders", FileText],
-    ["Receive Goods", ClipboardCheck],
-    ["Raw Material Stock", Warehouse],
-    ["General Ledger", ShieldCheck],
+  const navGroups = [
+    {
+      name: "Sales",
+      icon: ClipboardCheck,
+      items: [
+        ["Customer POs", ClipboardCheck],
+        ["Sales Orders", FileText],
+        ["Invoices", FileText],
+        ["Collections", Check],
+        ["Debtors Aging", ShieldCheck],
+        ["Commissions", FileText],
+      ],
+    },
+    {
+      name: "People & Products",
+      icon: Users,
+      items: [
+        ["Customers", Building2],
+        ["Salespersons", Users],
+        ["Pricing List", PackagePlus],
+        ["Employees", Users],
+        ["Payroll", Building2],
+      ],
+    },
+    {
+      name: "Purchasing & Inventory",
+      icon: Warehouse,
+      items: [
+        ["Suppliers", Building2],
+        ["Purchase Orders", FileText],
+        ["Receive Goods", ClipboardCheck],
+        ["Raw Material Stock", Warehouse],
+      ],
+    },
+    {
+      name: "Finance & Reports",
+      icon: ShieldCheck,
+      items: [
+        ["General Ledger", ShieldCheck],
+        ["Reports", FileText],
+      ],
+    },
   ] as const;
+  const goToPage = (name: string) => {
+    setPage(name);
+    setMenu(false);
+    setSearch("");
+  };
   const rows = useMemo(() => {
     const q = search.toLowerCase();
     if (page === "Suppliers")
@@ -309,21 +346,46 @@ export default function App() {
           </div>
         </div>
         <nav>
-          <label>SALES TO COLLECTION</label>
-          {nav.map(([name, Icon]) => (
-            <button
-              className={page === name ? "active" : ""}
-              onClick={() => {
-                setPage(name);
-                setMenu(false);
-                setSearch("");
-              }}
-              key={name}
-            >
-              <Icon />
-              <span>{name}</span>
-            </button>
-          ))}
+          <label>MAIN MENU</label>
+          <button
+            className={page === "Dashboard" ? "active" : ""}
+            onClick={() => goToPage("Dashboard")}
+          >
+            <LayoutDashboard />
+            <span>Dashboard</span>
+          </button>
+          {navGroups.map((group) => {
+            const isOpen = openNavGroup === group.name;
+            const hasActivePage = group.items.some(([name]) => name === page);
+            const GroupIcon = group.icon;
+            return (
+              <div className={`nav-group ${isOpen ? "open" : ""}`} key={group.name}>
+                <button
+                  className={`nav-group-toggle ${hasActivePage ? "group-active" : ""}`}
+                  aria-expanded={isOpen}
+                  onClick={() => setOpenNavGroup(isOpen ? "" : group.name)}
+                >
+                  <GroupIcon />
+                  <span>{group.name}</span>
+                  <ChevronDown className="nav-chevron" />
+                </button>
+                {isOpen && (
+                  <div className="nav-group-items">
+                    {group.items.map(([name, Icon]) => (
+                      <button
+                        className={page === name ? "active" : ""}
+                        onClick={() => goToPage(name)}
+                        key={name}
+                      >
+                        <Icon />
+                        <span>{name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
         <div className="user">
           <div>U1</div>
@@ -359,12 +421,12 @@ export default function App() {
             "Dashboard",
             "Customers",
             "Salespersons",
-            "Articles & Sets",
+            "Pricing List",
             "Customer POs",
             "Sales Orders",
             "Invoices",
             "Collections",
-            "Receivables Aging",
+            "Debtors Aging",
             "Commissions",
           ].includes(page) ? (
             <SalesPage token={token() || ""} page={page} go={setPage} />
@@ -402,6 +464,16 @@ export default function App() {
                 {page === "Receive Goods" && (
                   <button className="primary" onClick={() => setModal("grn")}>
                     <PackagePlus /> Receive Goods
+                  </button>
+                )}
+                {page === "General Ledger" && (
+                  <button className="primary" onClick={() => setModal("journal")}>
+                    <Plus /> New Journal Entry
+                  </button>
+                )}
+                {page === "Raw Material Stock" && (
+                  <button className="primary" onClick={() => setModal("stock_adjustment")}>
+                    <Plus /> Adjust Stock
                   </button>
                 )}
               </div>
@@ -489,10 +561,18 @@ function SalesPage({
     [aging, setAging] = useState<any>(null),
     [error, setError] = useState(""),
     [modal, setModal] = useState(""),
+    [editingMaster, setEditingMaster] = useState<{ type: string; row: any } | null>(null),
+    [editingTransaction, setEditingTransaction] = useState<any>(null),
     [editingArticle, setEditingArticle] = useState<any>(null),
     [editingPo, setEditingPo] = useState<any>(null),
     [dispatchOrder, setDispatchOrder] = useState<any>(null),
-    [viewing, setViewing] = useState<any>(null);
+    [viewing, setViewing] = useState<any>(null),
+    [priceImporting, setPriceImporting] = useState(false),
+    [priceImportMessage, setPriceImportMessage] = useState(""),
+    [pendingPriceFile, setPendingPriceFile] = useState<File | null>(null),
+    [pricePreview, setPricePreview] = useState<any>(null),
+    [expandedPriceArticles, setExpandedPriceArticles] = useState<Set<number>>(new Set());
+  const priceFileRef = useRef<HTMLInputElement>(null);
   const loadSales = useCallback(() => {
     setError("");
     Promise.all([
@@ -533,6 +613,48 @@ function SalesPage({
       );
     await loadSales();
     return json;
+  };
+  const previewPriceList = async (file?: File) => {
+    if (!file) return;
+    setPriceImporting(true);
+    setPriceImportMessage("");
+    setError("");
+    const body = new FormData();
+    body.append("file", file);
+    try {
+      const response = await fetch(`${API}/price-list/preview`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        body,
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.message || "Price-list validation failed.");
+      setPendingPriceFile(file);
+      setPricePreview(json);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPriceImporting(false);
+    }
+  };
+  const confirmPriceImport = async () => {
+    if (!pendingPriceFile || !pricePreview?.can_import) return;
+    setPriceImporting(true);
+    setError("");
+    const body = new FormData();
+    body.append("file", pendingPriceFile);
+    try {
+      const response = await fetch(`${API}/price-list/import`, { method: "POST", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, body });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.message || "Price-list import failed.");
+      const s = json.summary;
+      setPriceImportMessage(`Imported ${s.rows_read - s.rows_skipped} priced rows: ${s.articles_created} new articles, ${s.articles_updated} article updates, ${s.items_created} new sizes and ${s.items_updated} price updates. ${s.rows_skipped} rows skipped.`);
+      setPricePreview(null);
+      setPendingPriceFile(null);
+      if (priceFileRef.current) priceFileRef.current.value = "";
+      await loadSales();
+    } catch (e) { setError((e as Error).message); }
+    finally { setPriceImporting(false); }
   };
   if (!data || !aging)
     return (
@@ -608,7 +730,7 @@ function SalesPage({
             {[
               ["1", "Customer PO", "Customer POs"],
               ["2", "Sales Order", "Sales Orders"],
-              ["3", "Size Expansion", "Articles & Sets"],
+              ["3", "Price & Size", "Pricing List"],
               ["4", "Invoice", "Invoices"],
               ["5", "Collection", "Collections"],
               ["6", "Commission", "Commissions"],
@@ -680,21 +802,37 @@ function SalesPage({
   const map: any = {
     Customers: data.customers,
     Salespersons: data.reps,
-    "Articles & Sets": data.articles,
+    "Pricing List": data.articles.map((article: any) => ({
+      id: article.id,
+      article_id: article.id,
+      article_code: article.code,
+      article_name: article.name,
+      category: article.category,
+      article_status: article.status,
+      article,
+      variants: article.sets.flatMap((set: any) => set.items
+        .filter((item: any) => item.price_source || item.item_code || item.colours || item.production_cost != null)
+        .map((item: any) => ({ ...item, set_name: set.name })))
+        .sort((a: any, b: any) => Number(a.source_row || 999999) - Number(b.source_row || 999999)),
+    })).filter((article: any) => article.variants.length > 0)
+      .sort((a: any, b: any) => Number(a.variants[0]?.source_row || 999999) - Number(b.variants[0]?.source_row || 999999)),
     "Customer POs": data.pos,
     "Sales Orders": data.orders,
     Invoices: data.invoices,
     Collections: data.receipts,
-    "Receivables Aging": aging.rows,
+    "Debtors Aging": aging.rows,
     Commissions: data.commissions,
   };
   const rows = map[page] || [];
   const addType: any = {
     Customers: "customer",
     Salespersons: "rep",
-    "Articles & Sets": "article",
+    "Pricing List": "article",
     "Customer POs": "po",
+    "Sales Orders": "sales_order",
+    Invoices: "invoice",
     Collections: "receipt",
+    Commissions: "commission",
   };
   const heads: any = {
     Customers: ["Customer", "Phone", "Credit terms", "Credit limit", "Status"],
@@ -705,12 +843,7 @@ function SalesPage({
       "Default rate",
       "Status",
     ],
-    "Articles & Sets": [
-      "Article",
-      "Category",
-      "Set types",
-      "Size, quantity and price",
-    ],
+    "Pricing List": ["Article", "Category", "Item Code", "Size", "Colours", "Production Cost", "Selling Price"],
     "Customer POs": [
       "PO",
       "Customer",
@@ -747,7 +880,7 @@ function SalesPage({
       "Method",
       "Amount",
     ],
-    "Receivables Aging": [
+    "Debtors Aging": [
       "Invoice",
       "Customer",
       "Salesperson",
@@ -780,16 +913,33 @@ function SalesPage({
           </p>
         </div>
         {addType[page] && (
+          <div className="heading-actions">
+          {page === "Pricing List" && <>
+            <input ref={priceFileRef} hidden type="file" accept=".xlsx,.xls" onChange={(event) => previewPriceList(event.target.files?.[0])} />
+            <button className="secondary-action" disabled={priceImporting} onClick={() => priceFileRef.current?.click()}>
+              {priceImporting ? <Loader2 /> : <FileUp />} {priceImporting ? "Importing..." : "Import price list"}
+            </button>
+          </>}
           <button className="primary" onClick={() => setModal(addType[page])}>
             <Plus />{" "}
             {page === "Collections"
               ? "Record collection"
+              : page === "Commissions"
+                ? "Add commission"
+              : page === "Invoices"
+                ? "Create invoice"
+                : page === "Sales Orders"
+                  ? "Create sales order"
+                : page === "Pricing List"
+                  ? "Add price item"
               : `Add ${page.replace(/s$/, "")}`}
           </button>
+          </div>
         )}
       </div>
       {error && <div className="error">{error}</div>}
-      <div className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""}`}>
+      {priceImportMessage && page === "Pricing List" && <div className="success-message">{priceImportMessage}</div>}
+      <div className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}>
         <table>
           <thead>
             <tr>
@@ -806,10 +956,16 @@ function SalesPage({
               </tr>
             ) : (
               rows.map((r: any) => (
-                <tr key={r.id}>
+                <Fragment key={r.id}>
+                <tr>
                   {salesCells(page, r)}
                   <td>
                     <div className="row-actions">
+                      {page === "Pricing List" && (
+                        <button className="icon-action view" title={expandedPriceArticles.has(r.article_id) ? "Hide sizes" : "Show sizes"} onClick={() => setExpandedPriceArticles((current) => { const next = new Set(current); if (next.has(r.article_id)) next.delete(r.article_id); else next.add(r.article_id); return next; })}>
+                          {expandedPriceArticles.has(r.article_id) ? <ChevronDown /> : <ChevronRight />}
+                        </button>
+                      )}
                       {page === "Customer POs" && r.status === "draft" && (
                         <button
                           className="approve"
@@ -830,30 +986,64 @@ function SalesPage({
                             <FileText /> Dispatch &amp; invoice
                           </button>
                         )}
-                      <button
+                      {page !== "Pricing List" && <button
                         className="icon-action view"
                         onClick={() => setViewing(r)}
                       >
                         <Eye />
-                      </button>
-                      {page === "Customer POs" && r.status === "draft" && (
+                      </button>}
+                      {page === "Customer POs" && (
                         <>
                           <button className="icon-action edit" title="Edit and update PO" onClick={() => setEditingPo(r)}><Pencil /></button>
-                          <button className="icon-action delete" title="Delete draft PO" onClick={async () => { if (!confirm(`Delete ${r.number}?`)) return; try { await post(`customer-pos/${r.id}`, undefined, "DELETE"); } catch (e) { setError((e as Error).message); } }}><Trash2 /></button>
+                          <button className="icon-action delete" title="Delete PO and linked records" onClick={async () => { if (!confirm(`Delete ${r.number} and all linked sales orders, invoices, collections and journals? This cannot be undone.`)) return; try { await post(`customer-pos/${r.id}`, undefined, "DELETE"); } catch (e) { setError((e as Error).message); } }}><Trash2 /></button>
                         </>
                       )}
-                      {page === "Articles & Sets" && (
-                        <button
-                          className="icon-action edit"
-                          title="Edit article, set types and sizes"
-                          onClick={() => setEditingArticle(r)}
-                        >
-                          <Pencil />
-                        </button>
+                      {page === "Pricing List" && (
+                        <>
+                          <button className="icon-action edit" title="Edit article and prices" onClick={() => setEditingArticle(r.article)}><Pencil /></button>
+                          <button className="icon-action delete" title="Delete article" onClick={async () => { if (!confirm(`Delete article ${r.article_name} and all its price rows?`)) return; try { await post(`articles/${r.article_id}`, undefined, "DELETE"); } catch (e) { setError((e as Error).message); } }}><Trash2 /></button>
+                        </>
                       )}
+                      {page === "Customers" && <>
+                        <button className="icon-action edit" title="Edit customer" onClick={() => setEditingMaster({ type: "customer", row: r })}><Pencil /></button>
+                        <button className="icon-action delete" title="Delete customer" onClick={async () => { if (!confirm(`Delete ${r.name}?`)) return; try { await post(`customers/${r.id}`, undefined, "DELETE"); } catch (e) { setError((e as Error).message); } }}><Trash2 /></button>
+                      </>}
+                      {page === "Salespersons" && <>
+                        <button className="icon-action edit" title="Edit salesperson" onClick={() => setEditingMaster({ type: "rep", row: r })}><Pencil /></button>
+                        <button className="icon-action delete" title="Delete salesperson" onClick={async () => { if (!confirm(`Delete ${r.name}?`)) return; try { await post(`sales-reps/${r.id}`, undefined, "DELETE"); } catch (e) { setError((e as Error).message); } }}><Trash2 /></button>
+                      </>}
+                      {page === "Commissions" && <>
+                        <button className="icon-action edit" title="Edit commission" onClick={() => setEditingMaster({ type: "commission", row: r })}><Pencil /></button>
+                        <button className="icon-action delete" title="Delete commission" onClick={async () => {
+                          const manual = r.source_type === "manual";
+                          if (!confirm(manual ? "Delete this manual commission and its journal?" : "Delete this commission? The customer payment will remain allocated.")) return;
+                          try { await post(manual ? `commissions/manual/${r.manual_id}` : `commissions/${r.id}`, undefined, "DELETE"); } catch (e) { setError((e as Error).message); }
+                        }}><Trash2 /></button>
+                      </>}
+                      {["Sales Orders", "Invoices", "Collections"].includes(page) && <>
+                        <button className="icon-action edit" title={`Edit ${page}`} onClick={() => setEditingTransaction({ page, row: r })}><Pencil /></button>
+                        <button className="icon-action delete" title={`Delete ${page}`} onClick={async () => {
+                          if (!confirm(`Delete ${r.number}? Related posted records will be checked first.`)) return;
+                          const base = page === "Sales Orders" ? "sales-orders" : page === "Invoices" ? "sales-invoices" : "customer-receipts";
+                          try { await post(`${base}/${r.id}`, undefined, "DELETE"); } catch (e) { setError((e as Error).message); }
+                        }}><Trash2 /></button>
+                      </>}
                     </div>
                   </td>
                 </tr>
+                {page === "Pricing List" && expandedPriceArticles.has(r.article_id) && (
+                  <tr className="price-detail-row">
+                    <td colSpan={heads[page].length + 1}>
+                      <div className="price-variants">
+                        <div className="price-variant-head"><b>Item code</b><b>Size</b><b>Colours</b><b>Production cost</b><b>Selling price</b></div>
+                        {r.variants.map((item: any) => <div className="price-variant-line" key={item.id}>
+                          <span><b>{item.item_code || "—"}</b></span><span>{item.size_label}</span><span>{item.colours || "—"}</span><span>{item.production_cost == null ? "—" : money(item.production_cost)}</span><span><b>{money(item.unit_price)}</b></span>
+                        </div>)}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))
             )}
           </tbody>
@@ -892,6 +1082,18 @@ function SalesPage({
           }}
         />
       )}
+      {editingMaster && (
+        <SalesCreateModal
+          type={editingMaster.type}
+          data={data}
+          initial={editingMaster.row}
+          close={() => setEditingMaster(null)}
+          save={async (path, body, method) => {
+            try { setError(""); await post(path, body, method); setEditingMaster(null); }
+            catch (e) { setError((e as Error).message); }
+          }}
+        />
+      )}
       {editingPo && (
         <SalesCreateModal
           type="po"
@@ -900,6 +1102,17 @@ function SalesPage({
           close={() => setEditingPo(null)}
           save={async (path, body, method) => {
             try { setError(""); await post(path, body, method); setEditingPo(null); }
+            catch (e) { setError((e as Error).message); }
+          }}
+        />
+      )}
+      {editingTransaction && (
+        <SalesTransactionEditModal
+          page={editingTransaction.page}
+          row={editingTransaction.row}
+          close={() => setEditingTransaction(null)}
+          save={async (path, body) => {
+            try { setError(""); await post(path, body, "PUT"); setEditingTransaction(null); }
             catch (e) { setError((e as Error).message); }
           }}
         />
@@ -922,7 +1135,54 @@ function SalesPage({
       {viewing && (
         <RecordView page={page} row={viewing} close={() => setViewing(null)} />
       )}
+      {pricePreview && (
+        <div className="backdrop" onMouseDown={() => !priceImporting && setPricePreview(null)}>
+          <div className="modal price-validation-modal" onMouseDown={(event) => event.stopPropagation()}>
+            <button type="button" className="close" disabled={priceImporting} onClick={() => setPricePreview(null)}><X /></button>
+            <span>PRICE LIST VALIDATION</span>
+            <h2>Review before import</h2>
+            <p><b>{pricePreview.file_name}</b> · Sheet: {pricePreview.sheet_name}</p>
+            <div className="validation-summary">
+              <article><span>Valid rows</span><b>{pricePreview.valid_rows}</b></article>
+              <article><span>Skipped rows</span><b>{pricePreview.skipped_rows}</b></article>
+              <article><span>Duplicates</span><b>{pricePreview.duplicate_rows}</b></article>
+              <article><span>Missing columns</span><b>{pricePreview.missing_columns.length}</b></article>
+            </div>
+            {pricePreview.missing_columns.length > 0 && <div className="error">Missing required columns: {pricePreview.missing_columns.join(", ")}</div>}
+            {pricePreview.warnings.length > 0 && <div className="validation-warnings"><b>Validation warnings</b><ul>{pricePreview.warnings.slice(0, 12).map((warning: string) => <li key={warning}>{warning}</li>)}</ul>{pricePreview.warnings.length > 12 && <small>And {pricePreview.warnings.length - 12} more warnings.</small>}</div>}
+            {pricePreview.sample.length > 0 && <div className="validation-preview"><b>First validated rows</b><div className="table-card"><table><thead><tr><th>Row</th><th>Article</th><th>Item code</th><th>Size</th><th>Selling price</th></tr></thead><tbody>{pricePreview.sample.map((row: any) => <tr key={row.row}><td>{row.row}</td><td>{row.article}</td><td>{row.item_code}</td><td>{row.size}</td><td>{money(row.selling_price)}</td></tr>)}</tbody></table></div></div>}
+            <div className="actions">
+              <button type="button" disabled={priceImporting} onClick={() => { setPricePreview(null); setPendingPriceFile(null); if (priceFileRef.current) priceFileRef.current.value = ""; }}>Cancel</button>
+              <button type="button" className="primary" disabled={!pricePreview.can_import || priceImporting} onClick={confirmPriceImport}>{priceImporting ? <Loader2 /> : <Check />} Confirm import</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+function SalesTransactionEditModal({ page, row, close, save }: { page: string; row: any; close: () => void; save: (path: string, body: any) => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <ModalShell title={`Edit ${row.number}`} close={close} busy={busy} onSubmit={async (event) => {
+      event.preventDefault(); setBusy(true); const form = new FormData(event.currentTarget);
+      try {
+        if (page === "Sales Orders") await save(`sales-orders/${row.id}`, { order_date: form.get("order_date"), status: form.get("status") });
+        else if (page === "Invoices") await save(`sales-invoices/${row.id}`, { due_date: form.get("due_date"), sale_type: form.get("sale_type") });
+        else await save(`customer-receipts/${row.id}`, { receipt_date: form.get("receipt_date"), payment_method: form.get("payment_method"), reference: form.get("reference") });
+      } finally { setBusy(false); }
+    }}>
+      {page === "Sales Orders" ? <div className="form-row">
+        <label>Order date<input name="order_date" type="date" defaultValue={row.order_date} required /></label>
+        <label>Status<select name="status" defaultValue={row.status}><option value="confirmed">Confirmed</option><option value="part_invoiced">Part invoiced</option><option value="invoiced">Invoiced</option><option value="cancelled">Cancelled</option></select></label>
+      </div> : page === "Invoices" ? <div className="form-row">
+        <label>Due date<input name="due_date" type="date" defaultValue={row.due_date} required /></label>
+        <label>Sale type<select name="sale_type" defaultValue={row.sale_type}><option value="credit">Credit</option><option value="cash">Cash</option><option value="mixed">Mixed</option></select></label>
+      </div> : <>
+        <div className="form-row"><label>Receipt date<input name="receipt_date" type="date" defaultValue={row.receipt_date} required /></label><label>Payment method<select name="payment_method" defaultValue={row.payment_method}><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="cheque">Cheque</option><option value="card">Card</option></select></label></div>
+        <label>Reference<input name="reference" defaultValue={row.reference} /></label>
+      </>}
+    </ModalShell>
   );
 }
 function salesCells(page: string, r: any) {
@@ -954,41 +1214,25 @@ function salesCells(page: string, r: any) {
         <td>{status(r.status)}</td>
       </>
     );
-  if (page === "Articles & Sets")
-    return (
-      <>
+  if (page === "Pricing List")
+    {
+      const colours = [...new Set(r.variants.map((item: any) => item.colours).filter(Boolean))] as string[];
+      const costs = r.variants.map((item: any) => Number(item.production_cost)).filter((value: number) => Number.isFinite(value) && value > 0);
+      const prices = r.variants.map((item: any) => Number(item.unit_price)).filter((value: number) => Number.isFinite(value));
+      const priceText = prices.length && Math.min(...prices) !== Math.max(...prices) ? `${money(Math.min(...prices))} – ${money(Math.max(...prices))}` : money(prices[0] || 0);
+      const costText = costs.length ? (Math.min(...costs) === Math.max(...costs) ? money(costs[0]) : `${money(Math.min(...costs))} – ${money(Math.max(...costs))}`) : "—";
+      return <>
         <td>
-          <b>{r.code}</b>
-          <br />
-          {r.name}
+          <b>{r.article_code}</b>
         </td>
         <td>{r.category}</td>
-        <td>
-          {r.sets.map((set: any) => (
-            <div key={set.id}>
-              <b>{set.name}</b>
-              <br />
-              <small>
-                {set.pieces} pieces · {money(set.set_price)} per set
-              </small>
-            </div>
-          ))}
-        </td>
-        <td>
-          {r.sets.map((set: any) => (
-            <div key={set.id}>
-              <b>{set.name}:</b>{" "}
-              {set.items
-                .map(
-                  (item: any) =>
-                    `${item.size_label} × ${Number(item.quantity)} @ ${money(item.unit_price)}`,
-                )
-                .join(", ")}
-            </div>
-          ))}
-        </td>
-      </>
-    );
+        <td><b>{r.variants.length} item codes</b></td>
+        <td>{r.variants.map((item: any) => item.size_label).join(", ")}</td>
+        <td>{colours.join(" · ") || "—"}</td>
+        <td>{costText}</td>
+        <td><b>{priceText}</b></td>
+      </>;
+    }
   if (page === "Customer POs")
     return (
       <>
@@ -1051,7 +1295,7 @@ function salesCells(page: string, r: any) {
         <td>{money(r.amount)}</td>
       </>
     );
-  if (page === "Receivables Aging")
+  if (page === "Debtors Aging")
     return (
       <>
         <td>
@@ -1151,7 +1395,7 @@ function SalesCreateModal({
       : [
           {
             name: "Standard Set",
-            items: [{ size_label: "", quantity: 2, unit_price: 0 }],
+            items: [{ size_label: "", item_code: "", colours: "", production_cost: null, quantity: 2, unit_price: 0 }],
           },
         ]),
   ]);
@@ -1169,6 +1413,15 @@ function SalesCreateModal({
         }))
       : [{ article_id: firstArticleId, order_mode: "badge", set_template_id: firstSetId, set_item_id: firstItemId, quantity: 1 }]),
   ]);
+  const defaultInvoiceItem = data.articles?.[0]?.sets?.[0]?.items?.[0];
+  const [invoiceLines, setInvoiceLines] = useState<any[]>([
+    {
+      article_id: Number(data.articles?.[0]?.id || 0),
+      size_label: defaultInvoiceItem?.size_label || "",
+      quantity: 1,
+      rate: Number(defaultInvoiceItem?.unit_price || data.articles?.[0]?.selling_price || 0),
+    },
+  ]);
   const availableSets = (data.articles || []).flatMap((article: any) =>
     article.sets
       .filter((set: any) => set.status !== "inactive")
@@ -1184,6 +1437,10 @@ function SalesCreateModal({
     (total: number, line: any) => total + poLineTotal(line),
     0,
   );
+  const invoiceSubtotal = invoiceLines.reduce(
+    (total: number, line: any) => total + Number(line.quantity || 0) * Number(line.rate || 0),
+    0,
+  );
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setBusy(true);
@@ -1191,7 +1448,7 @@ function SalesCreateModal({
     let path = "",
       body: any = {};
     if (type === "customer") {
-      path = "customers";
+      path = initial ? `customers/${initial.id}` : "customers";
       body = {
         code: f.get("code"),
         name: f.get("name"),
@@ -1200,15 +1457,17 @@ function SalesCreateModal({
         address: f.get("address"),
         credit_days: Number(f.get("credit_days")),
         credit_limit: Number(f.get("credit_limit")),
+        status: initial?.status || "active",
       };
     } else if (type === "rep") {
-      path = "sales-reps";
+      path = initial ? `sales-reps/${initial.id}` : "sales-reps";
       body = {
         code: f.get("code"),
         name: f.get("name"),
         manager_name: f.get("manager_name"),
         channel: f.get("channel"),
         default_commission_rate: Number(f.get("default_commission_rate")),
+        status: initial?.status || "active",
       };
     } else if (type === "article") {
       path = initial ? `articles/${initial.id}` : "articles";
@@ -1219,8 +1478,8 @@ function SalesCreateModal({
         status: initial?.status || "active",
         sets: setTypes,
       };
-    } else if (type === "po") {
-      path = initial ? `customer-pos/${initial.id}` : "customer-pos";
+    } else if (type === "po" || type === "sales_order") {
+      path = type === "sales_order" ? "sales-orders/manual" : initial ? `customer-pos/${initial.id}` : "customer-pos";
       body = {
         customer_id: Number(f.get("customer_id")),
         sales_rep_id: Number(f.get("sales_rep_id")),
@@ -1228,6 +1487,33 @@ function SalesCreateModal({
         po_date: f.get("po_date"),
         sale_type: f.get("sale_type"),
         lines: poLines,
+      };
+    } else if (type === "invoice") {
+      path = "sales-invoices/manual";
+      body = {
+        customer_id: Number(f.get("customer_id")),
+        sales_rep_id: Number(f.get("sales_rep_id")),
+        invoice_date: f.get("invoice_date"),
+        due_date: f.get("due_date") || null,
+        sale_type: f.get("sale_type"),
+        reference: f.get("reference"),
+        discount: Number(f.get("discount") || 0),
+        tax: Number(f.get("tax") || 0),
+        lines: invoiceLines,
+      };
+    } else if (type === "commission") {
+      path = initial ? (initial.source_type === "manual" ? `commissions/manual/${initial.manual_id}` : `commissions/${initial.id}`) : "commissions/manual";
+      body = {
+        sales_rep_id: Number(f.get("sales_rep_id")),
+        customer_id: f.get("customer_id") ? Number(f.get("customer_id")) : null,
+        invoice_id: f.get("invoice_id") ? Number(f.get("invoice_id")) : null,
+        receipt_id: f.get("receipt_id") ? Number(f.get("receipt_id")) : null,
+        commission_date: f.get("commission_date"),
+        basis_amount: Number(f.get("basis_amount") || 0),
+        commission_rate: Number(f.get("commission_rate") || 0),
+        commission_amount: Number(f.get("commission_amount")),
+        commission_status: f.get("commission_status") || "eligible",
+        notes: f.get("notes"),
       };
     } else {
       path = "customer-receipts";
@@ -1242,7 +1528,7 @@ function SalesCreateModal({
       };
     }
     try {
-      await save(path, body, initial && (type === "article" || type === "po") ? "PUT" : "POST");
+      await save(path, body, initial && ["article", "po", "customer", "rep", "commission"].includes(type) ? "PUT" : "POST");
     } finally {
       setBusy(false);
     }
@@ -1250,7 +1536,7 @@ function SalesCreateModal({
   return (
     <div className="backdrop" onMouseDown={close}>
       <form
-        className={`modal ${type === "po" ? "po-modal" : ""}`}
+        className={`modal ${type === "po" || type === "sales_order" || type === "invoice" ? "po-modal" : type === "article" ? "price-modal" : ""}`}
         onSubmit={submit}
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -1261,6 +1547,12 @@ function SalesCreateModal({
         <h2>
           {type === "po"
             ? initial ? `Manage ${initial.number}` : "New Customer PO"
+            : type === "sales_order"
+              ? "Create Sales Order"
+            : type === "invoice"
+              ? "Create Manual Invoice"
+            : type === "commission"
+              ? initial ? "Edit Commission" : "Add Manual Commission"
             : type === "receipt"
               ? "Record Customer Collection"
               : initial && type === "article"
@@ -1272,26 +1564,26 @@ function SalesCreateModal({
             <div className="form-row">
               <label>
                 Customer code
-                <input name="code" required />
+                <input name="code" defaultValue={initial?.code} required />
               </label>
               <label>
                 Customer name
-                <input name="name" required />
+                <input name="name" defaultValue={initial?.name} required />
               </label>
               <label>
                 TIN
-                <input name="tin" />
+                <input name="tin" defaultValue={initial?.tin} />
               </label>
               <label>
                 Phone
-                <input name="phone" />
+                <input name="phone" defaultValue={initial?.phone} />
               </label>
               <label>
                 Credit days
                 <input
                   name="credit_days"
                   type="number"
-                  defaultValue="30"
+                  defaultValue={initial?.credit_days ?? 30}
                   required
                 />
               </label>
@@ -1300,14 +1592,14 @@ function SalesCreateModal({
                 <input
                   name="credit_limit"
                   type="number"
-                  defaultValue="0"
+                  defaultValue={initial?.credit_limit ?? 0}
                   required
                 />
               </label>
             </div>
             <label>
               Address
-              <input name="address" />
+              <input name="address" defaultValue={initial?.address} />
             </label>
           </>
         ) : type === "rep" ? (
@@ -1315,19 +1607,19 @@ function SalesCreateModal({
             <div className="form-row">
               <label>
                 Rep code
-                <input name="code" required />
+                <input name="code" defaultValue={initial?.code} required />
               </label>
               <label>
                 Name
-                <input name="name" required />
+                <input name="name" defaultValue={initial?.name} required />
               </label>
               <label>
                 Sales manager
-                <input name="manager_name" />
+                <input name="manager_name" defaultValue={initial?.manager_name} />
               </label>
               <label>
                 Channel
-                <select name="channel">
+                <select name="channel" defaultValue={initial?.channel || "direct_sales"}>
                   <option value="direct_sales">Direct Sales</option>
                   <option value="head_office">Head Office</option>
                   <option value="future_channel">Future Channel</option>
@@ -1340,7 +1632,7 @@ function SalesCreateModal({
                 name="default_commission_rate"
                 type="number"
                 step=".01"
-                defaultValue="0"
+                defaultValue={initial?.default_commission_rate ?? 0}
                 required
               />
             </label>
@@ -1395,14 +1687,17 @@ function SalesCreateModal({
                       </button>
                     )}
                   </div>
-                  <div className="set-size-head">
+                  <div className="set-size-head price-list-grid">
                     <span>Size</span>
+                    <span>Item code</span>
+                    <span>Colours</span>
+                    <span>Production cost</span>
                     <span>Pieces in set</span>
-                    <span>Price per piece</span>
+                    <span>Selling price</span>
                     <span></span>
                   </div>
                   {set.items.map((item: any, itemIndex: number) => (
-                    <div className="set-size-row" key={itemIndex}>
+                    <div className="set-size-row price-list-grid" key={itemIndex}>
                       <input
                         placeholder="Size"
                         value={item.size_label}
@@ -1423,6 +1718,24 @@ function SalesCreateModal({
                           )
                         }
                         required
+                      />
+                      <input
+                        placeholder="Item code"
+                        value={item.item_code || ""}
+                        onChange={(e) => setSetTypes((all) => all.map((x, i) => i === setIndex ? { ...x, items: x.items.map((v: any, j: number) => j === itemIndex ? { ...v, item_code: e.target.value } : v) } : x))}
+                      />
+                      <input
+                        placeholder="Colours"
+                        value={item.colours || ""}
+                        onChange={(e) => setSetTypes((all) => all.map((x, i) => i === setIndex ? { ...x, items: x.items.map((v: any, j: number) => j === itemIndex ? { ...v, colours: e.target.value } : v) } : x))}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="Cost"
+                        value={item.production_cost ?? ""}
+                        onChange={(e) => setSetTypes((all) => all.map((x, i) => i === setIndex ? { ...x, items: x.items.map((v: any, j: number) => j === itemIndex ? { ...v, production_cost: e.target.value === "" ? null : Number(e.target.value) } : v) } : x))}
                       />
                       <input
                         type="number"
@@ -1512,6 +1825,9 @@ function SalesCreateModal({
                                   ...x.items,
                                   {
                                     size_label: "",
+                                    item_code: "",
+                                    colours: "",
+                                    production_cost: null,
                                     quantity: 1,
                                     unit_price: 0,
                                   },
@@ -1534,7 +1850,7 @@ function SalesCreateModal({
                     ...all,
                     {
                       name: `Set Type ${all.length + 1}`,
-                      items: [{ size_label: "", quantity: 1, unit_price: 0 }],
+                      items: [{ size_label: "", item_code: "", colours: "", production_cost: null, quantity: 1, unit_price: 0 }],
                     },
                   ])
                 }
@@ -1543,7 +1859,7 @@ function SalesCreateModal({
               </button>
             </div>
           </>
-        ) : type === "po" ? (
+        ) : type === "po" || type === "sales_order" ? (
           <>
             <div className="form-row">
               <label>
@@ -1607,7 +1923,7 @@ function SalesCreateModal({
                       </select>
                     ) : (
                       <select value={line.set_item_id} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, set_item_id: Number(e.target.value) } : x))} required>
-                        {data.articles.find((a:any)=>Number(a.id)===Number(line.article_id))?.sets.flatMap((set:any)=>set.items.map((item:any)=><option value={item.id} key={item.id}>Size {item.size_label} · {money(item.unit_price)}</option>))}
+                        {data.articles.find((a:any)=>Number(a.id)===Number(line.article_id))?.sets.flatMap((set:any)=>set.items.map((item:any)=><option value={item.id} key={item.id}>{item.item_code ? `${item.item_code} · ` : ""}Size {item.size_label} · {money(item.unit_price)}{item.colours ? ` · ${item.colours}` : ""}</option>))}
                       </select>
                     )}
                   </label>
@@ -1626,6 +1942,54 @@ function SalesCreateModal({
                 <strong>{money(poGrandTotal)}</strong>
               </div>
             </div>
+          </>
+        ) : type === "invoice" ? (
+          <>
+            <div className="form-row">
+              <label>Customer
+                <select name="customer_id" required>{data.customers.map((customer: any) => <option value={customer.id} key={customer.id}>{customer.code} — {customer.name}</option>)}</select>
+              </label>
+              <label>Salesperson
+                <select name="sales_rep_id" required>{data.reps.map((rep: any) => <option value={rep.id} key={rep.id}>{rep.code} — {rep.name}</option>)}</select>
+              </label>
+              <label>Invoice date<input name="invoice_date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></label>
+              <label>Due date<input name="due_date" type="date" /></label>
+              <label>Sale type<select name="sale_type" defaultValue="credit"><option value="credit">Credit sale</option><option value="cash">Cash sale</option><option value="mixed">Mixed payment</option></select></label>
+              <label>Reference<input name="reference" placeholder="Customer reference / note" /></label>
+            </div>
+            <div className="po-lines">
+              <div className="po-lines-head"><div><b>Invoice items</b><small>Add one or more articles, sizes, quantities and selling rates.</small></div><button type="button" className="secondary-action" onClick={() => setInvoiceLines((lines) => [...lines, { article_id: Number(data.articles?.[0]?.id || 0), size_label: defaultInvoiceItem?.size_label || "", quantity: 1, rate: Number(defaultInvoiceItem?.unit_price || 0) }])}><Plus /> Add item</button></div>
+              {invoiceLines.map((line, index) => {
+                const article = data.articles.find((item: any) => Number(item.id) === Number(line.article_id));
+                const sizes = article?.sets?.flatMap((set: any) => set.items) || [];
+                return <div className="po-line invoice-line" key={index}>
+                  <label>Article<select value={line.article_id} onChange={(e) => { const nextArticle = data.articles.find((item: any) => Number(item.id) === Number(e.target.value)); const item = nextArticle?.sets?.[0]?.items?.[0]; setInvoiceLines((lines) => lines.map((value, i) => i === index ? { ...value, article_id: Number(e.target.value), size_label: item?.size_label || "", rate: Number(item?.unit_price || nextArticle?.selling_price || 0) } : value)); }}>{data.articles.map((item: any) => <option value={item.id} key={item.id}>{item.code} — {item.name}</option>)}</select></label>
+                  <label>Size / item<select value={line.size_label} onChange={(e) => { const item = sizes.find((size: any) => size.size_label === e.target.value); setInvoiceLines((lines) => lines.map((value, i) => i === index ? { ...value, size_label: e.target.value, rate: Number(item?.unit_price || value.rate) } : value)); }}>{sizes.map((item: any) => <option value={item.size_label} key={`${item.id}-${item.size_label}`}>{item.item_code ? `${item.item_code} · ` : ""}Size {item.size_label}{item.colours ? ` · ${item.colours}` : ""}</option>)}</select></label>
+                  <label>Quantity<input type="number" min="0.01" step="0.01" value={line.quantity} onChange={(e) => setInvoiceLines((lines) => lines.map((value, i) => i === index ? { ...value, quantity: Number(e.target.value) } : value))} required /></label>
+                  <label>Rate<input type="number" min="0" step="0.01" value={line.rate} onChange={(e) => setInvoiceLines((lines) => lines.map((value, i) => i === index ? { ...value, rate: Number(e.target.value) } : value))} required /></label>
+                  <div className="po-line-total"><small>Line total</small><b>{money(Number(line.quantity || 0) * Number(line.rate || 0))}</b></div>
+                  <button type="button" className="icon-action delete" disabled={invoiceLines.length === 1} onClick={() => setInvoiceLines((lines) => lines.filter((_, i) => i !== index))}><Trash2 /></button>
+                </div>;
+              })}
+              <div className="form-row invoice-adjustments"><label>Discount<input name="discount" type="number" min="0" step="0.01" defaultValue="0" /></label><label>Tax<input name="tax" type="number" min="0" step="0.01" defaultValue="0" /></label></div>
+              <div className="po-grand-total"><span>Invoice subtotal before discount and tax</span><strong>{money(invoiceSubtotal)}</strong></div>
+            </div>
+          </>
+        ) : type === "commission" ? (
+          <>
+            <div className="form-row">
+              <label>Salesperson<select name="sales_rep_id" required defaultValue={initial?.sales_rep_id}>{data.reps.map((rep: any) => <option value={rep.id} key={rep.id}>{rep.code} — {rep.name}</option>)}</select></label>
+              <label>Commission date<input name="commission_date" type="date" required defaultValue={initial?.receipt_date || new Date().toISOString().slice(0, 10)} /></label>
+              <label>Customer (optional)<select name="customer_id" defaultValue={initial?.customer_id || ""}><option value="">Not linked</option>{data.customers.map((customer: any) => <option value={customer.id} key={customer.id}>{customer.code} — {customer.name}</option>)}</select></label>
+              <label>Invoice (optional)<select name="invoice_id" defaultValue={initial?.invoice_id || ""}><option value="">Not linked</option>{data.invoices.map((invoice: any) => <option value={invoice.id} key={invoice.id}>{invoice.number} — {invoice.customer_name}</option>)}</select></label>
+              <label>Receipt (optional)<select name="receipt_id" defaultValue={initial?.receipt_id || ""}><option value="">Not linked</option>{data.receipts.map((receipt: any) => <option value={receipt.id} key={receipt.id}>{receipt.number} — {receipt.customer_name}</option>)}</select></label>
+              <label>Basis / collected amount<input name="basis_amount" type="number" min="0" step="0.01" defaultValue={initial?.amount ?? 0} required /></label>
+              <label>Rate per piece<input name="commission_rate" type="number" min="0" step="0.01" defaultValue={initial?.commission_rate ?? 0} required /></label>
+              <label>Commission amount<input name="commission_amount" type="number" min={initial?.source_type === "automatic" ? "0" : "0.01"} step="0.01" defaultValue={initial?.commission_amount} required /></label>
+              {initial?.source_type === "automatic" && <label>Status<select name="commission_status" defaultValue={initial?.commission_status || "eligible"}><option value="eligible">Eligible</option><option value="blocked_late">Blocked late</option><option value="void">Void</option></select></label>}
+            </div>
+            <label>Notes<input name="notes" maxLength={255} defaultValue={initial?.notes} placeholder="Reason or approval reference" /></label>
+            <p className="report-note">{initial?.source_type === "automatic" ? "Changes update the commission portion of the linked receipt journal without changing the customer payment." : "Saving posts the commission expense and commission payable journal automatically."}</p>
           </>
         ) : (
           <>
@@ -1698,7 +2062,7 @@ function SalesCreateModal({
             Cancel
           </button>
           <button className="primary" disabled={busy}>
-            {busy ? <Loader2 /> : <Check />} Save
+            {busy ? <Loader2 /> : <Check />} {type === "invoice" ? "Create invoice" : type === "sales_order" ? "Create sales order" : type === "commission" ? "Post commission" : "Save"}
           </button>
         </div>
       </form>
@@ -1958,20 +2322,22 @@ function Records({
                   >
                     <Eye />
                   </button>
-                  <button
-                    className="icon-action edit"
-                    title="Edit"
-                    onClick={() => edit(row)}
-                  >
-                    <Pencil />
-                  </button>
-                  <button
-                    className="icon-action delete"
-                    title="Delete"
-                    onClick={() => remove(row)}
-                  >
-                    <Trash2 />
-                  </button>
+                  {(page !== "General Ledger" || row.source_type === "manual_journal") && <>
+                    <button
+                      className="icon-action edit"
+                      title="Edit"
+                      onClick={() => edit(row)}
+                    >
+                      <Pencil />
+                    </button>
+                    <button
+                      className="icon-action delete"
+                      title="Delete"
+                      onClick={() => remove(row)}
+                    >
+                      <Trash2 />
+                    </button>
+                  </>}
                 </div>
               </td>
             </tr>
@@ -2109,6 +2475,25 @@ function CreateModal({
           ],
         });
       }
+      if (type === "journal")
+        await submit("/journals", {
+          posting_date: f.get("posting_date"),
+          description: f.get("description"),
+          lines: [
+            { account_code: f.get("debit_account"), debit: Number(f.get("amount")), credit: 0 },
+            { account_code: f.get("credit_account"), debit: 0, credit: Number(f.get("amount")) },
+          ],
+        });
+      if (type === "stock_adjustment")
+        await submit("/stock-adjustments", {
+          material_id: Number(f.get("material_id")),
+          batch_number: f.get("batch_number"),
+          adjustment_date: f.get("adjustment_date"),
+          adjustment_type: f.get("adjustment_type"),
+          quantity: Number(f.get("quantity")),
+          unit_cost: Number(f.get("unit_cost")),
+          reason: f.get("reason"),
+        });
     } finally {
       setBusy(false);
     }
@@ -2120,7 +2505,11 @@ function CreateModal({
           ? "Add Supplier"
           : type === "po"
             ? "New Purchase Order"
-            : "Receive Goods"
+            : type === "grn"
+              ? "Receive Goods"
+              : type === "stock_adjustment"
+                ? "Manual Stock Adjustment"
+                : "New Journal Entry"
       }
       close={close}
       busy={busy}
@@ -2210,8 +2599,54 @@ function CreateModal({
             </label>
           </div>
         </>
-      ) : (
+      ) : type === "grn" ? (
         <GrnFields orders={approved} />
+      ) : type === "stock_adjustment" ? (
+        <>
+          <div className="form-row">
+            <label>Material<select name="material_id" required defaultValue=""><option value="" disabled>Select material</option>{data.materials.map((material) => <option value={material.id} key={material.id}>{material.code} — {material.name}</option>)}</select></label>
+            <label>Batch number<input name="batch_number" required maxLength={80} /></label>
+            <label>Adjustment date<input name="adjustment_date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></label>
+            <label>Adjustment type<select name="adjustment_type" defaultValue="increase"><option value="increase">Increase stock</option><option value="decrease">Decrease stock</option></select></label>
+            <label>Quantity<input name="quantity" type="number" min="0.0001" step="0.0001" required /></label>
+            <label>Unit cost<input name="unit_cost" type="number" min="0" step="0.0001" required /></label>
+          </div>
+          <label>Reason<input name="reason" required maxLength={255} placeholder="Physical count, damage, opening balance…" /></label>
+          <p className="report-note">This adjustment updates batch stock and posts a balanced inventory journal.</p>
+        </>
+      ) : (
+        <>
+          <div className="form-row">
+            <label>
+              Posting date
+              <input name="posting_date" required type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
+            </label>
+            <label>
+              Amount (LKR)
+              <input name="amount" required type="number" min="0.01" step="0.01" />
+            </label>
+          </div>
+          <label>
+            Description
+            <input name="description" required maxLength={255} />
+          </label>
+          <div className="form-row">
+            <label>
+              Debit account
+              <select name="debit_account" required defaultValue="">
+                <option value="" disabled>Select account</option>
+                {data.accounts.map((account) => <option value={account.code} key={account.id}>{account.code} — {account.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Credit account
+              <select name="credit_account" required defaultValue="">
+                <option value="" disabled>Select account</option>
+                {data.accounts.map((account) => <option value={account.code} key={account.id}>{account.code} — {account.name}</option>)}
+              </select>
+            </label>
+          </div>
+        </>
       )}
     </ModalShell>
   );
@@ -2252,9 +2687,7 @@ function EditModal({
         });
       else if (page === "General Ledger")
         await submit(`/journals/${row.id}`, {
-          posting_date: f.get("posting_date"),
           description: f.get("description"),
-          status: f.get("status"),
         });
       else
         await submit(`/purchase-orders/${row.id}`, {
@@ -2356,24 +2789,16 @@ function EditModal({
           <label>
             Posting date
             <input
-              name="posting_date"
-              required
               type="date"
-              defaultValue={row.posting_date}
+              value={row.posting_date}
+              disabled
             />
           </label>
           <label>
             Description
             <input name="description" required defaultValue={row.description} />
           </label>
-          <label>
-            Status
-            <select name="status" defaultValue={row.status}>
-              <option value="draft">Draft</option>
-              <option value="posted">Posted</option>
-              <option value="void">Void</option>
-            </select>
-          </label>
+          <label>Status<input value="Posted" disabled /></label>
         </>
       ) : (
         <>
@@ -2966,7 +3391,9 @@ function PayrollPage({ token }: { token: string }) {
     [attendanceOpen, setAttendanceOpen] = useState(false),
     [attendanceHistoryOpen, setAttendanceHistoryOpen] = useState(false),
     [settingsOpen, setSettingsOpen] = useState(false),
-    [calculating, setCalculating] = useState<number | null>(null);
+    [calculating, setCalculating] = useState<number | null>(null),
+    [payrollTable, setPayrollTable] = useState<"runs" | "employees">("runs"),
+    [expandedPayrollRuns, setExpandedPayrollRuns] = useState<Set<number>>(new Set());
   const loadPayroll = useCallback(() => {
     fetch(`${API}/payroll`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -3034,6 +3461,13 @@ function PayrollPage({ token }: { token: string }) {
       setError((exception as Error).message);
     }
   };
+  const togglePayrollRun = (id: number) => {
+    setExpandedPayrollRuns((current) => {
+      const next = new Set(current);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
   return (
     <>
       <div className="heading">
@@ -3089,7 +3523,11 @@ function PayrollPage({ token }: { token: string }) {
               <small>Employee take-home total</small>
             </article>
           </div>
-          <div className="table-card">
+          <div className="table-view-tabs" role="tablist" aria-label="Payroll records">
+            <button className={payrollTable === "runs" ? "active" : ""} onClick={() => setPayrollTable("runs")}>Payroll Runs <span>{data.runs.length}</span></button>
+            <button className={payrollTable === "employees" ? "active" : ""} onClick={() => setPayrollTable("employees")}>Employees <span>{data.employees.length}</span></button>
+          </div>
+          {payrollTable === "employees" && <div className="table-card">
             <table>
               <thead>
                 <tr>
@@ -3145,8 +3583,8 @@ function PayrollPage({ token }: { token: string }) {
                 ))}
               </tbody>
             </table>
-          </div>
-          <div className="table-card">
+          </div>}
+          {payrollTable === "runs" && <div className="table-card">
             <table>
               <thead>
                 <tr>
@@ -3161,9 +3599,13 @@ function PayrollPage({ token }: { token: string }) {
               </thead>
               <tbody>
                 {data.runs.map((r: any) => (
-                  <tr key={r.id}>
+                  <Fragment key={r.id}>
+                  <tr>
                     <td>
-                      <b>{r.number}</b>
+                      <button className="payroll-expand" onClick={() => togglePayrollRun(r.id)} aria-expanded={expandedPayrollRuns.has(r.id)} title="Show employee pay details">
+                        {expandedPayrollRuns.has(r.id) ? <ChevronDown /> : <ChevronRight />}
+                        <b>{r.number}</b>
+                      </button>
                     </td>
                     <td>
                       {r.period_start} to {r.period_end}
@@ -3176,8 +3618,8 @@ function PayrollPage({ token }: { token: string }) {
                       <div className="row-actions">
                         <button
                           className="icon-action view"
-                          onClick={() => setViewing(r)}
-                          title="View"
+                          onClick={() => togglePayrollRun(r.id)}
+                          title="Show employee pay details"
                         >
                           <Eye />
                         </button>
@@ -3213,10 +3655,36 @@ function PayrollPage({ token }: { token: string }) {
                       </div>
                     </td>
                   </tr>
+                  {expandedPayrollRuns.has(r.id) && (
+                    <tr className="payroll-detail-row">
+                      <td colSpan={7}>
+                        <div className="payroll-breakdown">
+                          <div className="payroll-breakdown-head">
+                            <span>Employee</span><span>Basic salary</span><span>Allowance</span><span>Incentive</span><span>Commission</span><span>OT</span><span>Deductions</span><span>Net pay</span>
+                          </div>
+                          {(r.items || []).map((item: any) => {
+                            const deductions = Number(item.epf_employee || 0) + Number(item.other_deductions || 0) + Number(item.no_pay_amount || 0);
+                            return <div className="payroll-breakdown-line" key={item.id}>
+                              <span><b>{item.employee_no}</b><small>{item.name}</small></span>
+                              <span>{money(item.basic_salary)}</span>
+                              <span>{money(item.allowances)}</span>
+                              <span>{money(item.incentive)}</span>
+                              <span>{money(item.commission || 0)}</span>
+                              <span>{money(item.overtime)}<small>{Number(item.overtime_hours || 0)} hours</small></span>
+                              <span>{money(deductions)}<small>EPF {money(item.epf_employee)} · No-pay {money(item.no_pay_amount || 0)}</small></span>
+                              <span><b>{money(item.net_salary)}</b></span>
+                            </div>;
+                          })}
+                          {!r.items?.length && <div className="payroll-empty">No employee pay lines are recorded for this payroll run.</div>}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
-          </div>
+          </div>}
         </>
       )}
       {viewing && (
@@ -3879,8 +4347,9 @@ function ReportsPage({ token }: { token: string }) {
   const [data, setData] = useState<any>(null),
     [financial, setFinancial] = useState<any>(null),
     [aging, setAging] = useState<any>(null),
+    [retail, setRetail] = useState<any>(null),
     [error, setError] = useState(""),
-    [selected, setSelected] = useState("summary");
+    [selected, setSelected] = useState("");
   const load = useCallback(() => {
     setError("");
     Promise.all([
@@ -3893,12 +4362,16 @@ function ReportsPage({ token }: { token: string }) {
       fetch(`${API}/reports/aging?as_of=${to}`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
+      fetch(`${API}/reports/retail?from=${from}&to=${to}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
     ])
-      .then(async ([a, b, c]) => {
-        if (!a.ok || !b.ok || !c.ok) throw new Error();
+      .then(async ([a, b, c, d]) => {
+        if (!a.ok || !b.ok || !c.ok || !d.ok) throw new Error();
         setData(await a.json());
         setFinancial(await b.json());
         setAging(await c.json());
+        setRetail(await d.json());
       })
       .catch(() => setError("Unable to load financial reports."));
   }, [token, from, to]);
@@ -3925,40 +4398,76 @@ function ReportsPage({ token }: { token: string }) {
     a.click();
     URL.revokeObjectURL(url);
   };
-  return (
+  const reportGroups = [
+    { title: "Retail operations", reports: [["sales_report", "Sales report"], ["product_sales", "Product sales report"], ["receipt_report", "Receipt report"], ["customer_report", "Customer report"], ["product_report", "Product report"]] },
+    { title: "Purchasing & inventory", reports: [["purchase_report", "Purchase report"], ["product_purchase", "Product purchase report"], ["supplier_report", "Supplier report"], ["inventory_balance", "Inventory closing balance"], ["inventory_movement", "Inventory movement report"]] },
+    { title: "Finance", reports: [["summary", "Finance overview"], ["profit_loss", "Profit & loss statement"], ["balance_sheet", "Balance sheet"], ["cash_flow", "Cash flow"], ["trial_balance", "Trial balance"], ["aging", "Supplier aging report"]] },
+  ];
+  const pendingReports = ["Stock adjustment report", "Stock transfer report", "Supplier payment report", "Expense analysis report", "Product margin report"];
+  const financialKeys = ["summary", "profit_loss", "balance_sheet", "cash_flow", "trial_balance", "aging"];
+  const selectedGroup = reportGroups.find((group) => group.reports.some(([key]) => key === selected));
+  const selectedLabel = selectedGroup?.reports.find(([key]) => key === selected)?.[1];
+  const downloadExcel = () => {
+    if (financialKeys.includes(selected)) {
+      download();
+      return;
+    }
+    const rows = retail?.[selected] || [];
+    const columns = rows.length ? Object.keys(rows[0]) : [];
+    const escapeCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = [columns.map(escapeCell).join("\t"), ...rows.map((row: any) => columns.map((key) => escapeCell(row[key])).join("\t"))].join("\r\n");
+    const blob = new Blob(["\ufeff", csv], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url = URL.createObjectURL(blob), anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `AeroSoft360_${selected}_${to}.xls`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  const downloadPdf = () => {
+    const report = document.querySelector(".report-output");
+    if (!report) return;
+    const popup = window.open("", "_blank", "width=1100,height=800");
+    if (!popup) {
+      setError("Allow pop-ups to download this report as PDF.");
+      return;
+    }
+    popup.document.write(`<!doctype html><html><head><title>${selectedLabel}</title><style>
+      body{font-family:Arial,sans-serif;color:#172432;padding:28px}h1{margin:0 0 4px}p.meta{color:#657784;margin:0 0 24px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #ccd7dd;padding:7px;text-align:left}th{background:#edf4f5;text-transform:uppercase}.kpis,.aging-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}.kpis article,.aging-summary article{border:1px solid #ccd7dd;padding:12px}.kpis span,.aging-summary span{display:block;color:#657784;font-size:11px}.kpis b,.aging-summary b{display:block;margin-top:5px}.report-note,.report-title-row span,.panel-head button{display:none}.panels{display:grid;grid-template-columns:1fr 1fr;gap:12px}.report-row{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:7px}.table-card{overflow:visible}@page{size:landscape;margin:12mm}@media print{body{padding:0}}
+    </style></head><body><h1>${selectedLabel}</h1><p class="meta">Period: ${from} to ${to}</p>${report.innerHTML}</body></html>`);
+    popup.document.close();
+    popup.focus();
+    setTimeout(() => { popup.print(); popup.close(); }, 300);
+  };
+  if (!selected) return (
     <>
       <div className="heading">
         <div>
           <span>FINANCE AND MANAGEMENT ACCOUNTING</span>
-          <h1>Financial Reports</h1>
-          <p>
-            Profit and loss, balance sheet, cash flow, trial balance and
-            management summaries.
-          </p>
+          <h1>Reports</h1>
+          <p>Select a report to open its dedicated page.</p>
         </div>
-        <button className="primary" onClick={() => download()}>
-          <FileText /> Download this report
-        </button>
       </div>
-      <div className="report-menu">
-        {[
-          ["summary", "Report centre"],
-          ["profit_loss", "Profit and Loss"],
-          ["balance_sheet", "Balance Sheet"],
-          ["cash_flow", "Cash Flow"],
-          ["trial_balance", "Trial Balance"],
-          ["aging", "Payables Aging"],
-        ].map(([key, label]) => (
-          <button
-            className={selected === key ? "active" : ""}
-            onClick={() => setSelected(key)}
-            key={key}
-          >
-            <FileText />
-            <span>{label}</span>
-            <small>Open report →</small>
-          </button>
-        ))}
+      <div className="report-catalog">
+        {reportGroups.map((group) => <section key={group.title}><h2>{group.title}</h2><div className="report-menu">
+          {group.reports.map(([key, label]) => <button onClick={() => setSelected(key)} key={key}><FileText /><span>{label}</span><small>Open report →</small></button>)}
+        </div></section>)}
+      </div>
+      <section className="report-roadmap"><div><span>NEXT FINANCE CONTROLS</span><h2>Reports waiting for source transactions</h2><p>These activate after their entry and approval workflows are added, keeping every balance auditable.</p></div><div className="pending-report-list">{pendingReports.map((name) => <span key={name}>{name}<small>Requires module</small></span>)}</div></section>
+    </>
+  );
+  return (
+    <>
+      <button className="report-back" onClick={() => setSelected("")}><ArrowLeft /> Back to reports</button>
+      <div className="heading report-page-heading">
+        <div>
+          <span>{selectedGroup?.title.toUpperCase()}</span>
+          <h1>{selectedLabel}</h1>
+          <p>View the report for the selected accounting period.</p>
+        </div>
+        <div className="report-downloads">
+          <button onClick={downloadPdf}><FileDown /> Download PDF</button>
+          <button className="primary" onClick={downloadExcel}><FileText /> Download Excel</button>
+        </div>
       </div>
       <div className="report-filters">
         <label>
@@ -3980,13 +4489,13 @@ function ReportsPage({ token }: { token: string }) {
         <button onClick={load}>Apply period</button>
       </div>
       {error && <div className="error">{error}</div>}
-      {!data || !financial || !aging ? (
+      {!data || !financial || !aging || !retail ? (
         <div className="loading">
           <Loader2 /> Loading reports…
         </div>
       ) : (
-        <>
-          <div className="kpis">
+        <div className="report-output">
+          {selected === "summary" && <div className="kpis">
             <article>
               <span>Revenue</span>
               <b>{money(financial.profit_loss.revenue)}</b>
@@ -4007,13 +4516,15 @@ function ReportsPage({ token }: { token: string }) {
               <b>{money(financial.cash_flow.net_change)}</b>
               <small>Cash and bank accounts</small>
             </article>
-          </div>
+          </div>}
           {selected === "aging" ? (
             <AgingReportView aging={aging} />
+          ) : !financialKeys.includes(selected) ? (
+            <RetailReportView title={selectedLabel || "Report"} rows={retail[selected] || []} />
           ) : (
             <FinancialReportView selected={selected} financial={financial} />
           )}
-          <div className="panels">
+          {selected === "summary" && <div className="panels report-management-panels">
             <section>
               <div className="panel-head">
                 <h2>Purchases by status</h2>
@@ -4037,10 +4548,25 @@ function ReportsPage({ token }: { token: string }) {
                 </div>
               ))}
             </section>
-          </div>
-        </>
+          </div>}
+        </div>
       )}
     </>
+  );
+}
+function RetailReportView({ title, rows }: { title: string; rows: any[] }) {
+  const tableRef = useRef<HTMLDivElement>(null);
+  const columns = rows.length ? Object.keys(rows[0]) : [];
+  const currencyColumns = ["total", "sales", "outstanding", "value", "unit_cost", "production_cost", "line_total", "rate", "amount", "received_amount", "credit_limit", "selling_price"];
+  const display = (key: string, value: any) => currencyColumns.includes(key) ? money(value || 0) : value === null || value === "" ? "—" : String(value);
+  return (
+    <div className="retail-report">
+      <div className="report-title-row"><div><span>LIVE SOURCE REPORT</span><h2>{title}</h2></div><div className="report-table-actions"><strong>{rows.length} records</strong><button aria-label="Scroll table left" onClick={() => tableRef.current?.scrollBy({ left: -480, behavior: "smooth" })}><ChevronLeft /></button><button aria-label="Scroll table right" onClick={() => tableRef.current?.scrollBy({ left: 480, behavior: "smooth" })}><ChevronRight /></button></div></div>
+      <div className="table-card scrollable-report-table" ref={tableRef}><table><thead><tr>{columns.map((key) => <th key={key}>{key.replace(/_/g, " ")}</th>)}</tr></thead><tbody>
+        {!rows.length ? <tr><td colSpan={Math.max(1, columns.length)}>No records in the selected period.</td></tr> : rows.map((row, index) => <tr key={index}>{columns.map((key) => <td key={key}>{display(key, row[key])}</td>)}</tr>)}
+      </tbody></table></div>
+      <p className="report-note">Figures are read directly from system records for the selected reporting period.</p>
+    </div>
   );
 }
 function AgingReportView({ aging }: { aging: any }) {
