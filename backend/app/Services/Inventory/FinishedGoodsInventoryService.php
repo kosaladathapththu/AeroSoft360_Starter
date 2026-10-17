@@ -27,6 +27,8 @@ final class FinishedGoodsInventoryService
 
     public function adjust(int $articleId, string $size, float $quantity, string $type, string $date): void
     {
+        $validSize = DB::table('article_set_items as item')->join('article_set_templates as set', 'set.id', '=', 'item.set_template_id')->where('set.article_id', $articleId)->where('item.size_label', $size)->exists();
+        if (! $validSize) throw ValidationException::withMessages(['size_label' => 'The selected size does not belong to this article.']);
         $signed = $type === 'increase' ? abs($quantity) : -abs($quantity);
         $this->move($articleId, $size, $signed, 'adjustment_'.$type, 'manual_adjustment', 0, 'adjustment:'.uniqid('', true), $date, $type === 'decrease');
     }

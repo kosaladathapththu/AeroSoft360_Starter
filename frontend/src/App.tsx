@@ -836,6 +836,7 @@ function SalesPage({
     Invoices: "invoice",
     Collections: "receipt",
     Commissions: "commission",
+    "Finished Goods Stock": "finished_stock",
   };
   const heads: any = {
     Customers: ["Customer", "Phone", "Credit terms", "Credit limit", "Status"],
@@ -930,6 +931,8 @@ function SalesPage({
               ? "Record collection"
               : page === "Commissions"
                 ? "Add commission"
+              : page === "Finished Goods Stock"
+                ? "Adjust stock"
               : page === "Invoices"
                 ? "Create invoice"
                 : page === "Sales Orders"
@@ -1514,6 +1517,15 @@ function SalesCreateModal({
         tax: Number(f.get("tax") || 0),
         lines: invoiceLines,
       };
+    } else if (type === "finished_stock") {
+      path = "finished-stock-adjustments";
+      body = {
+        article_id: Number(f.get("article_id")),
+        size_label: f.get("size_label"),
+        quantity: Number(f.get("quantity")),
+        adjustment_type: f.get("adjustment_type"),
+        occurred_at: f.get("occurred_at"),
+      };
     } else if (type === "commission") {
       path = initial ? (initial.source_type === "manual" ? `commissions/manual/${initial.manual_id}` : `commissions/${initial.id}`) : "commissions/manual";
       body = {
@@ -1566,6 +1578,8 @@ function SalesCreateModal({
               ? "Create Manual Invoice"
             : type === "commission"
               ? initial ? "Edit Commission" : "Add Manual Commission"
+            : type === "finished_stock"
+              ? "Adjust Finished Goods Stock"
             : type === "receipt"
               ? "Record Customer Collection"
               : initial && type === "article"
@@ -1871,6 +1885,17 @@ function SalesCreateModal({
                 <Plus /> Add another set type
               </button>
             </div>
+          </>
+        ) : type === "finished_stock" ? (
+          <>
+            <div className="form-row">
+              <label>Article<select name="article_id" required>{data.articles.map((article: any) => <option value={article.id} key={article.id}>{article.code} — {article.name}</option>)}</select></label>
+              <label>Size<select name="size_label" required>{[...new Set(data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items.map((item: any) => item.size_label))))].map((size: any) => <option value={size} key={size}>{size}</option>)}</select></label>
+              <label>Adjustment<select name="adjustment_type"><option value="increase">Increase / stock in</option><option value="decrease">Decrease / stock out</option></select></label>
+              <label>Quantity<input name="quantity" type="number" min="0.01" step="0.01" required /></label>
+              <label>Date<input name="occurred_at" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></label>
+            </div>
+            <p className="report-note">Invoices reduce this stock automatically. Deleting an invoice returns the exact article and size quantities.</p>
           </>
         ) : type === "po" || type === "sales_order" ? (
           <>
