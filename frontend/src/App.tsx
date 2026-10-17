@@ -1418,6 +1418,7 @@ function SalesCreateModal({
   const firstSetId = Number(data.articles?.[0]?.sets?.[0]?.id || 0);
   const firstArticleId = Number(data.articles?.[0]?.id || 0);
   const firstItemId = Number(data.articles?.[0]?.sets?.[0]?.items?.[0]?.id || 0);
+  const [inventoryArticleId, setInventoryArticleId] = useState(firstArticleId);
   const [poLines, setPoLines] = useState<any[]>([
     ...(initial?.lines?.length
       ? initial.lines.map((line: any) => ({
@@ -1889,8 +1890,8 @@ function SalesCreateModal({
         ) : type === "finished_stock" ? (
           <>
             <div className="form-row">
-              <label>Article<select name="article_id" required>{data.articles.map((article: any) => <option value={article.id} key={article.id}>{article.code} — {article.name}</option>)}</select></label>
-              <label>Size<select name="size_label" required>{[...new Set(data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items.map((item: any) => item.size_label))))].map((size: any) => <option value={size} key={size}>{size}</option>)}</select></label>
+              <label>Article<select name="article_id" value={inventoryArticleId} onChange={(event) => setInventoryArticleId(Number(event.target.value))} required>{data.articles.map((article: any) => <option value={article.id} key={article.id}>{article.code} — {article.name}</option>)}</select></label>
+              <label>Size<select name="size_label" required>{[...new Set((data.articles.find((article: any) => Number(article.id) === inventoryArticleId)?.sets || []).flatMap((set: any) => set.items.map((item: any) => item.size_label)))].map((size: any) => <option value={size} key={size}>{size}</option>)}</select></label>
               <label>Adjustment<select name="adjustment_type"><option value="increase">Increase / stock in</option><option value="decrease">Decrease / stock out</option></select></label>
               <label>Quantity<input name="quantity" type="number" min="0.01" step="0.01" required /></label>
               <label>Date<input name="occurred_at" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></label>
@@ -3429,6 +3430,7 @@ function PayrollPage({ token }: { token: string }) {
     [attendanceOpen, setAttendanceOpen] = useState(false),
     [attendanceHistoryOpen, setAttendanceHistoryOpen] = useState(false),
     [settingsOpen, setSettingsOpen] = useState(false),
+    [editingPayrollItem, setEditingPayrollItem] = useState<any>(null),
     [calculating, setCalculating] = useState<number | null>(null),
     [payrollTable, setPayrollTable] = useState<"runs" | "employees">("runs"),
     [expandedPayrollRuns, setExpandedPayrollRuns] = useState<Set<number>>(new Set());
@@ -3505,6 +3507,20 @@ function PayrollPage({ token }: { token: string }) {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  };
+  const changePayrollItemPayment = async (item: any) => {
+    const next = item.payment_status === "paid" ? "unpaid" : "paid";
+    const response = await fetch(`${API}/payroll-items/${item.id}/payment`, { method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ payment_status: next }) });
+    const json = await response.json();
+    if (!response.ok) return setError(json.message || "Payment status update failed.");
+    loadPayroll();
+  };
+  const deletePayrollItem = async (item: any) => {
+    if (!confirm(`Delete ${item.name}'s pay line from this payroll month?`)) return;
+    const response = await fetch(`${API}/payroll-items/${item.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+    const json = await response.json();
+    if (!response.ok) return setError(json.message || "Employee pay line delete failed.");
+    loadPayroll();
   };
   return (
     <>
@@ -3698,7 +3714,7 @@ function PayrollPage({ token }: { token: string }) {
                       <td colSpan={7}>
                         <div className="payroll-breakdown">
                           <div className="payroll-breakdown-head">
-                            <span>Employee</span><span>Basic salary</span><span>Allowance</span><span>Incentive</span><span>Commission</span><span>OT</span><span>Deductions</span><span>Net pay</span>
+                            <span>Employee</span><span>Basic salary</span><span>Allowance</span><span>Incentive</span><span>Commission</span><span>OT</span><span>Deductions</span><span>Net pay</span><span>Payment</span><span>Actions</span>
                           </div>
                           {(r.items || []).map((item: any) => {
                             const deductions = Number(item.epf_employee || 0) + Number(item.other_deductions || 0) + Number(item.no_pay_amount || 0);
@@ -3711,6 +3727,12 @@ function PayrollPage({ token }: { token: string }) {
                               <span>{money(item.overtime)}<small>{Number(item.overtime_hours || 0)} hours</small></span>
                               <span>{money(deductions)}<small>EPF {money(item.epf_employee)} · No-pay {money(item.no_pay_amount || 0)}</small></span>
                               <span><b>{money(item.net_salary)}</b></span>
+                              <span>{status(item.payment_status || "unpaid")}{item.paid_at && <small>{String(item.paid_at).slice(0, 10)}</small>}</span>
+                              <span className="row-actions">
+                                <button className={`icon-action ${item.payment_status === "paid" ? "view" : "approve"}`} title={item.payment_status === "paid" ? "Mark unpaid" : "Mark paid"} onClick={() => changePayrollItemPayment(item)}><Check /></button>
+                                <button className="icon-action edit" title="Edit employee pay" onClick={() => setEditingPayrollItem(item)}><Pencil /></button>
+                                <button className="icon-action delete" title="Delete employee pay" onClick={() => deletePayrollItem(item)}><Trash2 /></button>
+                              </span>
                             </div>;
                           })}
                           {!r.items?.length && <div className="payroll-empty">No employee pay lines are recorded for this payroll run.</div>}
@@ -3782,6 +3804,7 @@ function PayrollPage({ token }: { token: string }) {
           }}
         />
       )}
+      {editingPayrollItem && <PayrollItemEditModal item={editingPayrollItem} token={token} close={() => setEditingPayrollItem(null)} saved={() => { setEditingPayrollItem(null); loadPayroll(); }} />}
     </>
   );
 }
@@ -4377,6 +4400,37 @@ function PayrollEditModal({
       </form>
     </div>
   );
+}
+function PayrollItemEditModal({ item, token, close, saved }: { item: any; token: string; close: () => void; saved: () => void }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setBusy(true); setError("");
+    const form = new FormData(event.currentTarget);
+    const number = (name: string) => Number(form.get(name) || 0);
+    const body = { basic_salary: number("basic_salary"), allowances: number("allowances"), incentive: number("incentive"), commission: number("commission"), overtime_hours: number("overtime_hours"), overtime: number("overtime"), epf_employee: number("epf_employee"), other_deductions: number("other_deductions"), no_pay_amount: number("no_pay_amount") };
+    try {
+      const response = await fetch(`${API}/payroll-items/${item.id}`, { method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(body) });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.message || Object.values(json.errors || {}).flat().join(" ") || "Update failed.");
+      saved();
+    } catch (exception) { setError((exception as Error).message); } finally { setBusy(false); }
+  };
+  return <div className="backdrop" onMouseDown={close}><form className="modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+    <button type="button" className="close" onClick={close}><X /></button><span>EMPLOYEE MONTHLY PAY</span><h2>Edit {item.name}</h2>
+    {error && <div className="error">{error}</div>}
+    <div className="form-row">
+      <label>Basic salary<input name="basic_salary" type="number" min="0" step="0.01" defaultValue={item.basic_salary} required /></label>
+      <label>Allowance<input name="allowances" type="number" min="0" step="0.01" defaultValue={item.allowances} required /></label>
+      <label>Incentive<input name="incentive" type="number" min="0" step="0.01" defaultValue={item.incentive} required /></label>
+      <label>Commission<input name="commission" type="number" min="0" step="0.01" defaultValue={item.commission || 0} required /></label>
+      <label>OT hours<input name="overtime_hours" type="number" min="0" step="0.01" defaultValue={item.overtime_hours || 0} required /></label>
+      <label>OT payment<input name="overtime" type="number" min="0" step="0.01" defaultValue={item.overtime} required /></label>
+      <label>EPF deduction<input name="epf_employee" type="number" min="0" step="0.01" defaultValue={item.epf_employee} required /></label>
+      <label>Other deductions<input name="other_deductions" type="number" min="0" step="0.01" defaultValue={item.other_deductions} required /></label>
+      <label>No-pay deduction<input name="no_pay_amount" type="number" min="0" step="0.01" defaultValue={item.no_pay_amount || 0} required /></label>
+    </div>
+    <div className="actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save and recalculate"}</button></div>
+  </form></div>;
 }
 function ReportsPage({ token }: { token: string }) {
   const now = new Date(),

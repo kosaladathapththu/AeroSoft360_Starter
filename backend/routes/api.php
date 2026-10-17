@@ -73,6 +73,9 @@ Route::prefix('v1')->group(function ():void {
   Route::delete('/employees/{employee}',[PayrollReportController::class,'deleteEmployee'])->middleware('permission:accounting.manage');
   Route::put('/payroll-runs/{payrollRun}',[AccountingPayrollController::class,'updatePayrollRun'])->middleware('permission:accounting.manage');
   Route::delete('/payroll-runs/{payrollRun}',[PayrollReportController::class,'deletePayrollRun'])->middleware('permission:accounting.manage');
+  Route::put('/payroll-items/{payrollItem}',[PayrollReportController::class,'updatePayrollItem'])->middleware('permission:accounting.manage');
+  Route::put('/payroll-items/{payrollItem}/payment',[PayrollReportController::class,'updatePayrollItemPayment'])->middleware('permission:accounting.manage');
+  Route::delete('/payroll-items/{payrollItem}',[PayrollReportController::class,'deletePayrollItem'])->middleware('permission:accounting.manage');
   Route::get('/payroll-runs/{payrollRun}/excel',[PayrollReportController::class,'exportPayroll'])->middleware('permission:workspace.view');
   Route::get('/reports/management',[PayrollReportController::class,'reports'])->middleware('permission:workspace.view');
   Route::get('/reports/financial-statements',[PayrollReportController::class,'financialStatements'])->middleware('permission:workspace.view');
