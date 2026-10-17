@@ -47,7 +47,17 @@ final class AccountingSalesController extends Controller
                 ->select('stock.*', 'article.code as article_code', 'article.name as article_name', 'article.category')
                 ->orderBy('article.code')->orderBy('stock.size_label')->get()
             : [];
+        $data['commission_settings'] = Schema::hasTable('commission_settings') ? DB::table('commission_settings')->first() : (object) ['max_collection_days'=>100];
         return response()->json($data);
+    }
+
+    public function updateCommissionSettings(Request $request): JsonResponse
+    {
+        $data = $request->validate(['max_collection_days'=>['required','integer','min:1','max:365']]);
+        $id = DB::table('commission_settings')->value('id');
+        if ($id) DB::table('commission_settings')->where('id', $id)->update($data + ['updated_at'=>now()]);
+        else $id = DB::table('commission_settings')->insertGetId($data + ['created_at'=>now(), 'updated_at'=>now()]);
+        return response()->json(DB::table('commission_settings')->find($id));
     }
 
     public function manualCommission(Request $request, PostingService $posting): JsonResponse

@@ -576,6 +576,8 @@ function SalesPage({
     [pricePreview, setPricePreview] = useState<any>(null),
     [expandedPriceArticles, setExpandedPriceArticles] = useState<Set<number>>(new Set());
   const priceFileRef = useRef<HTMLInputElement>(null);
+  const salesTableRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (salesTableRef.current) salesTableRef.current.scrollLeft = 0; }, [page]);
   const loadDashboard = useCallback(() => {
     setError("");
     fetch(`${API}/sales/dashboard`, { headers: { Authorization: `Bearer ${token}` } })
@@ -626,6 +628,15 @@ function SalesPage({
       );
     await loadSales();
     return json;
+  };
+  const updateCommissionPolicy = async () => {
+    const current = Number(data?.commission_settings?.max_collection_days || 100);
+    const value = prompt("Maximum collection days for commission eligibility", String(current));
+    if (value === null) return;
+    const days = Number(value);
+    if (!Number.isInteger(days) || days < 1 || days > 365) return setError("Enter a whole number between 1 and 365 days.");
+    try { await post("commission-settings", { max_collection_days: days }, "PUT"); }
+    catch (exception) { setError((exception as Error).message); }
   };
   const previewPriceList = async (file?: File) => {
     if (!file) return;
@@ -898,12 +909,14 @@ function SalesPage({
       "Outstanding",
     ],
     Commissions: [
+      "Source",
       "Collected by",
       "Customer",
       "Invoice",
       "Receipt",
-      "Collected",
+      "Basis / collected",
       "Days",
+      "Eligible pieces",
       "Rate",
       "Eligibility",
       "Commission",
@@ -929,12 +942,13 @@ function SalesPage({
               {priceImporting ? <Loader2 /> : <FileUp />} {priceImporting ? "Importing..." : "Import price list"}
             </button>
           </>}
+          {page === "Commissions" && <button className="secondary-action" onClick={updateCommissionPolicy}><Settings /> Policy: {data.commission_settings?.max_collection_days || 100} days</button>}
           <button className="primary" onClick={() => setModal(addType[page])}>
             <Plus />{" "}
             {page === "Collections"
               ? "Record collection"
               : page === "Commissions"
-                ? "Add commission"
+                ? "Manual adjustment"
               : page === "Finished Goods Stock"
                 ? "Adjust stock"
               : page === "Invoices"
@@ -950,7 +964,7 @@ function SalesPage({
       </div>
       {error && <div className="error">{error}</div>}
       {priceImportMessage && page === "Pricing List" && <div className="success-message">{priceImportMessage}</div>}
-      <div className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}>
+      <div ref={salesTableRef} className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}>
         <table>
           <thead>
             <tr>
@@ -1024,7 +1038,7 @@ function SalesPage({
                         <button className="icon-action delete" title="Delete salesperson" onClick={async () => { if (!confirm(`Delete ${r.name}?`)) return; try { await post(`sales-reps/${r.id}`, undefined, "DELETE"); } catch (e) { setError((e as Error).message); } }}><Trash2 /></button>
                       </>}
                       {page === "Commissions" && <>
-                        <button className="icon-action edit" title="Edit commission" onClick={() => setEditingMaster({ type: "commission", row: r })}><Pencil /></button>
+                        {r.source_type === "manual" && <button className="icon-action edit" title="Edit management adjustment" onClick={() => setEditingMaster({ type: "commission", row: r })}><Pencil /></button>}
                         <button className="icon-action delete" title="Delete commission" onClick={async () => {
                           const manual = r.source_type === "manual";
                           if (!confirm(manual ? "Delete this manual commission and its journal?" : "Delete this commission? The customer payment will remain allocated.")) return;
@@ -1331,6 +1345,7 @@ function salesCells(page: string, r: any) {
     );
   return (
     <>
+      <td>{status(r.source_type === "manual" ? "Manual" : "Automatic")}</td>
       <td>{r.rep_name}</td>
       <td>{r.customer_name}</td>
       <td>{r.invoice_number}</td>
@@ -1339,8 +1354,9 @@ function salesCells(page: string, r: any) {
         <br />
         <small>{r.receipt_date}</small>
       </td>
-      <td>{money(r.amount)}</td>
+      <td>{r.source_type === "manual" ? <><b>{Number(r.amount).toLocaleString()} pieces</b><br /><small>Manual quantity basis</small></> : money(r.amount)}</td>
       <td>{r.days_taken}</td>
+      <td>{Number(r.source_type === "manual" ? r.amount : r.commission_pieces || 0).toLocaleString()}</td>
       <td>{money(r.commission_rate)} / piece</td>
       <td>{status(r.commission_status)}</td>
       <td>
@@ -1552,12 +1568,10 @@ function SalesCreateModal({
       path = "customer-receipts";
       body = {
         invoice_id: Number(f.get("invoice_id")),
-        sales_rep_id: Number(f.get("sales_rep_id")),
         receipt_date: f.get("receipt_date"),
         payment_method: f.get("payment_method"),
         reference: f.get("reference"),
         amount: Number(f.get("amount")),
-        commission_rate: Number(f.get("commission_rate")),
       };
     }
     try {
@@ -2046,22 +2060,12 @@ function SalesCreateModal({
                   .filter((x: any) => Number(x.outstanding) > 0)
                   .map((x: any) => (
                     <option value={x.id} key={x.id}>
-                      {x.number} — {x.customer_name} — {money(x.outstanding)}
+                      {x.number} — {x.customer_name} — {x.rep_name} — {money(x.outstanding)}
                     </option>
                   ))}
               </select>
             </label>
             <div className="form-row">
-              <label>
-                Cash collected by
-                <select name="sales_rep_id">
-                  {data.reps.map((rep: any) => (
-                    <option value={rep.id} key={rep.id}>
-                      {rep.code} — {rep.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label>
                 Receipt date
                 <input name="receipt_date" type="date" required />
@@ -2089,18 +2093,8 @@ function SalesCreateModal({
                 Reference
                 <input name="reference" />
               </label>
-              <label>
-                Approved commission rate per piece
-                <input
-                  name="commission_rate"
-                  type="number"
-                  min="0"
-                  step=".01"
-                  defaultValue="0"
-                  required
-                />
-              </label>
             </div>
+            <p className="report-note">The salesperson and commission rate come from the selected invoice. Commission is earned only when collection is within the management policy of {data.commission_settings?.max_collection_days || 100} days.</p>
           </>
         )}
         <div className="actions">
