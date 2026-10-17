@@ -1174,9 +1174,6 @@ function SalesPage({
 }
 function SalesTransactionEditModal({ page, row, close, save }: { page: string; row: any; close: () => void; save: (path: string, body: any) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
-  const [commissionBasis, setCommissionBasis] = useState(Number(initial?.amount ?? initial?.basis_amount ?? 0));
-  const [commissionRate, setCommissionRate] = useState(Number(initial?.commission_rate ?? 0));
-  const calculatedCommission = Math.round(commissionBasis * commissionRate * 100) / 100;
   return (
     <ModalShell title={`Edit ${row.number}`} close={close} busy={busy} onSubmit={async (event) => {
       event.preventDefault(); setBusy(true); const form = new FormData(event.currentTarget);
@@ -1409,6 +1406,9 @@ function SalesCreateModal({
   save: (path: string, body: any, method?: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [commissionBasis, setCommissionBasis] = useState(Number(initial?.amount ?? initial?.basis_amount ?? 0));
+  const [commissionRate, setCommissionRate] = useState(Number(initial?.commission_rate ?? 0));
+  const calculatedCommission = Math.round(commissionBasis * commissionRate * 100) / 100;
   const [setTypes, setSetTypes] = useState<any[]>([
     ...(initial?.sets?.length
       ? initial.sets.map((set: any) => ({
