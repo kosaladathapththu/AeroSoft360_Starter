@@ -47,6 +47,7 @@ Route::prefix('v1')->group(function ():void {
   Route::delete('/commissions/manual/{id}',[AccountingSalesController::class,'deleteManualCommission'])->middleware('permission:accounting.manage');
   Route::put('/commissions/{id}',[AccountingSalesController::class,'updateAutomaticCommission'])->middleware('permission:accounting.manage');
   Route::delete('/commissions/{id}',[AccountingSalesController::class,'deleteAutomaticCommission'])->middleware('permission:accounting.manage');
+  Route::post('/finished-stock-adjustments',[AccountingSalesController::class,'adjustFinishedStock'])->middleware('permission:stock.manage');
   Route::get('/sales/aging',[SalesController::class,'aging'])->middleware('permission:workspace.view');
   Route::post('/suppliers',[ProcurementController::class,'storeSupplier'])->middleware('permission:suppliers.manage');
   Route::put('/suppliers/{supplier}',[ProcurementController::class,'updateSupplier'])->middleware('permission:suppliers.manage');

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Accounting\PostingService;
+use App\Services\Inventory\FinishedGoodsInventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,10 @@ final class AccountingSalesController extends Controller
                 'm.notes', DB::raw("'manual' as source_type"))
             ->latest('m.id')->get()->map(fn ($row) => (array) $row)->all();
         $data['commissions'] = array_values(array_merge($manual, $data['commissions'] ?? []));
+        $data['finished_stock'] = DB::table('finished_goods_stock as stock')
+            ->join('articles as article', 'article.id', '=', 'stock.article_id')
+            ->select('stock.*', 'article.code as article_code', 'article.name as article_name', 'article.category')
+            ->orderBy('article.code')->orderBy('stock.size_label')->get();
         return response()->json($data);
     }
 
@@ -235,6 +240,7 @@ final class AccountingSalesController extends Controller
             abort_unless($invoice, 404, 'Invoice not found.');
             abort_if(DB::table('receipt_allocations')->where('invoice_id', $id)->exists(), 422, 'Invoice has collections and cannot be deleted. Delete the collections first.');
             $lines = DB::table('sales_invoice_lines')->where('sales_invoice_id', $id)->get();
+            app(FinishedGoodsInventoryService::class)->restoreInvoice($id, now()->toDateString());
             DB::table('journal_entries')->where(['source_type'=>'sales_invoice', 'source_id'=>$id])->delete();
             DB::table('sales_invoices')->where('id', $id)->delete();
             foreach ($lines as $line) DB::table('sales_order_size_lines')->where('id', $line->sales_order_size_line_id)->decrement('invoiced_quantity', $line->quantity, ['updated_at'=>now()]);
@@ -334,6 +340,7 @@ final class AccountingSalesController extends Controller
                     'line_total'=>round($line['quantity'] * $line['rate'], 2), 'created_at'=>now(), 'updated_at'=>now(),
                 ]);
             }
+            app(FinishedGoodsInventoryService::class)->issueInvoice($invoiceId, $data['invoice_date']);
             $journalLines = [
                 ['account_code'=>'1100', 'debit'=>$total, 'credit'=>0, 'description'=>'Accounts receivable'],
                 ['account_code'=>'4000', 'debit'=>0, 'credit'=>$subtotal - $discount, 'description'=>'Domestic sales revenue'],
@@ -352,6 +359,7 @@ final class AccountingSalesController extends Controller
         return DB::transaction(function () use ($request, $id, $sales, $posting) {
             $response = $sales->invoiceDispatch($request, $id);
             $invoice = $response->getData(true);
+            app(FinishedGoodsInventoryService::class)->issueInvoice((int) $invoice['id'], $invoice['invoice_date']);
             $journalId = $posting->post('sales_invoice', (int) $invoice['id'], $invoice['invoice_date'], "Customer invoice {$invoice['number']}", [
                 ['account_code'=>'1100', 'debit'=>$invoice['total'], 'credit'=>0, 'description'=>'Accounts receivable'],
                 ['account_code'=>'4000', 'debit'=>0, 'credit'=>$invoice['total'], 'description'=>'Domestic sales revenue'],
@@ -383,6 +391,16 @@ final class AccountingSalesController extends Controller
             $this->audit('customer_receipt.posted', 'customer_receipt', (int) $receipt['id'], ['journal_id'=>$journalId, 'amount'=>$amount, 'commission'=>$commission]);
             return response()->json($result, 201);
         });
+    }
+
+    public function adjustFinishedStock(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'article_id'=>['required','integer','exists:articles,id'], 'size_label'=>['required','string','max:30'],
+            'quantity'=>['required','numeric','gt:0'], 'adjustment_type'=>['required','in:increase,decrease'], 'occurred_at'=>['required','date'],
+        ]);
+        DB::transaction(fn () => app(FinishedGoodsInventoryService::class)->adjust((int) $data['article_id'], $data['size_label'], (float) $data['quantity'], $data['adjustment_type'], $data['occurred_at']));
+        return response()->json(['message'=>'Finished-goods stock adjusted.'], 201);
     }
 
     private function audit(string $event, string $type, int $id, array $payload): void

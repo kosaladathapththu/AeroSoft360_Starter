@@ -234,6 +234,7 @@ export default function App() {
         ["Purchase Orders", FileText],
         ["Receive Goods", ClipboardCheck],
         ["Raw Material Stock", Warehouse],
+        ["Finished Goods Stock", PackagePlus],
       ],
     },
     {
@@ -428,6 +429,7 @@ export default function App() {
             "Collections",
             "Debtors Aging",
             "Commissions",
+            "Finished Goods Stock",
           ].includes(page) ? (
             <SalesPage token={token() || ""} page={page} go={setPage} />
           ) : page === "Employees" ? (
@@ -822,6 +824,7 @@ function SalesPage({
     Collections: data.receipts,
     "Debtors Aging": aging.rows,
     Commissions: data.commissions,
+    "Finished Goods Stock": data.finished_stock || [],
   };
   const rows = map[page] || [];
   const addType: any = {
@@ -900,6 +903,7 @@ function SalesPage({
       "Eligibility",
       "Commission",
     ],
+    "Finished Goods Stock": ["Article", "Category", "Size", "Available quantity"],
   };
   return (
     <>
@@ -1233,6 +1237,15 @@ function salesCells(page: string, r: any) {
         <td><b>{priceText}</b></td>
       </>;
     }
+  if (page === "Finished Goods Stock")
+    return (
+      <>
+        <td><b>{r.article_code}</b><br />{r.article_name}</td>
+        <td>{r.category}</td>
+        <td>{r.size_label}</td>
+        <td><b>{Number(r.quantity).toLocaleString()}</b></td>
+      </>
+    );
   if (page === "Customer POs")
     return (
       <>
