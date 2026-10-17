@@ -1425,6 +1425,7 @@ function SalesCreateModal({
   const [commissionBasis, setCommissionBasis] = useState(Number(initial?.amount ?? initial?.basis_amount ?? 0));
   const [commissionRate, setCommissionRate] = useState(Number(initial?.commission_rate ?? 0));
   const calculatedCommission = Math.round(commissionBasis * commissionRate * 100) / 100;
+  const [newCustomer, setNewCustomer] = useState(false);
   const [setTypes, setSetTypes] = useState<any[]>([
     ...(initial?.sets?.length
       ? initial.sets.map((set: any) => ({
@@ -1521,7 +1522,11 @@ function SalesCreateModal({
     } else if (type === "po" || type === "sales_order") {
       path = type === "sales_order" ? "sales-orders/manual" : initial ? `customer-pos/${initial.id}` : "customer-pos";
       body = {
-        customer_id: Number(f.get("customer_id")),
+        customer_id: newCustomer ? null : Number(f.get("customer_id")),
+        customer_name: newCustomer ? f.get("customer_name") : null,
+        customer_phone: newCustomer ? f.get("customer_phone") : null,
+        customer_address: newCustomer ? f.get("customer_address") : null,
+        customer_credit_days: newCustomer ? Number(f.get("customer_credit_days") || 30) : null,
         sales_rep_id: Number(f.get("sales_rep_id")),
         customer_po_reference: f.get("customer_po_reference"),
         po_date: f.get("po_date"),
@@ -1924,14 +1929,21 @@ function SalesCreateModal({
             <div className="form-row">
               <label>
                 Customer
-                <select name="customer_id" defaultValue={initial?.customer_id}>
+                <select name="customer_id" defaultValue={initial?.customer_id} onChange={(event) => setNewCustomer(event.target.value === "new")}>
                   {data.customers.map((x: any) => (
                     <option value={x.id} key={x.id}>
                       {x.code} — {x.name}
                     </option>
                   ))}
+                  {!initial && <option value="new">+ Enter new customer</option>}
                 </select>
               </label>
+              {newCustomer && <>
+                <label>New customer name<input name="customer_name" required placeholder="Customer or company name" /></label>
+                <label>Phone<input name="customer_phone" placeholder="Contact number" /></label>
+                <label>Credit days<input name="customer_credit_days" type="number" min="0" max="365" defaultValue="30" required /></label>
+                <label>Address<input name="customer_address" placeholder="Billing or delivery address" /></label>
+              </>}
               <label>
                 Salesperson
                 <select name="sales_rep_id" defaultValue={initial?.sales_rep_id}>
