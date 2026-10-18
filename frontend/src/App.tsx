@@ -583,6 +583,7 @@ function SalesPage({
     [pendingPriceFile, setPendingPriceFile] = useState<File | null>(null),
     [pricePreview, setPricePreview] = useState<any>(null),
     [collectionView, setCollectionView] = useState<"due" | "history">("due"),
+    [collectionInvoice, setCollectionInvoice] = useState<any>(null),
     [expandedPriceArticles, setExpandedPriceArticles] = useState<Set<number>>(new Set());
   const priceFileRef = useRef<HTMLInputElement>(null);
   const salesTableRef = useRef<HTMLDivElement>(null);
@@ -969,7 +970,7 @@ function SalesPage({
           </>}
           {page === "Commissions" && <button className="secondary-action" onClick={updateCommissionPolicy}><Settings /> Policy: {data.commission_settings?.max_collection_days || 100} days</button>}
           {page === "Invoices" && <button className="secondary-action" onClick={()=>setPoInvoiceOpen(true)}><FileText /> Invoice customer PO</button>}
-          <button className="primary" onClick={() => setModal(addType[page])}>
+          <button className="primary" onClick={() => { if (page === "Collections") setCollectionInvoice(null); setModal(addType[page]); }}>
             <Plus />{" "}
             {page === "Collections"
               ? "Record collection"
@@ -1017,7 +1018,7 @@ function SalesPage({
                   <td>
                     <div className="row-actions">
                       {page === "Collections" && collectionView === "due" && (
-                        <button className="approve" onClick={() => setModal("receipt")}><Check /> Record payment</button>
+                        <button className="approve" onClick={() => { setCollectionInvoice(r); setModal("receipt"); }}><Check /> Record payment</button>
                       )}
                       {page === "Pricing List" && (
                         <button className="icon-action view" title={expandedPriceArticles.has(r.article_id) ? "Hide sizes" : "Show sizes"} onClick={() => setExpandedPriceArticles((current) => { const next = new Set(current); if (next.has(r.article_id)) next.delete(r.article_id); else next.add(r.article_id); return next; })}>
@@ -1111,12 +1112,14 @@ function SalesPage({
         <SalesCreateModal
           type={modal}
           data={data}
-          close={() => setModal("")}
+          initial={modal === "receipt" ? collectionInvoice : undefined}
+          close={() => { setModal(""); setCollectionInvoice(null); }}
           save={async (path, body) => {
             try {
               setError("");
               await post(path, body);
               setModal("");
+              setCollectionInvoice(null);
             } catch (e) {
               setError((e as Error).message);
             }
@@ -1370,6 +1373,19 @@ function salesCells(page: string, r: any) {
         <td>{(r.collection_type || "regular").replaceAll("_", " ")}</td>
         <td>{r.payment_method.replaceAll("_", " ")}</td>
         <td>{money(r.amount)}</td>
+      </>
+    );
+  if (page === "Collections Due")
+    return (
+      <>
+        <td><b>{r.number}</b></td>
+        <td>{r.customer_name}</td>
+        <td>{r.rep_name}</td>
+        <td>{r.due_date}</td>
+        <td>{money(r.total)}</td>
+        <td>{money(r.received_amount)}</td>
+        <td><b>{money(r.outstanding)}</b></td>
+        <td>{status(Number(r.received_amount) > 0 ? "part paid" : "unpaid")}</td>
       </>
     );
   if (page === "Debtors Aging")
@@ -2173,7 +2189,7 @@ function SalesCreateModal({
           <>
             <label>
               Outstanding invoice
-              <select name="invoice_id">
+              <select name="invoice_id" defaultValue={initial?.id || ""}>
                 {data.invoices
                   .filter((x: any) => Number(x.outstanding) > 0)
                   .map((x: any) => (
@@ -2219,6 +2235,8 @@ function SalesCreateModal({
                   type="number"
                   step=".01"
                   min=".01"
+                  max={initial?.outstanding || undefined}
+                  defaultValue={initial?.outstanding || undefined}
                   required
                 />
               </label>
