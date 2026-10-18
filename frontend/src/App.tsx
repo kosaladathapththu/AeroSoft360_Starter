@@ -582,6 +582,7 @@ function SalesPage({
     [priceImportMessage, setPriceImportMessage] = useState(""),
     [pendingPriceFile, setPendingPriceFile] = useState<File | null>(null),
     [pricePreview, setPricePreview] = useState<any>(null),
+    [collectionView, setCollectionView] = useState<"due" | "history">("due"),
     [expandedPriceArticles, setExpandedPriceArticles] = useState<Set<number>>(new Set());
   const priceFileRef = useRef<HTMLInputElement>(null);
   const salesTableRef = useRef<HTMLDivElement>(null);
@@ -849,7 +850,11 @@ function SalesPage({
     Commissions: data.commissions,
     "Finished Goods Stock": data.finished_stock || [],
   };
-  const rows = map[page] || [];
+  const rows = page === "Collections"
+    ? (collectionView === "due"
+      ? data.invoices.filter((invoice: any) => Number(invoice.outstanding) > 0)
+      : data.receipts)
+    : map[page] || [];
   const addType: any = {
     Customers: "customer",
     Salespersons: "rep",
@@ -899,7 +904,16 @@ function SalesPage({
       "Outstanding",
       "Status",
     ],
-    Collections: [
+    Collections: collectionView === "due" ? [
+      "Invoice",
+      "Customer",
+      "Salesperson",
+      "Due date",
+      "Invoice total",
+      "Paid",
+      "To be paid",
+      "Status",
+    ] : [
       "Receipt",
       "Customer",
       "Invoice salesperson",
@@ -976,6 +990,10 @@ function SalesPage({
       </div>
       {error && <div className="error">{error}</div>}
       {priceImportMessage && page === "Pricing List" && <div className="success-message">{priceImportMessage}</div>}
+      {page === "Collections" && <div className="report-tabs" role="tablist" aria-label="Collection records">
+        <button className={collectionView === "due" ? "active" : ""} onClick={() => setCollectionView("due")}>To Be Paid <small>{data.invoices.filter((invoice: any) => Number(invoice.outstanding) > 0).length}</small></button>
+        <button className={collectionView === "history" ? "active" : ""} onClick={() => setCollectionView("history")}>Payment History <small>{data.receipts.length}</small></button>
+      </div>}
       <div ref={salesTableRef} className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}>
         <table>
           <thead>
@@ -995,9 +1013,12 @@ function SalesPage({
               rows.map((r: any) => (
                 <Fragment key={r.id}>
                 <tr>
-                  {salesCells(page, r)}
+                  {salesCells(page === "Collections" && collectionView === "due" ? "Collections Due" : page, r)}
                   <td>
                     <div className="row-actions">
+                      {page === "Collections" && collectionView === "due" && (
+                        <button className="approve" onClick={() => setModal("receipt")}><Check /> Record payment</button>
+                      )}
                       {page === "Pricing List" && (
                         <button className="icon-action view" title={expandedPriceArticles.has(r.article_id) ? "Hide sizes" : "Show sizes"} onClick={() => setExpandedPriceArticles((current) => { const next = new Set(current); if (next.has(r.article_id)) next.delete(r.article_id); else next.add(r.article_id); return next; })}>
                           {expandedPriceArticles.has(r.article_id) ? <ChevronDown /> : <ChevronRight />}
@@ -1023,7 +1044,7 @@ function SalesPage({
                             <FileText /> Dispatch &amp; invoice
                           </button>
                         )}
-                      {page !== "Pricing List" && <button
+                      {page !== "Pricing List" && !(page === "Collections" && collectionView === "due") && <button
                         className="icon-action view"
                         onClick={() => setViewing(r)}
                       >
@@ -1057,7 +1078,7 @@ function SalesPage({
                           try { await post(manual ? `commissions/manual/${r.manual_id}` : `commissions/${r.id}`, undefined, "DELETE"); } catch (e) { setError((e as Error).message); }
                         }}><Trash2 /></button>
                       </>}
-                      {["Sales Orders", "Invoices", "Collections"].includes(page) && <>
+                      {["Sales Orders", "Invoices", "Collections"].includes(page) && !(page === "Collections" && collectionView === "due") && <>
                         <button className="icon-action edit" title={`Edit ${page}`} onClick={() => page === "Invoices" ? setEditingMaster({ type: "invoice", row: r }) : setEditingTransaction({ page, row: r })}><Pencil /></button>
                         <button className="icon-action delete" title={`Delete ${page}`} onClick={async () => {
                           if (!confirm(`Delete ${r.number}? Related posted records will be checked first.`)) return;

@@ -197,7 +197,23 @@ final class AccountingSalesController extends Controller
     {
         $po = DB::table('customer_pos')->find($id);
         abort_unless($po, 404, 'Customer PO not found.');
-        if ($po->status === 'draft') return $sales->updatePo($request, $id);
+        if ($po->status === 'draft') {
+            $response = $sales->updatePo($request, $id);
+            $storedLines = DB::table('customer_po_lines')
+                ->where('customer_po_id', $id)
+                ->orderBy('id')
+                ->get();
+
+            foreach ($request->input('lines', []) as $index => $line) {
+                if (isset($storedLines[$index])) {
+                    DB::table('customer_po_lines')
+                        ->where('id', $storedLines[$index]->id)
+                        ->update(['colour' => $line['colour'] ?? null, 'updated_at' => now()]);
+                }
+            }
+
+            return $response;
+        }
         $data = $request->validate([
             'customer_id'=>'required|exists:customers,id', 'sales_rep_id'=>'required|exists:sales_representatives,id',
             'customer_po_reference'=>'nullable|max:80', 'po_date'=>'required|date', 'sale_type'=>'required|in:cash,credit,mixed',
