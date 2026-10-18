@@ -576,6 +576,7 @@ function SalesPage({
     [editingArticle, setEditingArticle] = useState<any>(null),
     [editingPo, setEditingPo] = useState<any>(null),
     [dispatchOrder, setDispatchOrder] = useState<any>(null),
+    [poInvoiceOpen, setPoInvoiceOpen] = useState(false),
     [viewing, setViewing] = useState<any>(null),
     [priceImporting, setPriceImporting] = useState(false),
     [priceImportMessage, setPriceImportMessage] = useState(""),
@@ -953,6 +954,7 @@ function SalesPage({
             </button>
           </>}
           {page === "Commissions" && <button className="secondary-action" onClick={updateCommissionPolicy}><Settings /> Policy: {data.commission_settings?.max_collection_days || 100} days</button>}
+          {page === "Invoices" && <button className="secondary-action" onClick={()=>setPoInvoiceOpen(true)}><FileText /> Invoice customer PO</button>}
           <button className="primary" onClick={() => setModal(addType[page])}>
             <Plus />{" "}
             {page === "Collections"
@@ -1168,6 +1170,7 @@ function SalesPage({
           }}
         />
       )}
+      {poInvoiceOpen && <PoInvoiceModal data={data} close={()=>setPoInvoiceOpen(false)} save={async(poId,body)=>{try{setError("");await post(`customer-pos/${poId}/invoice`,body);setPoInvoiceOpen(false);}catch(e){setError((e as Error).message);}}} />}
       {viewing && (
         <RecordView page={page} row={viewing} close={() => setViewing(null)} />
       )}
@@ -1295,7 +1298,7 @@ function salesCells(page: string, r: any) {
         <td>{r.customer_name}</td>
         <td>{r.rep_name}</td>
         <td>{r.po_date}</td>
-        <td>{r.sale_type}</td>
+        <td>{r.sale_type}{r.sale_type === "mixed" && <><br /><small>Cash {money(r.cash_amount)} · Credit {money(r.credit_amount)}</small></>}</td>
         <td>{money(r.total)}</td>
         <td>{status(r.status)}</td>
       </>
@@ -1385,6 +1388,33 @@ function salesCells(page: string, r: any) {
     </>
   );
 }
+function PoInvoiceModal({ data, close, save }: { data: any; close: () => void; save: (poId: number, body: any) => Promise<void> }) {
+  const eligible=data.pos.filter((po:any)=>["draft","ordered"].includes(po.status));
+  const [poId,setPoId]=useState<number>(Number(eligible[0]?.id||0));
+  const [quantities,setQuantities]=useState<Record<string,number>>({});
+  const [busy,setBusy]=useState(false);
+  const po=eligible.find((item:any)=>Number(item.id)===poId);
+  const lines=useMemo(()=>{
+    if(!po)return[];
+    const order=data.orders.find((item:any)=>Number(item.customer_po_id)===poId);
+    if(order)return order.lines.filter((line:any)=>Number(line.remaining_quantity)>0).map((line:any)=>({article_id:Number(line.article_id),article_code:line.article_code,article_name:line.article_name,size_label:line.size_label,remaining:Number(line.remaining_quantity),rate:Number(line.rate)}));
+    const expanded:any[]=[];
+    po.lines.forEach((line:any)=>{const article=data.articles.find((a:any)=>Number(a.id)===Number(line.article_id));const set=article?.sets.find((s:any)=>Number(s.id)===Number(line.set_template_id));if(line.order_mode==="size"){const item=set?.items.find((i:any)=>Number(i.id)===Number(line.set_item_id));if(item)expanded.push({article_id:Number(line.article_id),article_code:line.article_code,article_name:line.article_name,size_label:item.size_label,remaining:Number(line.pieces),rate:Number(item.unit_price)});}else set?.items.forEach((item:any)=>expanded.push({article_id:Number(line.article_id),article_code:line.article_code,article_name:line.article_name,size_label:item.size_label,remaining:Number(item.quantity)*Number(line.sets),rate:Number(item.unit_price)}));});
+    const grouped=new Map<string,any>();expanded.forEach(line=>{const key=`${line.article_id}|${line.size_label}`;if(grouped.has(key))grouped.get(key).remaining+=line.remaining;else grouped.set(key,{...line});});return[...grouped.values()];
+  },[po,poId,data.orders,data.articles]);
+  useEffect(()=>{setQuantities(Object.fromEntries(lines.map((line:any)=>[`${line.article_id}|${line.size_label}`,line.remaining])));},[poId,lines.length]);
+  const total=lines.reduce((sum:number,line:any)=>sum+Number(quantities[`${line.article_id}|${line.size_label}`]||0)*line.rate,0);
+  return <div className="backdrop" onMouseDown={close}><form className="modal po-modal" onMouseDown={e=>e.stopPropagation()} onSubmit={async e=>{e.preventDefault();setBusy(true);const f=new FormData(e.currentTarget);try{await save(poId,{invoice_date:f.get("invoice_date"),sale_type:f.get("sale_type"),lines:lines.map((line:any)=>({article_id:line.article_id,size_label:line.size_label,quantity:Number(quantities[`${line.article_id}|${line.size_label}`]||0)}))});}finally{setBusy(false);}}}>
+    <button type="button" className="close" onClick={close}><X /></button><span>PO FULFILMENT</span><h2>Create invoice from customer PO</h2><p>Select the supplied quantities. Any quantity left below the ordered amount remains pending for a later invoice.</p>
+    {eligible.length===0?<div className="error">There are no open customer POs available for invoicing.</div>:<>
+      <div className="form-row"><label>Customer PO<select value={poId} onChange={e=>setPoId(Number(e.target.value))}>{eligible.map((item:any)=><option value={item.id} key={item.id}>{item.number} — {item.customer_name}</option>)}</select></label><label>Sale type<select name="sale_type" defaultValue={po?.sale_type==="cash"?"cash":"credit"} key={`${poId}-type`}><option value="cash">Cash sale</option><option value="credit">Credit sale</option></select></label><label>Invoice date<input name="invoice_date" type="date" defaultValue={new Date().toISOString().slice(0,10)} required /></label></div>
+      <div className="dispatch-lines"><div className="dispatch-line head"><b>Article</b><b>Size</b><b>Ordered / pending</b><b>Supply now</b><b>Rate</b></div>{lines.map((line:any)=>{const key=`${line.article_id}|${line.size_label}`;return <div className="dispatch-line" key={key}><span><b>{line.article_code}</b><small>{line.article_name}</small></span><span>{line.size_label}</span><span>{line.remaining}</span><input type="number" min="0" max={line.remaining} step="0.01" value={quantities[key]??0} onChange={e=>setQuantities(current=>({...current,[key]:Number(e.target.value)}))}/><span>{money(line.rate)}</span></div>})}</div>
+      <div className="po-grand-total"><span>Invoice total for supplied goods</span><strong>{money(total)}</strong></div>
+    </>}
+    <div className="actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy||!eligible.length||total<=0}>{busy?<Loader2/>:<Check/>} Create invoice</button></div>
+  </form></div>;
+}
+
 function DispatchInvoiceModal({ order, close, save }: { order: any; close: () => void; save: (body: any) => Promise<void> }) {
   const available = order.lines.filter((line: any) => Number(line.remaining_quantity) > 0);
   const [quantities, setQuantities] = useState<Record<number, number>>(
@@ -1446,6 +1476,10 @@ function SalesCreateModal({
   const [commissionRate, setCommissionRate] = useState(Number(initial?.commission_rate ?? 0));
   const calculatedCommission = Math.round(commissionBasis * commissionRate * 100) / 100;
   const [newCustomer, setNewCustomer] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState(Number(initial?.customer_id || data.customers?.[0]?.id || 0));
+  const [poSaleType, setPoSaleType] = useState(initial?.sale_type || "credit");
+  const [poCashAmount, setPoCashAmount] = useState(Number(initial?.cash_amount || 0));
   const [setTypes, setSetTypes] = useState<any[]>([
     ...(initial?.sets?.length
       ? initial.sets.map((set: any) => ({
@@ -1498,6 +1532,10 @@ function SalesCreateModal({
     (total: number, line: any) => total + poLineTotal(line),
     0,
   );
+  const visibleCustomers = data.customers.filter((customer: any) => {
+    const query = customerSearch.trim().toLowerCase();
+    return !query || `${customer.code} ${customer.name} ${customer.phone || ""}`.toLowerCase().includes(query) || Number(customer.id) === selectedCustomerId;
+  }).slice(0, 50);
   const invoiceSubtotal = invoiceLines.reduce(
     (total: number, line: any) => total + Number(line.quantity || 0) * Number(line.rate || 0),
     0,
@@ -1542,7 +1580,7 @@ function SalesCreateModal({
     } else if (type === "po" || type === "sales_order") {
       path = type === "sales_order" ? "sales-orders/manual" : initial ? `customer-pos/${initial.id}` : "customer-pos";
       body = {
-        customer_id: newCustomer ? null : Number(f.get("customer_id")),
+        customer_id: newCustomer ? null : selectedCustomerId,
         customer_name: newCustomer ? f.get("customer_name") : null,
         customer_phone: newCustomer ? f.get("customer_phone") : null,
         customer_address: newCustomer ? f.get("customer_address") : null,
@@ -1551,6 +1589,7 @@ function SalesCreateModal({
         customer_po_reference: f.get("customer_po_reference"),
         po_date: f.get("po_date"),
         sale_type: f.get("sale_type"),
+        cash_amount: poSaleType === "mixed" ? poCashAmount : poSaleType === "cash" ? poGrandTotal : 0,
         lines: poLines,
       };
     } else if (type === "invoice") {
@@ -1951,15 +1990,19 @@ function SalesCreateModal({
           <>
             <div className="form-row">
               <label>
+                Search customer
+                <input type="search" value={customerSearch} onChange={(event)=>setCustomerSearch(event.target.value)} placeholder="Search by name, code or phone" disabled={newCustomer} />
+              </label>
+              <label>
                 Customer
-                <select name="customer_id" defaultValue={initial?.customer_id} onChange={(event) => setNewCustomer(event.target.value === "new")}>
-                  {data.customers.map((x: any) => (
+                <select name="customer_id" value={selectedCustomerId} onChange={(event)=>setSelectedCustomerId(Number(event.target.value))} disabled={newCustomer} required={!newCustomer}>
+                  {visibleCustomers.map((x: any) => (
                     <option value={x.id} key={x.id}>
                       {x.code} — {x.name}
                     </option>
                   ))}
-                  {!initial && <option value="new">+ Enter new customer</option>}
                 </select>
+                {!initial && <button type="button" className="inline-create" onClick={()=>setNewCustomer(value=>!value)}>{newCustomer ? "Choose existing customer" : "+ Enter new customer"}</button>}
               </label>
               {newCustomer && <>
                 <label>New customer name<input name="customer_name" required placeholder="Customer or company name" /></label>
@@ -1987,13 +2030,19 @@ function SalesCreateModal({
               </label>
               <label>
                 Sale type
-                <select name="sale_type" defaultValue={initial?.sale_type || "credit"}>
+                <select name="sale_type" value={poSaleType} onChange={(event)=>setPoSaleType(event.target.value)}>
                   <option value="credit">Credit sale</option>
                   <option value="cash">Cash sale</option>
                   <option value="mixed">Part cash / credit</option>
                 </select>
               </label>
             </div>
+            {poSaleType === "mixed" && <div className="form-row payment-split">
+              <label>Cash payment amount<input name="cash_amount" type="number" min="0.01" max={Math.max(0.01,poGrandTotal-0.01)} step="0.01" value={poCashAmount} onChange={(event)=>setPoCashAmount(Number(event.target.value))} required /></label>
+              <label>Credit balance<input type="text" value={money(Math.max(0,poGrandTotal-poCashAmount))} readOnly /></label>
+            </div>}
+            {poSaleType === "cash" && <p className="report-note">Full PO amount is cash: <b>{money(poGrandTotal)}</b>.</p>}
+            {poSaleType === "credit" && <p className="report-note">Full PO amount is credit: <b>{money(poGrandTotal)}</b>.</p>}
             <div className="po-lines">
               <div className="po-lines-head">
                 <div><b>PO articles</b><small>Order complete badges and individual article sizes together.</small></div>

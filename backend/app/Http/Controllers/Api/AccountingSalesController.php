@@ -445,6 +445,18 @@ final class AccountingSalesController extends Controller
         });
     }
 
+    public function invoiceCustomerPo(Request $request, int $id, SalesController $sales, PostingService $posting): JsonResponse
+    {
+        $data=$request->validate(['invoice_date'=>['required','date'],'sale_type'=>['required','in:cash,credit'],'lines'=>['required','array','min:1'],'lines.*.article_id'=>['required','integer','exists:articles,id'],'lines.*.size_label'=>['required','string','max:30'],'lines.*.quantity'=>['required','numeric','min:0']]);
+        return DB::transaction(function()use($data,$id,$sales,$posting){
+            $po=DB::table('customer_pos')->lockForUpdate()->find($id);abort_unless($po,404,'Customer PO not found.');abort_if($po->status==='invoiced'||$po->status==='cancelled',422,'This customer PO is already closed.');
+            DB::table('customer_pos')->where('id',$id)->update(['sale_type'=>$data['sale_type'],'updated_at'=>now()]);
+            $order=DB::table('sales_orders')->where('customer_po_id',$id)->first();if(!$order){$converted=$sales->convert($id)->getData(true);$order=DB::table('sales_orders')->find($converted['sales_order']['id']);}
+            $dispatch=[];foreach($data['lines']as$input){$requested=(float)$input['quantity'];$matching=DB::table('sales_order_size_lines')->where('sales_order_id',$order->id)->where('article_id',$input['article_id'])->where('size_label',$input['size_label'])->orderBy('id')->get();abort_if($matching->isEmpty(),422,"Invalid PO item size {$input['size_label']}.");foreach($matching as$line){$available=max(0,(float)$line->quantity-(float)$line->invoiced_quantity);$take=min($available,$requested);if($take>0)$dispatch[]=['sales_order_size_line_id'=>$line->id,'quantity'=>$take];$requested-=$take;if($requested<=0.0001)break;}abort_if($requested>0.0001,422,"Supplied quantity for size {$input['size_label']} exceeds the pending PO quantity.");}
+            $forward=Request::create('/','POST',['invoice_date'=>$data['invoice_date'],'lines'=>$dispatch]);$forward->setUserResolver($request->getUserResolver());return $this->invoiceDispatch($forward,$order->id,$sales,$posting);
+        });
+    }
+
     public function receipt(Request $request, SalesController $sales, PostingService $posting): JsonResponse
     {
         return DB::transaction(function () use ($request, $sales, $posting) {

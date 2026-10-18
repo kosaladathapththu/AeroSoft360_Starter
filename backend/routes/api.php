@@ -41,6 +41,7 @@ Route::prefix('v1')->group(function ():void {
   Route::put('/customer-pos/{id}',[AccountingSalesController::class,'updateCustomerPo'])->middleware('permission:accounting.manage');
   Route::delete('/customer-pos/{id}',[AccountingSalesController::class,'deleteCustomerPo'])->middleware('permission:accounting.manage');
   Route::post('/customer-pos/{id}/convert',[SalesController::class,'convert'])->middleware('permission:accounting.manage');
+  Route::post('/customer-pos/{id}/invoice',[AccountingSalesController::class,'invoiceCustomerPo'])->middleware('permission:accounting.manage');
   Route::post('/sales-orders/manual',[AccountingSalesController::class,'manualSalesOrder'])->middleware('permission:accounting.manage');
   Route::put('/sales-orders/{id}',[AccountingSalesController::class,'updateSalesOrder'])->middleware('permission:accounting.manage');
   Route::delete('/sales-orders/{id}',[AccountingSalesController::class,'deleteSalesOrder'])->middleware('permission:accounting.manage');
