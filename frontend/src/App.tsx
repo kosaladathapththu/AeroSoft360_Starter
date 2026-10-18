@@ -245,6 +245,11 @@ export default function App() {
         ["Reports", FileText],
       ],
     },
+    {
+      name: "Administration",
+      icon: Settings,
+      items: [["Access Control", ShieldCheck]],
+    },
   ] as const;
   const goToPage = (name: string) => {
     setPage(name);
@@ -355,7 +360,7 @@ export default function App() {
             <LayoutDashboard />
             <span>Dashboard</span>
           </button>
-          {navGroups.map((group) => {
+          {navGroups.filter((group) => group.name !== "Administration" || profile.permissions.includes("admin.manage")).map((group) => {
             const isOpen = openNavGroup === group.name;
             const hasActivePage = group.items.some(([name]) => name === page);
             const GroupIcon = group.icon;
@@ -388,13 +393,13 @@ export default function App() {
             );
           })}
         </nav>
-        <div className="user">
+        <button className="user" onClick={logout} title="Sign out">
           <div>U1</div>
           <span>
-            <b>Administrator</b>
-            <small>Full access</small>
+            <b>{profile.user.name}</b>
+            <small>{profile.user.role_name} · Sign out</small>
           </span>
-        </div>
+        </button>
       </aside>
       <main>
         <header>
@@ -438,6 +443,8 @@ export default function App() {
             <PayrollPage token={token() || ""} />
           ) : page === "Reports" ? (
             <ReportsPage token={token() || ""} />
+          ) : page === "Access Control" ? (
+            <AccessPage token={token() || ""} currentUserId={profile.user.id} />
           ) : (
             <>
               <div className="heading">
@@ -2940,6 +2947,29 @@ function EditModal({
       )}
     </ModalShell>
   );
+}
+
+function AccessPage({ token, currentUserId }: { token: string; currentUserId: number }) {
+  const [data, setData] = useState<any>({ users: [], roles: [], permissions: [] });
+  const [tab, setTab] = useState<"users" | "roles">("users");
+  const [editing, setEditing] = useState<any>(null);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+  const load = useCallback(async () => { const r = await fetch(`${API}/access`, { headers: { Authorization: `Bearer ${token}` } }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.message || "Unable to load access control"); setData(j); }, [token]);
+  useEffect(() => { load().catch((e) => setError(e.message)); }, [load]);
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); const f = new FormData(event.currentTarget); const isRole = tab === "roles"; const body = isRole ? { code: f.get("code"), name: f.get("name"), permission_ids: data.permissions.filter((p: any) => f.get(`permission_${p.id}`)).map((p: any) => p.id) } : { name: f.get("name"), email: f.get("email"), role_id: Number(f.get("role_id")), password: f.get("password") || null, active: f.get("active") === "on" };
+    const base=isRole?"roles":"users", method=editing?"PUT":"POST", url=`${API}/${base}${editing?`/${editing.id}`:""}`; const r=await fetch(url,{method,headers:{"Content-Type":"application/json",Accept:"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok){setError(j.message||Object.values(j.errors||{}).flat().join(" ")||"Save failed");return;}setEditing(null);setCreating(false);setError("");await load();
+  };
+  const remove = async (row: any) => { if (!confirm(`Delete ${row.name}?`)) return; const base=tab==="roles"?"roles":"users";const r=await fetch(`${API}/${base}/${row.id}`,{method:"DELETE",headers:{Authorization:`Bearer ${token}`,Accept:"application/json"}});const j=await r.json().catch(()=>({}));if(!r.ok){setError(j.message||"Delete failed");return;}await load(); };
+  const record=editing||{};
+  return <>
+    <div className="heading"><div><span>ADMINISTRATION</span><h1>Access Control</h1><p>Manage authorized users, roles and action permissions.</p></div><button className="primary" onClick={()=>{setEditing(null);setCreating(true)}}><Plus /> Add {tab==="users"?"user":"role"}</button></div>
+    {error&&<div className="error">{error}</div>}
+    <div className="report-tabs"><button className={tab==="users"?"active":""} onClick={()=>setTab("users")}>Users <small>{data.users.length}</small></button><button className={tab==="roles"?"active":""} onClick={()=>setTab("roles")}>Roles and permissions <small>{data.roles.length}</small></button></div>
+    <div className="table-card"><table><thead><tr>{(tab==="users"?["User","Email","Role","Status"]:["Role","Code","Permissions","Assigned users"]).map(h=><th key={h}>{h}</th>)}<th>Actions</th></tr></thead><tbody>{(tab==="users"?data.users:data.roles).map((row:any)=><tr key={row.id}>{tab==="users"?<><td><b>{row.name}</b>{row.id===currentUserId&&<small><br />Current user</small>}</td><td>{row.email}</td><td>{row.role_name}</td><td>{status(row.active?"active":"inactive")}</td></>:<><td><b>{row.name}</b></td><td>{row.code}</td><td>{row.permission_ids.length} permissions</td><td>{data.users.filter((u:any)=>u.role_id===row.id).length}</td></>}<td><div className="row-actions"><button className="icon-action edit" onClick={()=>{setCreating(false);setEditing(row)}}><Pencil /></button><button className="icon-action delete" disabled={tab==="users"&&row.id===currentUserId} onClick={()=>remove(row)}><Trash2 /></button></div></td></tr>)}</tbody></table></div>
+    {(creating||editing)&&<div className="backdrop" onMouseDown={()=>{setCreating(false);setEditing(null)}}><form className="modal" onSubmit={save} onMouseDown={e=>e.stopPropagation()}><button type="button" className="close" onClick={()=>{setCreating(false);setEditing(null)}}><X /></button><span>ACCESS ADMINISTRATION</span><h2>{editing?"Edit":"Add"} {tab==="users"?"user":"role"}</h2>{tab==="users"?<><div className="form-row"><label>Name<input name="name" defaultValue={record.name} required /></label><label>Email<input name="email" type="email" defaultValue={record.email} required /></label><label>Role<select name="role_id" defaultValue={record.role_id} required>{data.roles.map((role:any)=><option value={role.id} key={role.id}>{role.name}</option>)}</select></label><label>Password<input name="password" type="password" minLength={8} required={!editing} placeholder={editing?"Leave blank to keep current password":"Minimum 8 characters"} /></label></div><label className="access-check"><input name="active" type="checkbox" defaultChecked={editing?Boolean(record.active):true} /> Active account</label></>:<><div className="form-row"><label>Role name<input name="name" defaultValue={record.name} required /></label><label>Role code<input name="code" defaultValue={record.code} pattern="[A-Za-z0-9_-]+" required readOnly={record.code==="administrator"} /></label></div><div className="permission-grid">{data.permissions.map((permission:any)=><label className="access-check" key={permission.id}><input name={`permission_${permission.id}`} type="checkbox" defaultChecked={record.permission_ids?.includes(permission.id)} /> <span><b>{permission.name}</b><small>{permission.code}</small></span></label>)}</div></>}<div className="actions"><button type="button" onClick={()=>{setCreating(false);setEditing(null)}}>Cancel</button><button className="primary"><Check /> Save</button></div></form></div>}
+  </>;
 }
 
 function ModalShell({

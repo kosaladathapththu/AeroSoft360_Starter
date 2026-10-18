@@ -1,5 +1,6 @@
 <?php
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AccessController;
 use App\Http\Controllers\Api\AccountingPayrollController;
 use App\Http\Controllers\Api\AccountingSalesController;
 use App\Http\Controllers\Api\JournalController;
@@ -15,6 +16,13 @@ Route::prefix('v1')->group(function ():void {
  Route::middleware('token.auth')->group(function ():void {
   Route::get('/auth/me',[AuthController::class,'me']);
   Route::post('/auth/logout',[AuthController::class,'logout']);
+  Route::get('/access',[AccessController::class,'index'])->middleware('permission:admin.manage');
+  Route::post('/users',[AccessController::class,'storeUser'])->middleware('permission:admin.manage');
+  Route::put('/users/{id}',[AccessController::class,'updateUser'])->middleware('permission:admin.manage');
+  Route::delete('/users/{id}',[AccessController::class,'deleteUser'])->middleware('permission:admin.manage');
+  Route::post('/roles',[AccessController::class,'storeRole'])->middleware('permission:admin.manage');
+  Route::put('/roles/{id}',[AccessController::class,'updateRole'])->middleware('permission:admin.manage');
+  Route::delete('/roles/{id}',[AccessController::class,'deleteRole'])->middleware('permission:admin.manage');
   Route::get('/workspace',[ProcurementController::class,'workspace'])->middleware('permission:workspace.view');
   Route::get('/sales/workspace',[AccountingSalesController::class,'workspace'])->middleware('permission:workspace.view');
   Route::get('/sales/dashboard',[AccountingSalesController::class,'dashboard'])->middleware('permission:workspace.view');
