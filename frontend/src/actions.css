@@ -643,7 +643,7 @@ aside .user:hover { background: #173443; }
 }
 .po-line {
   display: grid;
-  grid-template-columns: minmax(180px, 1.3fr) 135px minmax(170px, 1.2fr) 120px 145px 42px;
+  grid-template-columns: minmax(170px,1.25fr) 140px 135px minmax(165px,1.15fr) 115px 140px 42px;
   padding: 13px;
   margin-top: 10px;
   border: 1px solid #d5e2e5;
@@ -664,6 +664,12 @@ aside .user:hover { background: #173443; }
 .po-line-total b { display: block; }
 .po-line-total small { color: #71808e; margin-bottom: 3px; }
 .po-line-total b { color: #073c4b; white-space: nowrap; }
+.po-article-details { grid-column:1 / -1; margin-top:4px; border:1px solid #cbdde1; border-radius:9px; overflow:auto; }
+.po-detail-head,.po-detail-row { display:grid; grid-template-columns:90px 1fr 1.3fr 100px 130px 120px; min-width:700px; }
+.po-detail-head { background:#dcebed; color:#24434e; font-size:11px; text-transform:uppercase; }
+.po-detail-head b,.po-detail-row span { padding:9px 11px; border-right:1px solid #cbdde1; }
+.po-detail-row { background:#fff; font-size:12px; border-top:1px solid #dce5e8; }
+.po-detail-row:nth-child(odd){background:#f5f9fa}
 .po-grand-total {
   display: flex;
   align-items: center;
