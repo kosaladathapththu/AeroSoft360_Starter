@@ -1553,11 +1553,12 @@ function SalesCreateModal({
     ...(initial?.lines?.length
       ? initial.lines.map((line: any) => ({
           article_id: Number(line.article_id),
-          order_mode: line.order_mode || "badge",
+          order_mode: (line.order_mode || "badge") === "size" ? "custom" : "badge",
           set_template_id: Number(line.set_template_id || 0),
           set_item_id: Number(line.set_item_id || 0),
           colour: line.colour || "",
           quantity: Number((line.order_mode || "badge") === "badge" ? line.sets : line.pieces),
+          custom_sizes: (line.order_mode || "badge") === "size" ? { [Number(line.set_item_id)]: Number(line.pieces) } : {},
         }))
       : [{ article_id: firstArticleId, colour: "", order_mode: "badge", set_template_id: firstSetId, set_item_id: firstItemId, quantity: 1 }]),
   ]);
@@ -1582,10 +1583,12 @@ function SalesCreateModal({
       .map((set: any) => ({ ...set, article })),
   );
   const poLineTotal = (line: any) => {
-    const unitPrice = line.order_mode === "badge"
-      ? Number(availableSets.find((set: any) => Number(set.id) === Number(line.set_template_id))?.set_price || 0)
-      : Number(data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items)).find((item: any) => Number(item.id) === Number(line.set_item_id))?.unit_price || 0);
-    return unitPrice * Number(line.quantity || 0);
+    if (line.order_mode === "custom") {
+      const items = data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items));
+      return Object.entries(line.custom_sizes || {}).reduce((total: number, [itemId, quantity]: any) =>
+        total + Number(items.find((item: any) => Number(item.id) === Number(itemId))?.unit_price || 0) * Number(quantity || 0), 0);
+    }
+    return Number(availableSets.find((set: any) => Number(set.id) === Number(line.set_template_id))?.set_price || 0) * Number(line.quantity || 0);
   };
   const poGrandTotal = poLines.reduce(
     (total: number, line: any) => total + poLineTotal(line),
@@ -1657,7 +1660,12 @@ function SalesCreateModal({
         po_date: f.get("po_date"),
         sale_type: f.get("sale_type"),
         cash_amount: poSaleType === "mixed" ? poCashAmount : poSaleType === "cash" ? poGrandTotal : 0,
-        lines: poLines,
+        lines: poLines.flatMap((line: any) => line.order_mode === "custom"
+          ? Object.entries(line.custom_sizes || {}).filter(([, quantity]: any) => Number(quantity) > 0).map(([itemId, quantity]: any) => {
+              const item = data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items)).find((value: any) => Number(value.id) === Number(itemId));
+              return { article_id: line.article_id, colour: line.colour || null, order_mode: "size", set_template_id: item?.set_template_id, set_item_id: Number(itemId), quantity: Number(quantity) };
+            })
+          : [line]),
       };
     } else if (type === "invoice") {
       path = initial ? `sales-invoices/${initial.id}` : "sales-invoices/manual";
@@ -2123,53 +2131,61 @@ function SalesCreateModal({
             {poSaleType === "credit" && <p className="report-note">Full PO amount is credit: <b>{money(poGrandTotal)}</b>.</p>}
             <div className="po-lines">
               <div className="po-lines-head">
-                <div><b>PO articles</b><small>Select an article, colour and either a complete set or individual size.</small></div>
+                <div><b>PO articles</b><small>Select an article and colour, then order a complete set or customize the required sizes.</small></div>
                 <button type="button" className="secondary-action" onClick={() => setPoLines((lines) => [...lines, { article_id: firstArticleId, colour: "", order_mode: "badge", set_template_id: firstSetId, set_item_id: firstItemId, quantity: 1 }])}><Plus /> Add article</button>
               </div>
-              {poLines.map((line, index) => (
-                <div className="po-line" key={index}>
+              {poLines.map((line, index) => {
+                const selectedArticle = data.articles.find((article:any)=>Number(article.id)===Number(line.article_id));
+                const selectableItems = (selectedArticle?.sets || []).filter((set:any)=>set.status!=="inactive").flatMap((set:any)=>set.items)
+                  .filter((item:any)=>!line.colour||(item.colours||"").toLowerCase().split(",").map((value:string)=>value.trim()).includes(line.colour.toLowerCase()));
+                const selectedSizeCount = Object.values(line.custom_sizes || {}).filter((quantity:any)=>Number(quantity)>0).length;
+                return <div className="po-line" key={index}>
                   <label>Article
-                    <select value={line.article_id} onChange={(e) => { const article=data.articles.find((a:any)=>Number(a.id)===Number(e.target.value)); const set=article?.sets?.find((s:any)=>s.status!=="inactive"); setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, article_id: Number(e.target.value), colour: "", set_template_id: Number(set?.id||0), set_item_id: Number(set?.items?.[0]?.id||0) } : x)); }} required>
+                    <select value={line.article_id} onChange={(e) => { const article=data.articles.find((a:any)=>Number(a.id)===Number(e.target.value)); const set=article?.sets?.find((s:any)=>s.status!=="inactive"); setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, article_id: Number(e.target.value), colour: "", set_template_id: Number(set?.id||0), set_item_id: Number(set?.items?.[0]?.id||0), custom_sizes: {} } : x)); }} required>
                       {data.articles.map((article: any) => <option value={article.id} key={article.id}>{article.code} — {article.name}</option>)}
                     </select>
                     <button type="button" className="inline-create" onClick={()=>setExpandedPoLine(expandedPoLine===index?null:index)}>{expandedPoLine===index?"Hide article details":"View article details"}</button>
                   </label>
                   <label>Colour / variant
-                    <select value={line.colour || ""} onChange={(e)=>setPoLines(lines=>lines.map((x,i)=>i===index?{...x,colour:e.target.value}:x))}>
+                    <select value={line.colour || ""} onChange={(e)=>setPoLines(lines=>lines.map((x,i)=>i===index?{...x,colour:e.target.value,custom_sizes:{}}:x))}>
                       <option value="">Any / not specified</option>
                       {[...new Set((data.articles.find((a:any)=>Number(a.id)===Number(line.article_id))?.sets||[]).flatMap((set:any)=>set.items.flatMap((item:any)=>(item.colours||"").split(",").map((colour:string)=>colour.trim()).filter(Boolean))))].map((colour:any)=><option value={colour} key={colour}>{colour}</option>)}
                     </select>
                   </label>
                   <label>Order method
-                    <select value={line.order_mode} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, order_mode: e.target.value } : x))}>
-                      <option value="badge">Complete set</option><option value="size">Individual size</option>
+                    <select value={line.order_mode} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, order_mode: e.target.value, custom_sizes: e.target.value === "custom" ? (Object.keys(x.custom_sizes || {}).length ? x.custom_sizes : {}) : x.custom_sizes } : x))}>
+                      <option value="badge">Complete set</option><option value="custom">Customize order</option>
                     </select>
                   </label>
-                  <label>{line.order_mode === "badge" ? "Set template" : "Size"}
+                  <label>{line.order_mode === "badge" ? "Set template" : "Selected sizes"}
                     {line.order_mode === "badge" ? (
                       <select value={line.set_template_id} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, set_template_id: Number(e.target.value) } : x))} required>
                         {data.articles.find((a:any)=>Number(a.id)===Number(line.article_id))?.sets.filter((s:any)=>s.status!=="inactive").map((set:any)=><option value={set.id} key={set.id}>{set.name} ({set.pieces} pcs · {money(set.set_price)})</option>)}
                       </select>
                     ) : (
-                      <select value={line.set_item_id} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, set_item_id: Number(e.target.value) } : x))} required>
-                        {data.articles.find((a:any)=>Number(a.id)===Number(line.article_id))?.sets.flatMap((set:any)=>set.items.map((item:any)=><option value={item.id} key={item.id}>{item.item_code ? `${item.item_code} · ` : ""}Size {item.size_label} · {money(item.unit_price)}{item.colours ? ` · ${item.colours}` : ""}</option>))}
-                      </select>
+                      <div className="custom-size-summary">{selectedSizeCount ? `${selectedSizeCount} size${selectedSizeCount === 1 ? "" : "s"} selected` : "Select sizes below"}</div>
                     )}
                   </label>
-                  <label>{line.order_mode === "badge" ? "Number of sets" : "Pieces"}
-                    <input type="number" step="1" min="1" value={line.quantity} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, quantity: Number(e.target.value) } : x))} required />
-                  </label>
+                  {line.order_mode === "badge" ? <label>Number of sets<input type="number" step="1" min="1" value={line.quantity} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, quantity: Number(e.target.value) } : x))} required /></label> : <div className="custom-size-summary pieces-summary"><small>Total pieces</small><b>{Object.values(line.custom_sizes || {}).reduce((sum:number, quantity:any)=>sum+Number(quantity||0),0)}</b></div>}
                   <div className="po-line-total">
                     <small>Line total</small>
                     <b>{money(poLineTotal(line))}</b>
                   </div>
                   <button type="button" className="icon-action delete" title="Remove article" disabled={poLines.length === 1} onClick={() => setPoLines((lines) => lines.filter((_, i) => i !== index))}><Trash2 /></button>
+                  {line.order_mode === "custom" && <div className="custom-size-picker">
+                    <div className="custom-size-head"><b>Select</b><b>Size</b><b>Item code</b><b>Price</b><b>Available</b><b>Pieces required</b></div>
+                    {selectableItems.map((item:any)=>{const quantity=Number(line.custom_sizes?.[item.id]||0);return <div className={`custom-size-row ${quantity>0?"selected":""}`} key={item.id}>
+                      <input type="checkbox" aria-label={`Select size ${item.size_label}`} checked={quantity>0} onChange={(event)=>setPoLines(lines=>lines.map((value,i)=>i===index?{...value,custom_sizes:{...(value.custom_sizes||{}),[item.id]:event.target.checked?1:0}}:value))}/>
+                      <b>{item.size_label}</b><span>{item.item_code||"—"}</span><span>{money(item.unit_price)}</span><span>{Number((data.finished_stock||[]).find((stock:any)=>Number(stock.article_id)===Number(line.article_id)&&stock.size_label===item.size_label)?.quantity||0).toLocaleString()}</span>
+                      <input aria-label={`Pieces for size ${item.size_label}`} type="number" min="1" step="1" disabled={quantity<=0} value={quantity>0?quantity:1} onChange={(event)=>setPoLines(lines=>lines.map((value,i)=>i===index?{...value,custom_sizes:{...(value.custom_sizes||{}),[item.id]:Number(event.target.value)}}:value))}/>
+                    </div>})}
+                  </div>}
                   {expandedPoLine===index && <div className="po-article-details">
                     <div className="po-detail-head"><b>Size</b><b>Item code</b><b>Colours</b><b>Pieces/set</b><b>Price</b><b>Available stock</b></div>
                     {(data.articles.find((article:any)=>Number(article.id)===Number(line.article_id))?.sets||[]).flatMap((set:any)=>set.items).filter((item:any)=>!line.colour||(item.colours||"").toLowerCase().split(",").map((x:string)=>x.trim()).includes(line.colour.toLowerCase())).map((item:any)=><div className="po-detail-row" key={item.id}><span>{item.size_label}</span><span>{item.item_code||"—"}</span><span>{item.colours||"—"}</span><span>{item.quantity}</span><span>{money(item.unit_price)}</span><span>{Number((data.finished_stock||[]).find((stock:any)=>Number(stock.article_id)===Number(line.article_id)&&stock.size_label===item.size_label)?.quantity||0).toLocaleString()}</span></div>)}
                   </div>}
-                </div>
-              ))}
+                </div>;
+              })}
               <div className="po-grand-total">
                 <span>Customer PO total</span>
                 <strong>{money(poGrandTotal)}</strong>
