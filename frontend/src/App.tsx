@@ -1559,6 +1559,8 @@ function SalesCreateModal({
           colour: line.colour || "",
           quantity: Number((line.order_mode || "badge") === "badge" ? line.sets : line.pieces),
           custom_sizes: (line.order_mode || "badge") === "size" ? { [Number(line.set_item_id)]: Number(line.pieces) } : {},
+          custom_colours: (line.order_mode || "badge") === "size" && line.colour ? { [Number(line.set_item_id)]: [line.colour] } : {},
+          custom_colour_quantities: (line.order_mode || "badge") === "size" && line.colour ? { [Number(line.set_item_id)]: { [line.colour]: Number(line.pieces) } } : {},
         }))
       : [{ article_id: firstArticleId, colour: "", order_mode: "badge", set_template_id: firstSetId, set_item_id: firstItemId, quantity: 1 }]),
   ]);
@@ -1585,8 +1587,10 @@ function SalesCreateModal({
   const poLineTotal = (line: any) => {
     if (line.order_mode === "custom") {
       const items = data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items));
-      return Object.entries(line.custom_sizes || {}).reduce((total: number, [itemId, quantity]: any) =>
-        total + Number(items.find((item: any) => Number(item.id) === Number(itemId))?.unit_price || 0) * Number(quantity || 0), 0);
+      return Object.entries(line.custom_sizes || {}).reduce((total: number, [itemId, quantity]: any) => {
+        const colourQuantities = Object.values(line.custom_colour_quantities?.[itemId] || {}).reduce((sum: number, value: any) => sum + Number(value || 0), 0);
+        return total + Number(items.find((item: any) => Number(item.id) === Number(itemId))?.unit_price || 0) * (colourQuantities || Number(quantity || 0));
+      }, 0);
     }
     return Number(availableSets.find((set: any) => Number(set.id) === Number(line.set_template_id))?.set_price || 0) * Number(line.quantity || 0);
   };
@@ -1661,12 +1665,24 @@ function SalesCreateModal({
         sale_type: f.get("sale_type"),
         cash_amount: poSaleType === "mixed" ? poCashAmount : poSaleType === "cash" ? poGrandTotal : 0,
         lines: poLines.flatMap((line: any) => line.order_mode === "custom"
-          ? Object.entries(line.custom_sizes || {}).filter(([, quantity]: any) => Number(quantity) > 0).map(([itemId, quantity]: any) => {
+          ? Object.entries(line.custom_sizes || {}).filter(([, quantity]: any) => Number(quantity) > 0).flatMap(([itemId, quantity]: any) => {
               const item = data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items)).find((value: any) => Number(value.id) === Number(itemId));
-              return { article_id: line.article_id, colour: line.colour || null, order_mode: "size", set_template_id: item?.set_template_id, set_item_id: Number(itemId), quantity: Number(quantity) };
+              const colours = line.custom_colours?.[itemId]?.length ? line.custom_colours[itemId] : [null];
+              return colours.map((colour: string | null) => ({ article_id: line.article_id, colour, order_mode: "size", set_template_id: item?.set_template_id, set_item_id: Number(itemId), quantity: colour ? Number(line.custom_colour_quantities?.[itemId]?.[colour] || 1) : Number(quantity) }));
             })
           : [line]),
       };
+      if (poLines.some((line: any) => line.order_mode === "custom" && !Object.values(line.custom_sizes || {}).some((quantity: any) => Number(quantity) > 0))) {
+        alert("Select at least one size for every customized article.");
+        setBusy(false);
+        return;
+      }
+      const allItems = data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items));
+      if (poLines.some((line: any) => line.order_mode === "custom" && Object.entries(line.custom_sizes || {}).some(([itemId, quantity]: any) => Number(quantity) > 0 && String(allItems.find((item: any) => Number(item.id) === Number(itemId))?.colours || "").trim() && !(line.custom_colours?.[itemId] || []).length))) {
+        alert("Choose at least one colour for every selected size.");
+        setBusy(false);
+        return;
+      }
     } else if (type === "invoice") {
       path = initial ? `sales-invoices/${initial.id}` : "sales-invoices/manual";
       body = {
@@ -2136,21 +2152,20 @@ function SalesCreateModal({
               </div>
               {poLines.map((line, index) => {
                 const selectedArticle = data.articles.find((article:any)=>Number(article.id)===Number(line.article_id));
-                const selectableItems = (selectedArticle?.sets || []).filter((set:any)=>set.status!=="inactive").flatMap((set:any)=>set.items)
-                  .filter((item:any)=>!line.colour||(item.colours||"").toLowerCase().split(",").map((value:string)=>value.trim()).includes(line.colour.toLowerCase()));
+                const selectableItems = (selectedArticle?.sets || []).filter((set:any)=>set.status!=="inactive").flatMap((set:any)=>set.items);
                 const selectedSizeCount = Object.values(line.custom_sizes || {}).filter((quantity:any)=>Number(quantity)>0).length;
                 return <div className="po-line" key={index}>
                   <label>Article
-                    <select value={line.article_id} onChange={(e) => { const article=data.articles.find((a:any)=>Number(a.id)===Number(e.target.value)); const set=article?.sets?.find((s:any)=>s.status!=="inactive"); setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, article_id: Number(e.target.value), colour: "", set_template_id: Number(set?.id||0), set_item_id: Number(set?.items?.[0]?.id||0), custom_sizes: {} } : x)); }} required>
+                    <select value={line.article_id} onChange={(e) => { const article=data.articles.find((a:any)=>Number(a.id)===Number(e.target.value)); const set=article?.sets?.find((s:any)=>s.status!=="inactive"); setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, article_id: Number(e.target.value), colour: "", set_template_id: Number(set?.id||0), set_item_id: Number(set?.items?.[0]?.id||0), custom_sizes: {}, custom_colours: {}, custom_colour_quantities: {} } : x)); }} required>
                       {data.articles.map((article: any) => <option value={article.id} key={article.id}>{article.code} — {article.name}</option>)}
                     </select>
                     <button type="button" className="inline-create" onClick={()=>setExpandedPoLine(expandedPoLine===index?null:index)}>{expandedPoLine===index?"Hide article details":"View article details"}</button>
                   </label>
-                  <label>Colour / variant
-                    <select value={line.colour || ""} onChange={(e)=>setPoLines(lines=>lines.map((x,i)=>i===index?{...x,colour:e.target.value,custom_sizes:{}}:x))}>
+                  <label>{line.order_mode === "custom" ? "Colours" : "Colour / variant"}
+                    {line.order_mode === "custom" ? <div className="custom-size-summary">Choose colours per size below</div> : <select value={line.colour || ""} onChange={(e)=>setPoLines(lines=>lines.map((x,i)=>i===index?{...x,colour:e.target.value}:x))}>
                       <option value="">Any / not specified</option>
                       {[...new Set((data.articles.find((a:any)=>Number(a.id)===Number(line.article_id))?.sets||[]).flatMap((set:any)=>set.items.flatMap((item:any)=>(item.colours||"").split(",").map((colour:string)=>colour.trim()).filter(Boolean))))].map((colour:any)=><option value={colour} key={colour}>{colour}</option>)}
-                    </select>
+                    </select>}
                   </label>
                   <label>Order method
                     <select value={line.order_mode} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, order_mode: e.target.value, custom_sizes: e.target.value === "custom" ? (Object.keys(x.custom_sizes || {}).length ? x.custom_sizes : {}) : x.custom_sizes } : x))}>
@@ -2166,18 +2181,18 @@ function SalesCreateModal({
                       <div className="custom-size-summary">{selectedSizeCount ? `${selectedSizeCount} size${selectedSizeCount === 1 ? "" : "s"} selected` : "Select sizes below"}</div>
                     )}
                   </label>
-                  {line.order_mode === "badge" ? <label>Number of sets<input type="number" step="1" min="1" value={line.quantity} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, quantity: Number(e.target.value) } : x))} required /></label> : <div className="custom-size-summary pieces-summary"><small>Total pieces</small><b>{Object.values(line.custom_sizes || {}).reduce((sum:number, quantity:any)=>sum+Number(quantity||0),0)}</b></div>}
+                  {line.order_mode === "badge" ? <label>Number of sets<input type="number" step="1" min="1" value={line.quantity} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, quantity: Number(e.target.value) } : x))} required /></label> : <div className="custom-size-summary pieces-summary"><small>Total pieces</small><b>{Object.entries(line.custom_sizes || {}).reduce((sum:number,[itemId,quantity]:any)=>{const colourTotal=Object.values(line.custom_colour_quantities?.[itemId]||{}).reduce((subtotal:number,value:any)=>subtotal+Number(value||0),0);return sum+(colourTotal||Number(quantity||0));},0)}</b></div>}
                   <div className="po-line-total">
                     <small>Line total</small>
                     <b>{money(poLineTotal(line))}</b>
                   </div>
                   <button type="button" className="icon-action delete" title="Remove article" disabled={poLines.length === 1} onClick={() => setPoLines((lines) => lines.filter((_, i) => i !== index))}><Trash2 /></button>
                   {line.order_mode === "custom" && <div className="custom-size-picker">
-                    <div className="custom-size-head"><b>Select</b><b>Size</b><b>Item code</b><b>Price</b><b>Available</b><b>Pieces required</b></div>
-                    {selectableItems.map((item:any)=>{const quantity=Number(line.custom_sizes?.[item.id]||0);return <div className={`custom-size-row ${quantity>0?"selected":""}`} key={item.id}>
-                      <input type="checkbox" aria-label={`Select size ${item.size_label}`} checked={quantity>0} onChange={(event)=>setPoLines(lines=>lines.map((value,i)=>i===index?{...value,custom_sizes:{...(value.custom_sizes||{}),[item.id]:event.target.checked?1:0}}:value))}/>
-                      <b>{item.size_label}</b><span>{item.item_code||"—"}</span><span>{money(item.unit_price)}</span><span>{Number((data.finished_stock||[]).find((stock:any)=>Number(stock.article_id)===Number(line.article_id)&&stock.size_label===item.size_label)?.quantity||0).toLocaleString()}</span>
-                      <input aria-label={`Pieces for size ${item.size_label}`} type="number" min="1" step="1" disabled={quantity<=0} value={quantity>0?quantity:1} onChange={(event)=>setPoLines(lines=>lines.map((value,i)=>i===index?{...value,custom_sizes:{...(value.custom_sizes||{}),[item.id]:Number(event.target.value)}}:value))}/>
+                    <div className="custom-size-head"><b>Select</b><b>Size</b><b>Item code</b><b>Colour quantities</b><b>Price</b><b>Available</b><b>Size total</b></div>
+                    {selectableItems.map((item:any)=>{const quantity=Number(line.custom_sizes?.[item.id]||0);const itemColours=[...new Set(String(item.colours||"").split(",").map((colour:string)=>colour.trim()).filter(Boolean))] as string[];const chosenColours=line.custom_colours?.[item.id]||[];const sizeTotal=Object.values(line.custom_colour_quantities?.[item.id]||{}).reduce((sum:number,value:any)=>sum+Number(value||0),0)||quantity;return <div className={`custom-size-row ${quantity>0?"selected":""}`} key={item.id}>
+                      <input type="checkbox" aria-label={`Select size ${item.size_label}`} checked={quantity>0} onChange={(event)=>setPoLines(lines=>lines.map((value,i)=>i===index?{...value,custom_sizes:{...(value.custom_sizes||{}),[item.id]:event.target.checked?1:0},custom_colours:{...(value.custom_colours||{}),[item.id]:event.target.checked&&itemColours.length?[itemColours[0]]:[]},custom_colour_quantities:{...(value.custom_colour_quantities||{}),[item.id]:event.target.checked&&itemColours.length?{[itemColours[0]]:1}:{}}}:value))}/>
+                      <b>{item.size_label}</b><span>{item.item_code||"—"}</span><div className="size-colour-options">{itemColours.length?itemColours.map((colour:string)=><label className={chosenColours.includes(colour)?"selected":""} key={colour}><input type="checkbox" aria-label={`${colour} for size ${item.size_label}`} disabled={quantity<=0} checked={chosenColours.includes(colour)} onChange={(event)=>setPoLines(lines=>lines.map((value,i)=>{if(i!==index)return value;const current=value.custom_colours?.[item.id]||[];return {...value,custom_colours:{...(value.custom_colours||{}),[item.id]:event.target.checked?[...new Set([...current,colour])]:current.filter((entry:string)=>entry!==colour)},custom_colour_quantities:{...(value.custom_colour_quantities||{}),[item.id]:{...(value.custom_colour_quantities?.[item.id]||{}),[colour]:event.target.checked?1:0}}};}))}/><span>{colour}</span>{chosenColours.includes(colour)&&<input aria-label={`${colour} pieces for size ${item.size_label}`} type="number" min="1" step="1" value={Number(line.custom_colour_quantities?.[item.id]?.[colour]||1)} onChange={(event)=>setPoLines(lines=>lines.map((value,i)=>i===index?{...value,custom_colour_quantities:{...(value.custom_colour_quantities||{}),[item.id]:{...(value.custom_colour_quantities?.[item.id]||{}),[colour]:Number(event.target.value)}}}:value))}/>}</label>):<small>No colour specified</small>}</div><span>{money(item.unit_price)}</span><span>{Number((data.finished_stock||[]).find((stock:any)=>Number(stock.article_id)===Number(line.article_id)&&stock.size_label===item.size_label)?.quantity||0).toLocaleString()}</span>
+                      {itemColours.length?<b>{sizeTotal}</b>:<input aria-label={`Pieces for size ${item.size_label}`} type="number" min="1" step="1" disabled={quantity<=0} value={quantity>0?quantity:1} onChange={(event)=>setPoLines(lines=>lines.map((value,i)=>i===index?{...value,custom_sizes:{...(value.custom_sizes||{}),[item.id]:Number(event.target.value)}}:value))}/>} 
                     </div>})}
                   </div>}
                   {expandedPoLine===index && <div className="po-article-details">
