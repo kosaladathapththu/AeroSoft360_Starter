@@ -1598,6 +1598,16 @@ function SalesCreateModal({
     (total: number, line: any) => total + poLineTotal(line),
     0,
   );
+  const poTotalPieces = poLines.reduce((total: number, line: any) => {
+    if (line.order_mode === "custom") {
+      return total + Object.entries(line.custom_sizes || {}).reduce((lineTotal: number, [itemId, quantity]: any) => {
+        const colourTotal = Object.values(line.custom_colour_quantities?.[itemId] || {}).reduce((sum: number, value: any) => sum + Number(value || 0), 0);
+        return lineTotal + (colourTotal || Number(quantity || 0));
+      }, 0);
+    }
+    const set = availableSets.find((value: any) => Number(value.id) === Number(line.set_template_id));
+    return total + Number(set?.pieces || 0) * Number(line.quantity || 0);
+  }, 0);
   const visibleCustomers = data.customers.filter((customer: any) => {
     const query = customerSearch.trim().toLowerCase();
     return !query || `${customer.code} ${customer.name} ${customer.phone || ""}`.toLowerCase().includes(query) || Number(customer.id) === selectedCustomerId;
@@ -2156,21 +2166,23 @@ function SalesCreateModal({
                 const selectedSizeCount = Object.values(line.custom_sizes || {}).filter((quantity:any)=>Number(quantity)>0).length;
                 return <div className="po-line" key={index}>
                   <label>Article
+                    <div className="article-picker-control">
                     <select value={line.article_id} onChange={(e) => { const article=data.articles.find((a:any)=>Number(a.id)===Number(e.target.value)); const set=article?.sets?.find((s:any)=>s.status!=="inactive"); setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, article_id: Number(e.target.value), colour: "", set_template_id: Number(set?.id||0), set_item_id: Number(set?.items?.[0]?.id||0), custom_sizes: {}, custom_colours: {}, custom_colour_quantities: {} } : x)); }} required>
                       {data.articles.map((article: any) => <option value={article.id} key={article.id}>{article.code} — {article.name}</option>)}
                     </select>
-                    <button type="button" className="inline-create" onClick={()=>setExpandedPoLine(expandedPoLine===index?null:index)}>{expandedPoLine===index?"Hide article details":"View article details"}</button>
+                    <button type="button" className={`article-details-button ${expandedPoLine===index?"active":""}`} aria-expanded={expandedPoLine===index} title={expandedPoLine===index?"Hide article details":"Show article details"} onClick={()=>setExpandedPoLine(expandedPoLine===index?null:index)}><Eye /><span>Details</span><ChevronDown /></button>
+                    </div>
+                  </label>
+                  <label>Order method
+                    <select value={line.order_mode} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, order_mode: e.target.value, custom_sizes: e.target.value === "custom" ? (Object.keys(x.custom_sizes || {}).length ? x.custom_sizes : {}) : x.custom_sizes } : x))}>
+                      <option value="badge">Complete set</option><option value="custom">Customize order</option>
+                    </select>
                   </label>
                   <label>{line.order_mode === "custom" ? "Colours" : "Colour / variant"}
                     {line.order_mode === "custom" ? <div className="custom-size-summary">Choose colours per size below</div> : <select value={line.colour || ""} onChange={(e)=>setPoLines(lines=>lines.map((x,i)=>i===index?{...x,colour:e.target.value}:x))}>
                       <option value="">Any / not specified</option>
                       {[...new Set((data.articles.find((a:any)=>Number(a.id)===Number(line.article_id))?.sets||[]).flatMap((set:any)=>set.items.flatMap((item:any)=>(item.colours||"").split(",").map((colour:string)=>colour.trim()).filter(Boolean))))].map((colour:any)=><option value={colour} key={colour}>{colour}</option>)}
                     </select>}
-                  </label>
-                  <label>Order method
-                    <select value={line.order_mode} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, order_mode: e.target.value, custom_sizes: e.target.value === "custom" ? (Object.keys(x.custom_sizes || {}).length ? x.custom_sizes : {}) : x.custom_sizes } : x))}>
-                      <option value="badge">Complete set</option><option value="custom">Customize order</option>
-                    </select>
                   </label>
                   <label>{line.order_mode === "badge" ? "Set template" : "Selected sizes"}
                     {line.order_mode === "badge" ? (
@@ -2203,6 +2215,7 @@ function SalesCreateModal({
               })}
               <div className="po-grand-total">
                 <span>Customer PO total</span>
+                <span className="po-total-pieces"><small>Total pieces</small><b>{poTotalPieces.toLocaleString()} pcs</b></span>
                 <strong>{money(poGrandTotal)}</strong>
               </div>
             </div>
