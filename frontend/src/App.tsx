@@ -835,7 +835,7 @@ function SalesPage({
   const map: any = {
     Customers: data.customers,
     Salespersons: data.reps,
-    "Pricing List": data.articles.map((article: any) => ({
+    "Pricing List": data.articles.filter((article: any) => article.status === "active").map((article: any) => ({
       id: article.id,
       article_id: article.id,
       article_code: article.code,
@@ -1100,9 +1100,9 @@ function SalesPage({
                   <tr className="price-detail-row">
                     <td colSpan={heads[page].length + 1}>
                       <div className="price-variants">
-                        <div className="price-variant-head"><b>Item code</b><b>Size</b><b>Colours</b><b>Production cost</b><b>Selling price</b></div>
+                        <div className="price-variant-head"><b>Variant</b><b>Item code</b><b>Size</b><b>Colours</b><b>Production cost</b><b>Selling price</b></div>
                         {r.variants.map((item: any) => <div className="price-variant-line" key={item.id}>
-                          <span><b>{item.item_code || "—"}</b></span><span>{item.size_label}</span><span>{item.colours || "—"}</span><span>{item.production_cost == null ? "—" : money(item.production_cost)}</span><span><b>{money(item.unit_price)}</b></span>
+                          <span>{item.set_name || "Price List"}</span><span><b>{item.item_code || "—"}</b></span><span>{item.size_label}</span><span>{item.colours || "—"}</span><span>{item.production_cost == null ? "—" : money(item.production_cost)}</span><span><b>{money(item.unit_price)}</b></span>
                         </div>)}
                       </div>
                     </td>

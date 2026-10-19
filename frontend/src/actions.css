@@ -163,7 +163,7 @@
 .price-variant-head,
 .price-variant-line {
   display: grid;
-  grid-template-columns: 1fr .65fr 1.8fr 1fr 1fr;
+  grid-template-columns: 1.15fr 1fr .55fr 1.7fr 1fr 1fr;
   gap: 12px;
   align-items: center;
 }
@@ -185,7 +185,7 @@
   .validation-summary { grid-template-columns: 1fr 1fr; }
   .price-variants { padding-left: 14px; overflow-x: auto; }
   .price-variant-head,
-  .price-variant-line { min-width: 700px; }
+  .price-variant-line { min-width: 820px; }
 }
 .salary-preview {
   margin-top: 18px;

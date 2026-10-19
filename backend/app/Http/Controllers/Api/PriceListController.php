@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 final class PriceListController extends Controller
 {
@@ -18,7 +19,7 @@ final class PriceListController extends Controller
         $request->validate(['file' => ['required', 'file', 'mimes:xlsx,xls', 'max:10240']]);
         $upload = $request->file('file');
         $sheet = IOFactory::load($upload->getRealPath())->getSheet(0);
-        $rows = $sheet->toArray(null, true, true, true);
+        $rows = $this->sheetRows($sheet);
         $header = array_shift($rows) ?: [];
         $columns = $this->columns($header);
         $required = ['article', 'category', 'item_code', 'size', 'colours', 'production_cost', 'selling_price'];
@@ -42,10 +43,16 @@ final class PriceListController extends Controller
                 }
                 $itemCode = $this->cleanCode($row[$columns['item_code']] ?? null) ?: $article;
                 $size = $this->cleanCode($row[$columns['size']] ?? null) ?: 'STANDARD';
-                $key = Str::upper($article.'|'.$size);
+                $variant = $this->variantKey(
+                    trim((string) ($row[$columns['category']] ?? '')),
+                    trim((string) ($row[$columns['colours']] ?? '')),
+                    $this->number($row[$columns['production_cost']] ?? null),
+                    $price,
+                );
+                $key = Str::upper($article.'|'.$variant.'|'.$size);
                 if (isset($seen[$key])) {
                     $duplicates++;
-                    if (count($warnings) < 50) $warnings[] = "Row {$line}: duplicate article/size {$article} / {$size}; the last row will update the first.";
+                    if (count($warnings) < 50) $warnings[] = "Row {$line}: exact duplicate variant/size {$article} / {$size}; the last row will update the first.";
                 }
                 $seen[$key] = true;
                 $valid++;
@@ -60,7 +67,7 @@ final class PriceListController extends Controller
             'file_name'=>$upload->getClientOriginalName(), 'sheet_name'=>$sheet->getTitle(),
             'can_import'=>count($missing) === 0 && $valid > 0,
             'missing_columns'=>$missing, 'valid_rows'=>$valid, 'skipped_rows'=>$skipped,
-            'duplicate_rows'=>$duplicates, 'warnings'=>$warnings, 'sample'=>$sample,
+            'duplicate_rows'=>$duplicates, 'variant_groups'=>count(array_unique(array_keys($seen))), 'warnings'=>$warnings, 'sample'=>$sample,
         ]);
     }
 
@@ -70,7 +77,7 @@ final class PriceListController extends Controller
         $request->validate(['file' => ['required', 'file', 'mimes:xlsx,xls', 'max:10240']]);
         $upload = $request->file('file');
         $sheet = IOFactory::load($upload->getRealPath())->getSheet(0);
-        $rows = $sheet->toArray(null, true, true, true);
+        $rows = $this->sheetRows($sheet);
         $header = array_shift($rows) ?: [];
         $columns = $this->columns($header);
         foreach (['article', 'category', 'item_code', 'size', 'selling_price'] as $required) {
@@ -79,32 +86,39 @@ final class PriceListController extends Controller
 
         $stats = ['rows_read'=>0, 'articles_created'=>0, 'articles_updated'=>0, 'items_created'=>0, 'items_updated'=>0, 'rows_skipped'=>0];
         $warnings = [];
-        $seen = [];
-        $articleOrigins = [];
+        $prepared = [];
 
-        DB::transaction(function () use ($rows, $columns, $upload, $sheet, &$stats, &$warnings, &$seen, &$articleOrigins): void {
-            foreach ($rows as $index => $row) {
-                if (!array_filter($row, fn ($value) => $value !== null && trim((string) $value) !== '')) continue;
-                $stats['rows_read']++;
-                $line = $index + 2;
-                $articleCode = $this->cleanCode($row[$columns['article']] ?? null);
-                $price = $this->number($row[$columns['selling_price']] ?? null);
-                if ($articleCode === '' || $price === null) {
-                    $stats['rows_skipped']++;
-                    if (count($warnings) < 30) $warnings[] = "Row {$line}: missing article or selling price.";
-                    continue;
-                }
+        foreach ($rows as $index => $row) {
+            if (!array_filter($row, fn ($value) => $value !== null && trim((string) $value) !== '')) continue;
+            $stats['rows_read']++;
+            $line = $index + 2;
+            $articleCode = $this->cleanCode($row[$columns['article']] ?? null);
+            $price = $this->number($row[$columns['selling_price']] ?? null);
+            if ($articleCode === '' || $price === null) {
+                $stats['rows_skipped']++;
+                if (count($warnings) < 30) $warnings[] = "Row {$line}: missing article or selling price.";
+                continue;
+            }
+            $category = trim((string) ($row[$columns['category']] ?? '')) ?: 'UNCATEGORIZED';
+            $colours = trim((string) ($row[$columns['colours']] ?? '')) ?: null;
+            $cost = $this->number($row[$columns['production_cost']] ?? null);
+            $variantKey = $this->variantKey($category, $colours, $cost, $price);
+            $prepared[$articleCode][$variantKey][] = [
+                'line'=>$line, 'category'=>$category,
+                'item_code'=>$this->cleanCode($row[$columns['item_code']] ?? null) ?: $articleCode,
+                'size'=>$this->cleanCode($row[$columns['size']] ?? null) ?: 'STANDARD',
+                'colours'=>$colours, 'cost'=>$cost, 'price'=>$price,
+            ];
+        }
 
-                $category = trim((string) ($row[$columns['category']] ?? '')) ?: 'UNCATEGORIZED';
-                $itemCode = $this->cleanCode($row[$columns['item_code']] ?? null) ?: $articleCode;
-                $size = $this->cleanCode($row[$columns['size']] ?? null) ?: 'STANDARD';
-                $colours = trim((string) ($row[$columns['colours']] ?? '')) ?: null;
-                $cost = $this->number($row[$columns['production_cost']] ?? null);
-                $key = Str::upper($articleCode.'|'.$size);
-                if (isset($seen[$key])) {
-                    if (abs($seen[$key] - $price) > 0.001 && count($warnings) < 30) $warnings[] = "Row {$line}: duplicate {$itemCode} has a different price; the last price was used.";
-                }
-                $seen[$key] = $price;
+        DB::transaction(function () use ($prepared, $upload, $sheet, &$stats, &$warnings): void {
+            foreach ($prepared as $articleKey => $variantGroups) {
+                // PHP converts numeric-looking array keys to integers. Cast back to a
+                // string so MySQL does not loosely match e.g. 2315 to 2315(S).
+                $articleCode = (string) $articleKey;
+                $firstRow = collect($variantGroups)->flatten(1)->first();
+                $category = $firstRow['category'];
+                $price = $firstRow['price'];
 
                 $article = DB::table('articles')->where('code', $articleCode)->first();
                 if (!$article) {
@@ -113,38 +127,78 @@ final class PriceListController extends Controller
                         'pieces_per_set'=>1, 'selling_price'=>$price, 'commission_rate'=>0, 'status'=>'active',
                         'created_at'=>now(), 'updated_at'=>now(),
                     ]);
-                    if (!isset($articleOrigins[$articleCode])) {
-                        $articleOrigins[$articleCode] = 'created';
-                        $stats['articles_created']++;
-                    }
+                    $stats['articles_created']++;
                 } else {
                     $articleId = $article->id;
                     DB::table('articles')->where('id', $articleId)->update([
                         'category'=>$category === 'UNCATEGORIZED' ? $article->category : $category,
                         'selling_price'=>$price, 'status'=>'active', 'updated_at'=>now(),
                     ]);
-                    if (!isset($articleOrigins[$articleCode])) {
-                        $articleOrigins[$articleCode] = 'updated';
-                        $stats['articles_updated']++;
+                    $stats['articles_updated']++;
+                }
+
+                $desiredSetIds = [];
+                $multiple = count($variantGroups) > 1;
+                foreach (array_values($variantGroups) as $groupIndex => $groupRows) {
+                    $setName = $multiple ? 'Price List - Variant '.($groupIndex + 1) : 'Price List';
+                    $set = DB::table('article_set_templates')->where('article_id', $articleId)->where('name', $setName)->first();
+                    $setId = $set?->id ?: DB::table('article_set_templates')->insertGetId([
+                        'article_id'=>$articleId, 'name'=>$setName, 'status'=>'active', 'created_at'=>now(), 'updated_at'=>now(),
+                    ]);
+                    DB::table('article_set_templates')->where('id', $setId)->update(['status'=>'active', 'updated_at'=>now()]);
+                    $desiredSetIds[] = $setId;
+                    $keptItemIds = [];
+                    foreach ($groupRows as $itemRow) {
+                        $item = DB::table('article_set_items')->where('set_template_id', $setId)->where('size_label', $itemRow['size'])->first();
+                        $values = [
+                            'item_code'=>$itemRow['item_code'], 'colours'=>$itemRow['colours'], 'production_cost'=>$itemRow['cost'], 'quantity'=>1,
+                            'unit_price'=>$itemRow['price'], 'price_source'=>$upload->getClientOriginalName(), 'source_row'=>$itemRow['line'], 'price_updated_at'=>now(),
+                            'sort_order'=>is_numeric($itemRow['size']) ? (int) $itemRow['size'] : 999, 'updated_at'=>now(),
+                        ];
+                        if ($item) {
+                            DB::table('article_set_items')->where('id', $item->id)->update($values);
+                            $keptItemIds[] = $item->id;
+                            $stats['items_updated']++;
+                        } else {
+                            $keptItemIds[] = DB::table('article_set_items')->insertGetId($values + ['set_template_id'=>$setId, 'size_label'=>$itemRow['size'], 'created_at'=>now()]);
+                            $stats['items_created']++;
+                        }
+                    }
+                    $staleItems = DB::table('article_set_items')->where('set_template_id', $setId)->whereNotIn('id', $keptItemIds)->get();
+                    foreach ($staleItems as $staleItem) {
+                        if (!DB::table('customer_po_lines')->where('set_item_id', $staleItem->id)->exists()) {
+                            DB::table('article_set_items')->where('id', $staleItem->id)->delete();
+                        }
                     }
                 }
 
-                $set = DB::table('article_set_templates')->where('article_id', $articleId)->where('name', 'Price List')->first();
-                $setId = $set?->id ?: DB::table('article_set_templates')->insertGetId([
-                    'article_id'=>$articleId, 'name'=>'Price List', 'status'=>'active', 'created_at'=>now(), 'updated_at'=>now(),
-                ]);
-                $item = DB::table('article_set_items')->where('set_template_id', $setId)->where('size_label', $size)->first();
-                $values = [
-                    'item_code'=>$itemCode, 'colours'=>$colours, 'production_cost'=>$cost, 'quantity'=>1,
-                    'unit_price'=>$price, 'price_source'=>$upload->getClientOriginalName(), 'source_row'=>$line, 'price_updated_at'=>now(),
-                    'sort_order'=>is_numeric($size) ? (int) $size : 999, 'updated_at'=>now(),
-                ];
-                if ($item) {
-                    DB::table('article_set_items')->where('id', $item->id)->update($values);
-                    $stats['items_updated']++;
-                } else {
-                    DB::table('article_set_items')->insert($values + ['set_template_id'=>$setId, 'size_label'=>$size, 'created_at'=>now()]);
-                    $stats['items_created']++;
+                $staleSets = DB::table('article_set_templates')->where('article_id', $articleId)->where('name', 'like', 'Price List%')->whereNotIn('id', $desiredSetIds)->get();
+                foreach ($staleSets as $staleSet) {
+                    if (DB::table('customer_po_lines')->where('set_template_id', $staleSet->id)->exists()) {
+                        DB::table('article_set_templates')->where('id', $staleSet->id)->update(['status'=>'inactive', 'updated_at'=>now()]);
+                    } else {
+                        DB::table('article_set_templates')->where('id', $staleSet->id)->delete();
+                    }
+                }
+            }
+
+            $activeCodes = array_map('strval', array_keys($prepared));
+            $obsoleteArticles = DB::table('articles as a')
+                ->join('article_set_templates as s', 's.article_id', '=', 'a.id')
+                ->join('article_set_items as i', 'i.set_template_id', '=', 's.id')
+                ->whereNotNull('i.price_source')
+                ->whereNotIn('a.code', $activeCodes)
+                ->select('a.id')
+                ->distinct()
+                ->get();
+            foreach ($obsoleteArticles as $obsoleteArticle) {
+                DB::table('articles')->where('id', $obsoleteArticle->id)->update(['status'=>'inactive', 'updated_at'=>now()]);
+                foreach (DB::table('article_set_templates')->where('article_id', $obsoleteArticle->id)->where('name', 'like', 'Price List%')->get() as $obsoleteSet) {
+                    if (DB::table('customer_po_lines')->where('set_template_id', $obsoleteSet->id)->exists()) {
+                        DB::table('article_set_templates')->where('id', $obsoleteSet->id)->update(['status'=>'inactive', 'updated_at'=>now()]);
+                    } else {
+                        DB::table('article_set_templates')->where('id', $obsoleteSet->id)->delete();
+                    }
                 }
             }
 
@@ -201,6 +255,21 @@ final class PriceListController extends Controller
         return $found;
     }
 
+    private function sheetRows(Worksheet $sheet): array
+    {
+        $rows = [];
+        foreach ($sheet->getRowIterator() as $row) {
+            $values = [];
+            foreach ($row->getCellIterator('A', $sheet->getHighestColumn()) as $cell) {
+                $values[$cell->getColumn()] = $cell->isFormula()
+                    ? $cell->getOldCalculatedValue()
+                    : $cell->getValue();
+            }
+            $rows[] = $values;
+        }
+        return $rows;
+    }
+
     private function cleanCode(mixed $value): string
     {
         $text = trim((string) $value);
@@ -212,5 +281,10 @@ final class PriceListController extends Controller
         if ($value === null || trim((string) $value) === '') return null;
         $clean = str_replace([',', 'LKR', 'Rs.', 'Rs'], '', (string) $value);
         return is_numeric(trim($clean)) ? round((float) $clean, 2) : null;
+    }
+
+    private function variantKey(string $category, ?string $colours, ?float $cost, float $price): string
+    {
+        return Str::upper(trim($category).'|'.trim((string) $colours).'|'.($cost ?? '').'|'.$price);
     }
 }
