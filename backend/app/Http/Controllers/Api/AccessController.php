@@ -13,23 +13,24 @@ final class AccessController extends Controller
 {
     public function index(): JsonResponse
     {
-        $users=DB::table('users as u')->join('roles as r','r.id','=','u.role_id')->select('u.id','u.role_id','u.name','u.email','u.active','u.created_at','r.name as role_name','r.code as role_code')->orderBy('u.name')->get();
+        $users=DB::table('users as u')->join('roles as r','r.id','=','u.role_id')->leftJoin('sales_representatives as sr','sr.id','=','u.sales_rep_id')->select('u.id','u.role_id','u.sales_rep_id','u.name','u.email','u.active','u.created_at','r.name as role_name','r.code as role_code','sr.name as sales_rep_name')->orderBy('u.name')->get();
         $permissions=DB::table('permissions')->orderBy('code')->get();
         $rolePermissions=DB::table('role_permissions')->get()->groupBy('role_id');
         $roles=DB::table('roles')->orderBy('name')->get()->map(function($role)use($rolePermissions){$role->permission_ids=$rolePermissions->get($role->id,collect())->pluck('permission_id')->values();return $role;});
-        return response()->json(compact('users','roles','permissions'));
+        $sales_reps=DB::table('sales_representatives')->where('status','active')->orderBy('name')->get();
+        return response()->json(compact('users','roles','permissions','sales_reps'));
     }
 
     public function storeUser(Request $request): JsonResponse
     {
-        $data=$request->validate(['name'=>'required|string|max:160','email'=>'required|email|max:160|unique:users,email','role_id'=>'required|exists:roles,id','password'=>'required|string|min:8','active'=>'required|boolean']);
+        $data=$request->validate(['name'=>'required|string|max:160','email'=>'required|email|max:160|unique:users,email','role_id'=>'required|exists:roles,id','sales_rep_id'=>'nullable|exists:sales_representatives,id|unique:users,sales_rep_id','password'=>'required|string|min:8','active'=>'required|boolean']);
         $data['password']=Hash::make($data['password']);$data['created_at']=now();$data['updated_at']=now();
         $id=DB::table('users')->insertGetId($data);return response()->json(DB::table('users')->find($id),201);
     }
 
     public function updateUser(Request $request,int $id): JsonResponse
     {
-        $data=$request->validate(['name'=>'required|string|max:160','email'=>['required','email','max:160',Rule::unique('users','email')->ignore($id)],'role_id'=>'required|exists:roles,id','password'=>'nullable|string|min:8','active'=>'required|boolean']);
+        $data=$request->validate(['name'=>'required|string|max:160','email'=>['required','email','max:160',Rule::unique('users','email')->ignore($id)],'role_id'=>'required|exists:roles,id','sales_rep_id'=>['nullable','exists:sales_representatives,id',Rule::unique('users','sales_rep_id')->ignore($id)],'password'=>'nullable|string|min:8','active'=>'required|boolean']);
         $current=(int)$request->attributes->get('auth_user')->id;abort_if($current===$id&&!$data['active'],422,'You cannot deactivate your own account.');
         if(empty($data['password']))unset($data['password']);else$data['password']=Hash::make($data['password']);$data['updated_at']=now();DB::table('users')->where('id',$id)->update($data);return response()->json(DB::table('users')->find($id));
     }

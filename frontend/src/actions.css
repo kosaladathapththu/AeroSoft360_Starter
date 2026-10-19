@@ -655,6 +655,40 @@ aside .user:hover { background: #173443; }
 }
 .po-line label:first-child { min-width: 0; }
 .customer-mode-row { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.customer-mode-switch {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid #b9d5d8;
+  border-radius: 10px;
+  background: #edf6f6;
+}
+.customer-mode-switch button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 190px;
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #31535d;
+  font-weight: 700;
+  cursor: pointer;
+}
+.customer-mode-switch button.active {
+  background: #07998e;
+  color: #fff;
+  box-shadow: 0 2px 7px rgba(7, 74, 78, .18);
+}
+.customer-mode-switch svg { width: 17px; height: 17px; }
+.locked-salesperson { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 10px 13px; border: 1px solid #9fd5d0; border-radius: 8px; background: #e9f8f5; color: #075f5a; }
+.locked-salesperson svg { width: 20px; height: 20px; flex: 0 0 auto; }
+.locked-salesperson span,.locked-salesperson small { display: block; }
+.locked-salesperson small,.field-help { margin-top: 5px; color: #637b83; font-size: 12px; }
 .po-line label:nth-child(2) { width: auto; }
 .po-line .icon-action { margin-bottom: 1px; }
 .po-line-total {

@@ -112,6 +112,9 @@ type Profile = {
     email: string;
     role_code: string;
     role_name: string;
+    sales_rep_id?: number | null;
+    sales_rep_code?: string | null;
+    sales_rep_name?: string | null;
   };
   permissions: string[];
 };
@@ -436,7 +439,7 @@ export default function App() {
             "Commissions",
             "Finished Goods Stock",
           ].includes(page) ? (
-            <SalesPage token={token() || ""} page={page} go={setPage} />
+            <SalesPage token={token() || ""} page={page} go={setPage} currentUser={profile.user} />
           ) : page === "Employees" ? (
             <EmployeesPage token={token() || ""} />
           ) : page === "Payroll" ? (
@@ -561,10 +564,12 @@ function SalesPage({
   token,
   page,
   go,
+  currentUser,
 }: {
   token: string;
   page: string;
   go: (page: string) => void;
+  currentUser: Profile["user"];
 }) {
   const [data, setData] = useState<any>(null),
     [aging, setAging] = useState<any>(null),
@@ -1112,6 +1117,7 @@ function SalesPage({
         <SalesCreateModal
           type={modal}
           data={data}
+          currentUser={currentUser}
           initial={modal === "receipt" ? collectionInvoice : undefined}
           close={() => { setModal(""); setCollectionInvoice(null); }}
           save={async (path, body) => {
@@ -1130,6 +1136,7 @@ function SalesPage({
         <SalesCreateModal
           type="article"
           data={data}
+          currentUser={currentUser}
           initial={editingArticle}
           close={() => setEditingArticle(null)}
           save={async (path, body, method) => {
@@ -1147,6 +1154,7 @@ function SalesPage({
         <SalesCreateModal
           type={editingMaster.type}
           data={data}
+          currentUser={currentUser}
           initial={editingMaster.row}
           close={() => setEditingMaster(null)}
           save={async (path, body, method) => {
@@ -1159,6 +1167,7 @@ function SalesPage({
         <SalesCreateModal
           type="po"
           data={data}
+          currentUser={currentUser}
           initial={editingPo}
           close={() => setEditingPo(null)}
           save={async (path, body, method) => {
@@ -1499,12 +1508,14 @@ function SalesCreateModal({
   type,
   data,
   initial,
+  currentUser,
   close,
   save,
 }: {
   type: string;
   data: any;
   initial?: any;
+  currentUser?: Profile["user"];
   close: () => void;
   save: (path: string, body: any, method?: string) => Promise<void>;
 }) {
@@ -1515,6 +1526,8 @@ function SalesCreateModal({
   const [newCustomer, setNewCustomer] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState(Number(initial?.customer_id || data.customers?.[0]?.id || 0));
+  const [repSearch, setRepSearch] = useState("");
+  const [selectedRepId, setSelectedRepId] = useState(Number(currentUser?.sales_rep_id || initial?.sales_rep_id || data.reps?.[0]?.id || 0));
   const [poSaleType, setPoSaleType] = useState(initial?.sale_type || "credit");
   const [poCashAmount, setPoCashAmount] = useState(Number(initial?.cash_amount || 0));
   const [setTypes, setSetTypes] = useState<any[]>([
@@ -1581,6 +1594,10 @@ function SalesCreateModal({
     const query = customerSearch.trim().toLowerCase();
     return !query || `${customer.code} ${customer.name} ${customer.phone || ""}`.toLowerCase().includes(query) || Number(customer.id) === selectedCustomerId;
   }).slice(0, 50);
+  const visibleReps = data.reps.filter((rep: any) => {
+    const query = repSearch.trim().toLowerCase();
+    return rep.status === "active" && (!query || `${rep.code} ${rep.name} ${rep.manager_name || ""} ${rep.channel || ""}`.toLowerCase().includes(query) || Number(rep.id) === selectedRepId);
+  }).slice(0, 50);
   const expandedInvoiceLines = invoiceLines.flatMap((line: any) => {
     const article = data.articles.find((item: any) => Number(item.id) === Number(line.article_id));
     const set = article?.sets?.find((item: any) => Number(item.id) === Number(line.set_template_id)) || article?.sets?.[0];
@@ -1634,7 +1651,7 @@ function SalesCreateModal({
         customer_phone: newCustomer ? f.get("customer_phone") : null,
         customer_address: newCustomer ? f.get("customer_address") : null,
         customer_credit_days: newCustomer ? Number(f.get("customer_credit_days") || 30) : null,
-        sales_rep_id: Number(f.get("sales_rep_id")),
+        sales_rep_id: Number(currentUser?.sales_rep_id || selectedRepId),
         customer_po_reference: f.get("customer_po_reference"),
         po_date: f.get("po_date"),
         sale_type: f.get("sale_type"),
@@ -1645,7 +1662,7 @@ function SalesCreateModal({
       path = initial ? `sales-invoices/${initial.id}` : "sales-invoices/manual";
       body = {
         customer_id: Number(f.get("customer_id")),
-        sales_rep_id: Number(f.get("sales_rep_id")),
+        sales_rep_id: Number(currentUser?.sales_rep_id || selectedRepId),
         invoice_date: f.get("invoice_date"),
         due_date: f.get("due_date") || null,
         sale_type: f.get("sale_type"),
@@ -2038,6 +2055,10 @@ function SalesCreateModal({
         ) : type === "po" || type === "sales_order" ? (
           <>
             <div className="form-row">
+              {!initial && <div className="customer-mode-switch" role="group" aria-label="Customer type">
+                <button type="button" className={!newCustomer ? "active" : ""} onClick={()=>setNewCustomer(false)}>Existing customer</button>
+                <button type="button" className={newCustomer ? "active" : ""} onClick={()=>setNewCustomer(true)}><Plus /> New customer</button>
+              </div>}
               {!newCustomer && <><label>
                 Search customer
                 <input type="search" value={customerSearch} onChange={(event)=>setCustomerSearch(event.target.value)} placeholder="Search by name, code or phone" />
@@ -2051,10 +2072,9 @@ function SalesCreateModal({
                     </option>
                   ))}
                 </select>
-                {!initial && <button type="button" className="inline-create" onClick={()=>setNewCustomer(true)}>+ Enter new customer</button>}
               </label></>}
               {newCustomer && <>
-                <div className="customer-mode-row"><b>New customer details</b><button type="button" className="inline-create" onClick={()=>setNewCustomer(false)}>Choose existing customer</button></div>
+                <div className="customer-mode-row"><b>New customer details</b></div>
                 <label>New customer name<input name="customer_name" required placeholder="Customer or company name" /></label>
                 <label>Phone<input name="customer_phone" placeholder="Contact number" /></label>
                 <label>Credit days<input name="customer_credit_days" type="number" min="0" max="365" defaultValue="30" required /></label>
@@ -2062,13 +2082,20 @@ function SalesCreateModal({
               </>}
               <label>
                 Salesperson
-                <select name="sales_rep_id" defaultValue={initial?.sales_rep_id}>
-                  {data.reps.map((x: any) => (
+                {currentUser?.sales_rep_id ? <>
+                  <input type="hidden" name="sales_rep_id" value={currentUser.sales_rep_id} />
+                  <div className="locked-salesperson"><ShieldCheck /><span><b>{currentUser.sales_rep_code} — {currentUser.sales_rep_name}</b><small>Automatically assigned from your login</small></span></div>
+                </> : <>
+                  <input type="search" value={repSearch} onChange={(event)=>setRepSearch(event.target.value)} placeholder="Search salesperson by name or code" />
+                  <select name="sales_rep_id" value={selectedRepId} onChange={(event)=>setSelectedRepId(Number(event.target.value))} required>
+                  {visibleReps.map((x: any) => (
                     <option value={x.id} key={x.id}>
                       {x.code} — {x.name}
                     </option>
                   ))}
-                </select>
+                  </select>
+                  <small className="field-help">New salespeople and their login passwords are created in Salespersons and Access Control.</small>
+                </>}
               </label>
               <label>
                 Customer PO reference
@@ -3073,7 +3100,7 @@ function AccessPage({ token, currentUserId }: { token: string; currentUserId: nu
   const load = useCallback(async () => { const r = await fetch(`${API}/access`, { headers: { Authorization: `Bearer ${token}` } }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.message || "Unable to load access control"); setData(j); }, [token]);
   useEffect(() => { load().catch((e) => setError(e.message)); }, [load]);
   const save = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); const f = new FormData(event.currentTarget); const isRole = tab === "roles"; const body = isRole ? { code: f.get("code"), name: f.get("name"), permission_ids: data.permissions.filter((p: any) => f.get(`permission_${p.id}`)).map((p: any) => p.id) } : { name: f.get("name"), email: f.get("email"), role_id: Number(f.get("role_id")), password: f.get("password") || null, active: f.get("active") === "on" };
+    event.preventDefault(); const f = new FormData(event.currentTarget); const isRole = tab === "roles"; const body = isRole ? { code: f.get("code"), name: f.get("name"), permission_ids: data.permissions.filter((p: any) => f.get(`permission_${p.id}`)).map((p: any) => p.id) } : { name: f.get("name"), email: f.get("email"), role_id: Number(f.get("role_id")), sales_rep_id: f.get("sales_rep_id") ? Number(f.get("sales_rep_id")) : null, password: f.get("password") || null, active: f.get("active") === "on" };
     const base=isRole?"roles":"users", method=editing?"PUT":"POST", url=`${API}/${base}${editing?`/${editing.id}`:""}`; const r=await fetch(url,{method,headers:{"Content-Type":"application/json",Accept:"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok){setError(j.message||Object.values(j.errors||{}).flat().join(" ")||"Save failed");return;}setEditing(null);setCreating(false);setError("");await load();
   };
   const remove = async (row: any) => { if (!confirm(`Delete ${row.name}?`)) return; const base=tab==="roles"?"roles":"users";const r=await fetch(`${API}/${base}/${row.id}`,{method:"DELETE",headers:{Authorization:`Bearer ${token}`,Accept:"application/json"}});const j=await r.json().catch(()=>({}));if(!r.ok){setError(j.message||"Delete failed");return;}await load(); };
@@ -3082,8 +3109,8 @@ function AccessPage({ token, currentUserId }: { token: string; currentUserId: nu
     <div className="heading"><div><span>ADMINISTRATION</span><h1>Access Control</h1><p>Manage authorized users, roles and action permissions.</p></div><button className="primary" onClick={()=>{setEditing(null);setCreating(true)}}><Plus /> Add {tab==="users"?"user":"role"}</button></div>
     {error&&<div className="error">{error}</div>}
     <div className="report-tabs"><button className={tab==="users"?"active":""} onClick={()=>setTab("users")}>Users <small>{data.users.length}</small></button><button className={tab==="roles"?"active":""} onClick={()=>setTab("roles")}>Roles and permissions <small>{data.roles.length}</small></button></div>
-    <div className="table-card"><table><thead><tr>{(tab==="users"?["User","Email","Role","Status"]:["Role","Code","Permissions","Assigned users"]).map(h=><th key={h}>{h}</th>)}<th>Actions</th></tr></thead><tbody>{(tab==="users"?data.users:data.roles).map((row:any)=><tr key={row.id}>{tab==="users"?<><td><b>{row.name}</b>{row.id===currentUserId&&<small><br />Current user</small>}</td><td>{row.email}</td><td>{row.role_name}</td><td>{status(row.active?"active":"inactive")}</td></>:<><td><b>{row.name}</b></td><td>{row.code}</td><td>{row.permission_ids.length} permissions</td><td>{data.users.filter((u:any)=>u.role_id===row.id).length}</td></>}<td><div className="row-actions"><button className="icon-action edit" onClick={()=>{setCreating(false);setEditing(row)}}><Pencil /></button><button className="icon-action delete" disabled={tab==="users"&&row.id===currentUserId} onClick={()=>remove(row)}><Trash2 /></button></div></td></tr>)}</tbody></table></div>
-    {(creating||editing)&&<div className="backdrop" onMouseDown={()=>{setCreating(false);setEditing(null)}}><form className="modal" onSubmit={save} onMouseDown={e=>e.stopPropagation()}><button type="button" className="close" onClick={()=>{setCreating(false);setEditing(null)}}><X /></button><span>ACCESS ADMINISTRATION</span><h2>{editing?"Edit":"Add"} {tab==="users"?"user":"role"}</h2>{tab==="users"?<><div className="form-row"><label>Name<input name="name" defaultValue={record.name} required /></label><label>Email<input name="email" type="email" defaultValue={record.email} required /></label><label>Role<select name="role_id" defaultValue={record.role_id} required>{data.roles.map((role:any)=><option value={role.id} key={role.id}>{role.name}</option>)}</select></label><label>Password<input name="password" type="password" minLength={8} required={!editing} placeholder={editing?"Leave blank to keep current password":"Minimum 8 characters"} /></label></div><label className="access-check"><input name="active" type="checkbox" defaultChecked={editing?Boolean(record.active):true} /> Active account</label></>:<><div className="form-row"><label>Role name<input name="name" defaultValue={record.name} required /></label><label>Role code<input name="code" defaultValue={record.code} pattern="[A-Za-z0-9_-]+" required readOnly={record.code==="administrator"} /></label></div><div className="permission-grid">{data.permissions.map((permission:any)=><label className="access-check" key={permission.id}><input name={`permission_${permission.id}`} type="checkbox" defaultChecked={record.permission_ids?.includes(permission.id)} /> <span><b>{permission.name}</b><small>{permission.code}</small></span></label>)}</div></>}<div className="actions"><button type="button" onClick={()=>{setCreating(false);setEditing(null)}}>Cancel</button><button className="primary"><Check /> Save</button></div></form></div>}
+    <div className="table-card"><table><thead><tr>{(tab==="users"?["User","Email","Role","Linked salesperson","Status"]:["Role","Code","Permissions","Assigned users"]).map(h=><th key={h}>{h}</th>)}<th>Actions</th></tr></thead><tbody>{(tab==="users"?data.users:data.roles).map((row:any)=><tr key={row.id}>{tab==="users"?<><td><b>{row.name}</b>{row.id===currentUserId&&<small><br />Current user</small>}</td><td>{row.email}</td><td>{row.role_name}</td><td>{row.sales_rep_name || "Not linked"}</td><td>{status(row.active?"active":"inactive")}</td></>:<><td><b>{row.name}</b></td><td>{row.code}</td><td>{row.permission_ids.length} permissions</td><td>{data.users.filter((u:any)=>u.role_id===row.id).length}</td></>}<td><div className="row-actions"><button className="icon-action edit" onClick={()=>{setCreating(false);setEditing(row)}}><Pencil /></button><button className="icon-action delete" disabled={tab==="users"&&row.id===currentUserId} onClick={()=>remove(row)}><Trash2 /></button></div></td></tr>)}</tbody></table></div>
+    {(creating||editing)&&<div className="backdrop" onMouseDown={()=>{setCreating(false);setEditing(null)}}><form className="modal" onSubmit={save} onMouseDown={e=>e.stopPropagation()}><button type="button" className="close" onClick={()=>{setCreating(false);setEditing(null)}}><X /></button><span>ACCESS ADMINISTRATION</span><h2>{editing?"Edit":"Add"} {tab==="users"?"user":"role"}</h2>{tab==="users"?<><div className="form-row"><label>Name<input name="name" defaultValue={record.name} required /></label><label>Email<input name="email" type="email" defaultValue={record.email} required /></label><label>Role<select name="role_id" defaultValue={record.role_id} required>{data.roles.map((role:any)=><option value={role.id} key={role.id}>{role.name}</option>)}</select></label><label>Linked salesperson<select name="sales_rep_id" defaultValue={record.sales_rep_id || ""}><option value="">Not a salesperson login</option>{(data.sales_reps || []).map((rep:any)=><option value={rep.id} key={rep.id}>{rep.code} — {rep.name}</option>)}</select></label><label>Password<input name="password" type="password" minLength={8} required={!editing} placeholder={editing?"Leave blank to keep current password":"Minimum 8 characters"} /></label></div><p className="report-note">For a salesperson login, choose the Salesperson role and link the matching salesperson profile. Their sales documents will then use that identity automatically.</p><label className="access-check"><input name="active" type="checkbox" defaultChecked={editing?Boolean(record.active):true} /> Active account</label></>:<><div className="form-row"><label>Role name<input name="name" defaultValue={record.name} required /></label><label>Role code<input name="code" defaultValue={record.code} pattern="[A-Za-z0-9_-]+" required readOnly={record.code==="administrator"} /></label></div><div className="permission-grid">{data.permissions.map((permission:any)=><label className="access-check" key={permission.id}><input name={`permission_${permission.id}`} type="checkbox" defaultChecked={record.permission_ids?.includes(permission.id)} /> <span><b>{permission.name}</b><small>{permission.code}</small></span></label>)}</div></>}<div className="actions"><button type="button" onClick={()=>{setCreating(false);setEditing(null)}}>Cancel</button><button className="primary"><Check /> Save</button></div></form></div>}
   </>;
 }
 
