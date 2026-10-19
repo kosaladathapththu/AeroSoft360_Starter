@@ -276,6 +276,7 @@ final class AccountingSalesController extends Controller
 
     public function updateInvoice(Request $request, int $id): JsonResponse
     {
+        if ($request->attributes->get('auth_user')?->sales_rep_id) $request->merge(['sales_rep_id'=>$request->attributes->get('auth_user')->sales_rep_id]);
         $data = $request->validate([
             'customer_id'=>['required','integer','exists:customers,id'], 'sales_rep_id'=>['required','integer','exists:sales_representatives,id'],
             'invoice_date'=>['required','date'], 'due_date'=>['required','date','after_or_equal:invoice_date'], 'sale_type'=>['required','in:cash,credit,mixed'],
@@ -382,6 +383,7 @@ final class AccountingSalesController extends Controller
 
     public function manualInvoice(Request $request, PostingService $posting): JsonResponse
     {
+        if ($request->attributes->get('auth_user')?->sales_rep_id) $request->merge(['sales_rep_id'=>$request->attributes->get('auth_user')->sales_rep_id]);
         $data = $request->validate([
             'customer_id'=>['required','integer','exists:customers,id'],
             'sales_rep_id'=>['required','integer','exists:sales_representatives,id'],

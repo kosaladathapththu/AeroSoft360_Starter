@@ -24,6 +24,7 @@ final class AccessController extends Controller
     public function storeUser(Request $request): JsonResponse
     {
         $data=$request->validate(['name'=>'required|string|max:160','email'=>'required|email|max:160|unique:users,email','role_id'=>'required|exists:roles,id','sales_rep_id'=>'nullable|exists:sales_representatives,id|unique:users,sales_rep_id','password'=>'required|string|min:8','active'=>'required|boolean']);
+        abort_if(DB::table('roles')->where('id',$data['role_id'])->value('code')==='sales_person' && empty($data['sales_rep_id']),422,'A salesperson login must be linked to a salesperson profile.');
         $data['password']=Hash::make($data['password']);$data['created_at']=now();$data['updated_at']=now();
         $id=DB::table('users')->insertGetId($data);return response()->json(DB::table('users')->find($id),201);
     }
@@ -31,6 +32,7 @@ final class AccessController extends Controller
     public function updateUser(Request $request,int $id): JsonResponse
     {
         $data=$request->validate(['name'=>'required|string|max:160','email'=>['required','email','max:160',Rule::unique('users','email')->ignore($id)],'role_id'=>'required|exists:roles,id','sales_rep_id'=>['nullable','exists:sales_representatives,id',Rule::unique('users','sales_rep_id')->ignore($id)],'password'=>'nullable|string|min:8','active'=>'required|boolean']);
+        abort_if(DB::table('roles')->where('id',$data['role_id'])->value('code')==='sales_person' && empty($data['sales_rep_id']),422,'A salesperson login must be linked to a salesperson profile.');
         $current=(int)$request->attributes->get('auth_user')->id;abort_if($current===$id&&!$data['active'],422,'You cannot deactivate your own account.');
         if(empty($data['password']))unset($data['password']);else$data['password']=Hash::make($data['password']);$data['updated_at']=now();DB::table('users')->where('id',$id)->update($data);return response()->json(DB::table('users')->find($id));
     }

@@ -817,6 +817,7 @@ function SalesPage({
           <SalesCreateModal
             type={modal}
             data={data}
+            currentUser={currentUser}
             close={() => setModal("")}
             save={async (path, body) => {
               try {
@@ -2182,7 +2183,7 @@ function SalesCreateModal({
                 <select name="customer_id" defaultValue={initial?.customer_id} required>{data.customers.map((customer: any) => <option value={customer.id} key={customer.id}>{customer.code} — {customer.name}</option>)}</select>
               </label>
               <label>Salesperson
-                <select name="sales_rep_id" defaultValue={initial?.sales_rep_id} required>{data.reps.map((rep: any) => <option value={rep.id} key={rep.id}>{rep.code} — {rep.name}</option>)}</select>
+                {currentUser?.sales_rep_id ? <><input type="hidden" name="sales_rep_id" value={currentUser.sales_rep_id} /><div className="locked-salesperson"><ShieldCheck /><span><b>{currentUser.sales_rep_code} — {currentUser.sales_rep_name}</b><small>Automatically assigned from your login</small></span></div></> : <select name="sales_rep_id" value={selectedRepId} onChange={(event)=>setSelectedRepId(Number(event.target.value))} required>{data.reps.filter((rep: any) => rep.status === "active").map((rep: any) => <option value={rep.id} key={rep.id}>{rep.code} — {rep.name}</option>)}</select>}
               </label>
               <label>Invoice date<input name="invoice_date" type="date" required defaultValue={initial?.invoice_date || new Date().toISOString().slice(0, 10)} /></label>
               <label>Due date<input name="due_date" type="date" defaultValue={initial?.due_date} /></label>
