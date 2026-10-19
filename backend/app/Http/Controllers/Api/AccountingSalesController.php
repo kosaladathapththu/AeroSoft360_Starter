@@ -281,7 +281,7 @@ final class AccountingSalesController extends Controller
             'invoice_date'=>['required','date'], 'due_date'=>['required','date','after_or_equal:invoice_date'], 'sale_type'=>['required','in:cash,credit,mixed'],
             'reference'=>['nullable','string','max:80'], 'discount'=>['nullable','numeric','gte:0'], 'tax'=>['nullable','numeric','gte:0'],
             'lines'=>['required','array','min:1'], 'lines.*.article_id'=>['required','integer','exists:articles,id'],
-            'lines.*.size_label'=>['required','string','max:30'], 'lines.*.quantity'=>['required','numeric','gt:0'], 'lines.*.rate'=>['required','numeric','gte:0'],
+            'lines.*.size_label'=>['required','string','max:30'], 'lines.*.colour'=>['nullable','string','max:80'], 'lines.*.quantity'=>['required','numeric','gt:0'], 'lines.*.rate'=>['required','numeric','gte:0'],
         ]);
         return DB::transaction(function () use ($data, $id) {
             $invoice = DB::table('sales_invoices')->lockForUpdate()->find($id);
@@ -300,14 +300,14 @@ final class AccountingSalesController extends Controller
                 $orderLine = DB::table('sales_order_size_lines')->where('sales_order_id', $invoice->sales_order_id)->where('article_id', $line['article_id'])->where('size_label', $line['size_label'])->first();
                 if (! $orderLine) {
                     abort_unless($manualOrder, 422, 'The selected article and size are not part of the linked sales order.');
-                    $orderLineId = DB::table('sales_order_size_lines')->insertGetId(['sales_order_id'=>$invoice->sales_order_id,'article_id'=>$line['article_id'],'size_label'=>$line['size_label'],'quantity'=>$line['quantity'],'invoiced_quantity'=>$line['quantity'],'rate'=>$line['rate'],'created_at'=>now(),'updated_at'=>now()]);
+                    $orderLineId = DB::table('sales_order_size_lines')->insertGetId(['sales_order_id'=>$invoice->sales_order_id,'article_id'=>$line['article_id'],'size_label'=>$line['size_label'],'colour'=>$line['colour']??null,'quantity'=>$line['quantity'],'invoiced_quantity'=>$line['quantity'],'rate'=>$line['rate'],'created_at'=>now(),'updated_at'=>now()]);
                 } else {
                     $available = (float) $orderLine->quantity - (float) $orderLine->invoiced_quantity;
                     abort_if(! $manualOrder && (float) $line['quantity'] > $available + .0001, 422, "Quantity for size {$line['size_label']} exceeds the remaining sales-order quantity.");
                     $orderLineId = $orderLine->id;
-                    DB::table('sales_order_size_lines')->where('id', $orderLineId)->update(['quantity'=>$manualOrder?$line['quantity']:$orderLine->quantity,'invoiced_quantity'=>DB::raw('invoiced_quantity + '.(float)$line['quantity']),'rate'=>$line['rate'],'updated_at'=>now()]);
+                    DB::table('sales_order_size_lines')->where('id', $orderLineId)->update(['colour'=>$line['colour']??null,'quantity'=>$manualOrder?$line['quantity']:$orderLine->quantity,'invoiced_quantity'=>DB::raw('invoiced_quantity + '.(float)$line['quantity']),'rate'=>$line['rate'],'updated_at'=>now()]);
                 }
-                DB::table('sales_invoice_lines')->insert(['sales_invoice_id'=>$id,'sales_order_size_line_id'=>$orderLineId,'article_id'=>$line['article_id'],'size_label'=>$line['size_label'],'quantity'=>$line['quantity'],'rate'=>$line['rate'],'line_total'=>round($line['quantity']*$line['rate'],2),'created_at'=>now(),'updated_at'=>now()]);
+                DB::table('sales_invoice_lines')->insert(['sales_invoice_id'=>$id,'sales_order_size_line_id'=>$orderLineId,'article_id'=>$line['article_id'],'size_label'=>$line['size_label'],'colour'=>$line['colour']??null,'quantity'=>$line['quantity'],'rate'=>$line['rate'],'line_total'=>round($line['quantity']*$line['rate'],2),'created_at'=>now(),'updated_at'=>now()]);
             }
             DB::table('sales_invoices')->where('id', $id)->update(['customer_id'=>$data['customer_id'],'sales_rep_id'=>$data['sales_rep_id'],'invoice_date'=>$data['invoice_date'],'due_date'=>$data['due_date'],'sale_type'=>$data['sale_type'],'subtotal'=>$subtotal,'discount'=>$discount,'tax'=>$tax,'total'=>$total,'outstanding'=>$total,'status'=>'unpaid','updated_at'=>now()]);
             DB::table('customer_pos')->where('id', DB::table('sales_orders')->where('id',$invoice->sales_order_id)->value('customer_po_id'))->update(['customer_po_reference'=>$data['reference']??null,'updated_at'=>now()]);
@@ -389,7 +389,7 @@ final class AccountingSalesController extends Controller
             'sale_type'=>['required','in:cash,credit,mixed'], 'discount'=>['nullable','numeric','gte:0'],
             'tax'=>['nullable','numeric','gte:0'], 'reference'=>['nullable','string','max:80'],
             'lines'=>['required','array','min:1'], 'lines.*.article_id'=>['required','integer','exists:articles,id'],
-            'lines.*.size_label'=>['required','string','max:30'], 'lines.*.quantity'=>['required','numeric','gt:0'],
+            'lines.*.size_label'=>['required','string','max:30'], 'lines.*.colour'=>['nullable','string','max:80'], 'lines.*.quantity'=>['required','numeric','gt:0'],
             'lines.*.rate'=>['required','numeric','gte:0'],
         ]);
         return DB::transaction(function () use ($data, $posting) {
@@ -421,13 +421,13 @@ final class AccountingSalesController extends Controller
             ]);
             foreach ($data['lines'] as $line) {
                 $orderLineId = DB::table('sales_order_size_lines')->insertGetId([
-                    'sales_order_id'=>$orderId, 'article_id'=>$line['article_id'], 'size_label'=>$line['size_label'],
+                    'sales_order_id'=>$orderId, 'article_id'=>$line['article_id'], 'size_label'=>$line['size_label'], 'colour'=>$line['colour']??null,
                     'quantity'=>$line['quantity'], 'invoiced_quantity'=>$line['quantity'], 'rate'=>$line['rate'],
                     'created_at'=>now(), 'updated_at'=>now(),
                 ]);
                 DB::table('sales_invoice_lines')->insert([
                     'sales_invoice_id'=>$invoiceId, 'sales_order_size_line_id'=>$orderLineId, 'article_id'=>$line['article_id'],
-                    'size_label'=>$line['size_label'], 'quantity'=>$line['quantity'], 'rate'=>$line['rate'],
+                    'size_label'=>$line['size_label'], 'colour'=>$line['colour']??null, 'quantity'=>$line['quantity'], 'rate'=>$line['rate'],
                     'line_total'=>round($line['quantity'] * $line['rate'], 2), 'created_at'=>now(), 'updated_at'=>now(),
                 ]);
             }

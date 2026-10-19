@@ -1547,13 +1547,19 @@ function SalesCreateModal({
         }))
       : [{ article_id: firstArticleId, colour: "", order_mode: "badge", set_template_id: firstSetId, set_item_id: firstItemId, quantity: 1 }]),
   ]);
-  const defaultInvoiceItem = data.articles?.[0]?.sets?.[0]?.items?.[0];
+  const defaultInvoiceSet = data.articles?.[0]?.sets?.find((set: any) => set.status !== "inactive") || data.articles?.[0]?.sets?.[0];
   const [invoiceLines, setInvoiceLines] = useState<any[]>(
-    initial?.lines?.length ? initial.lines.map((line: any) => ({ article_id: Number(line.article_id), size_label: line.size_label, quantity: Number(line.quantity), rate: Number(line.rate) })) : [{
+    initial?.lines?.length ? [...new Set(initial.lines.map((line: any) => Number(line.article_id)))].map((articleId: any) => {
+      const article = data.articles.find((item: any) => Number(item.id) === Number(articleId));
+      const set = article?.sets?.find((item: any) => item.status !== "inactive") || article?.sets?.[0];
+      const firstStoredLine = initial.lines.find((item: any) => Number(item.article_id) === Number(articleId));
+      const matchingItem = set?.items?.find((item: any) => item.size_label === firstStoredLine?.size_label);
+      return { article_id: Number(articleId), set_template_id: Number(set?.id || 0), colour: firstStoredLine?.colour || "", sets: Math.max(1, Number(firstStoredLine?.quantity || 1) / Math.max(1, Number(matchingItem?.quantity || 1))) };
+    }) : [{
       article_id: Number(data.articles?.[0]?.id || 0),
-      size_label: defaultInvoiceItem?.size_label || "",
-      quantity: 1,
-      rate: Number(defaultInvoiceItem?.unit_price || data.articles?.[0]?.selling_price || 0),
+      set_template_id: Number(defaultInvoiceSet?.id || 0),
+      colour: "",
+      sets: 1,
     }],
   );
   const availableSets = (data.articles || []).flatMap((article: any) =>
@@ -1575,9 +1581,13 @@ function SalesCreateModal({
     const query = customerSearch.trim().toLowerCase();
     return !query || `${customer.code} ${customer.name} ${customer.phone || ""}`.toLowerCase().includes(query) || Number(customer.id) === selectedCustomerId;
   }).slice(0, 50);
-  const invoiceSubtotal = invoiceLines.reduce(
-    (total: number, line: any) => total + Number(line.quantity || 0) * Number(line.rate || 0),
-    0,
+  const expandedInvoiceLines = invoiceLines.flatMap((line: any) => {
+    const article = data.articles.find((item: any) => Number(item.id) === Number(line.article_id));
+    const set = article?.sets?.find((item: any) => Number(item.id) === Number(line.set_template_id)) || article?.sets?.[0];
+    return (set?.items || []).map((item: any) => ({ article_id: Number(line.article_id), size_label: item.size_label, colour: line.colour || null, quantity: Number(item.quantity) * Number(line.sets || 0), rate: Number(item.unit_price) }));
+  });
+  const invoiceSubtotal = expandedInvoiceLines.reduce(
+    (total: number, line: any) => total + Number(line.quantity || 0) * Number(line.rate || 0), 0,
   );
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1642,7 +1652,7 @@ function SalesCreateModal({
         reference: f.get("reference"),
         discount: Number(f.get("discount") || 0),
         tax: Number(f.get("tax") || 0),
-        lines: invoiceLines,
+        lines: expandedInvoiceLines,
       };
     } else if (type === "finished_stock") {
       path = "finished-stock-adjustments";
@@ -2152,16 +2162,19 @@ function SalesCreateModal({
               <label>Reference<input name="reference" defaultValue={initial?.reference} placeholder="Customer reference / note" /></label>
             </div>
             <div className="po-lines">
-              <div className="po-lines-head"><div><b>Invoice items</b><small>Add one or more articles, sizes, quantities and selling rates.</small></div><button type="button" className="secondary-action" onClick={() => setInvoiceLines((lines) => [...lines, { article_id: Number(data.articles?.[0]?.id || 0), size_label: defaultInvoiceItem?.size_label || "", quantity: 1, rate: Number(defaultInvoiceItem?.unit_price || 0) }])}><Plus /> Add item</button></div>
+              <div className="po-lines-head"><div><b>Invoice items</b><small>Select an article and colour. Every size in its price-list set is included automatically.</small></div><button type="button" className="secondary-action" onClick={() => setInvoiceLines((lines) => [...lines, { article_id: Number(data.articles?.[0]?.id || 0), set_template_id: Number(defaultInvoiceSet?.id || 0), colour: "", sets: 1 }])}><Plus /> Add article</button></div>
               {invoiceLines.map((line, index) => {
                 const article = data.articles.find((item: any) => Number(item.id) === Number(line.article_id));
-                const sizes = article?.sets?.flatMap((set: any) => set.items) || [];
+                const set = article?.sets?.find((item: any) => Number(item.id) === Number(line.set_template_id)) || article?.sets?.[0];
+                const colours = [...new Set((set?.items || []).flatMap((item: any) => String(item.colours || "").split(",")).map((colour: any) => String(colour).trim()).filter(Boolean))] as string[];
+                const piecesPerSet = Number(set?.pieces || (set?.items || []).reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0));
+                const setPrice = Number(set?.set_price || (set?.items || []).reduce((sum: number, item: any) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0), 0));
                 return <div className="po-line invoice-line" key={index}>
-                  <label>Article<select value={line.article_id} onChange={(e) => { const nextArticle = data.articles.find((item: any) => Number(item.id) === Number(e.target.value)); const item = nextArticle?.sets?.[0]?.items?.[0]; setInvoiceLines((lines) => lines.map((value, i) => i === index ? { ...value, article_id: Number(e.target.value), size_label: item?.size_label || "", rate: Number(item?.unit_price || nextArticle?.selling_price || 0) } : value)); }}>{data.articles.map((item: any) => <option value={item.id} key={item.id}>{item.code} — {item.name}</option>)}</select></label>
-                  <label>Size / item<select value={line.size_label} onChange={(e) => { const item = sizes.find((size: any) => size.size_label === e.target.value); setInvoiceLines((lines) => lines.map((value, i) => i === index ? { ...value, size_label: e.target.value, rate: Number(item?.unit_price || value.rate) } : value)); }}>{sizes.map((item: any) => <option value={item.size_label} key={`${item.id}-${item.size_label}`}>{item.item_code ? `${item.item_code} · ` : ""}Size {item.size_label}{item.colours ? ` · ${item.colours}` : ""}</option>)}</select></label>
-                  <label>Quantity<input type="number" min="0.01" step="0.01" value={line.quantity} onChange={(e) => setInvoiceLines((lines) => lines.map((value, i) => i === index ? { ...value, quantity: Number(e.target.value) } : value))} required /></label>
-                  <label>Rate<input type="number" min="0" step="0.01" value={line.rate} onChange={(e) => setInvoiceLines((lines) => lines.map((value, i) => i === index ? { ...value, rate: Number(e.target.value) } : value))} required /></label>
-                  <div className="po-line-total"><small>Line total</small><b>{money(Number(line.quantity || 0) * Number(line.rate || 0))}</b></div>
+                  <label>Article<select value={line.article_id} onChange={(e) => { const nextArticle = data.articles.find((item: any) => Number(item.id) === Number(e.target.value)); const nextSet = nextArticle?.sets?.find((item: any) => item.status !== "inactive") || nextArticle?.sets?.[0]; setInvoiceLines((lines) => lines.map((value, i) => i === index ? { ...value, article_id: Number(e.target.value), set_template_id: Number(nextSet?.id || 0), colour: "" } : value)); }}>{data.articles.map((item: any) => <option value={item.id} key={item.id}>{item.code} — {item.name}</option>)}</select></label>
+                  <label>Colour<select value={line.colour || ""} onChange={(e) => setInvoiceLines((lines) => lines.map((value, i) => i === index ? { ...value, colour: e.target.value } : value))} required><option value="" disabled>Select colour</option>{colours.map((colour) => <option value={colour} key={colour}>{colour}</option>)}</select></label>
+                  <label>Number of sets<input type="number" min="1" step="1" value={line.sets} onChange={(e) => setInvoiceLines((lines) => lines.map((value, i) => i === index ? { ...value, sets: Number(e.target.value) } : value))} required /></label>
+                  <div className="po-line-total"><small>{piecesPerSet} pieces/set · {(set?.items || []).map((item: any) => `${item.size_label}×${item.quantity}`).join(", ")}</small><b>{Number(line.sets || 0) * piecesPerSet} pieces</b></div>
+                  <div className="po-line-total"><small>Line total</small><b>{money(Number(line.sets || 0) * setPrice)}</b></div>
                   <button type="button" className="icon-action delete" disabled={invoiceLines.length === 1} onClick={() => setInvoiceLines((lines) => lines.filter((_, i) => i !== index))}><Trash2 /></button>
                 </div>;
               })}
