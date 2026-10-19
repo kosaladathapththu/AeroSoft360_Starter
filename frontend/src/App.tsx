@@ -2038,22 +2038,23 @@ function SalesCreateModal({
         ) : type === "po" || type === "sales_order" ? (
           <>
             <div className="form-row">
-              <label>
+              {!newCustomer && <><label>
                 Search customer
-                <input type="search" value={customerSearch} onChange={(event)=>setCustomerSearch(event.target.value)} placeholder="Search by name, code or phone" disabled={newCustomer} />
+                <input type="search" value={customerSearch} onChange={(event)=>setCustomerSearch(event.target.value)} placeholder="Search by name, code or phone" />
               </label>
               <label>
                 Customer
-                <select name="customer_id" value={selectedCustomerId} onChange={(event)=>setSelectedCustomerId(Number(event.target.value))} disabled={newCustomer} required={!newCustomer}>
+                <select name="customer_id" value={selectedCustomerId} onChange={(event)=>setSelectedCustomerId(Number(event.target.value))} required>
                   {visibleCustomers.map((x: any) => (
                     <option value={x.id} key={x.id}>
                       {x.code} — {x.name}
                     </option>
                   ))}
                 </select>
-                {!initial && <button type="button" className="inline-create" onClick={()=>setNewCustomer(value=>!value)}>{newCustomer ? "Choose existing customer" : "+ Enter new customer"}</button>}
-              </label>
+                {!initial && <button type="button" className="inline-create" onClick={()=>setNewCustomer(true)}>+ Enter new customer</button>}
+              </label></>}
               {newCustomer && <>
+                <div className="customer-mode-row"><b>New customer details</b><button type="button" className="inline-create" onClick={()=>setNewCustomer(false)}>Choose existing customer</button></div>
                 <label>New customer name<input name="customer_name" required placeholder="Customer or company name" /></label>
                 <label>Phone<input name="customer_phone" placeholder="Contact number" /></label>
                 <label>Credit days<input name="customer_credit_days" type="number" min="0" max="365" defaultValue="30" required /></label>

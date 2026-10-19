@@ -654,6 +654,7 @@ aside .user:hover { background: #173443; }
   background: #fff;
 }
 .po-line label:first-child { min-width: 0; }
+.customer-mode-row { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .po-line label:nth-child(2) { width: auto; }
 .po-line .icon-action { margin-bottom: 1px; }
 .po-line-total {
