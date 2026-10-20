@@ -640,6 +640,15 @@ aside .user:hover { background: #173443; }
 .article-details-button svg { width:16px; height:16px; }
 .article-details-button svg:last-child { width:14px; transition:transform .18s ease; }
 .article-details-button.active svg:last-child { transform:rotate(180deg); }
+.order-method-field > span { display:block; margin-bottom:7px; color:#162b3a; font-weight:700; }
+.order-method-options { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.order-method-options button { display:flex; align-items:center; gap:7px; min-height:52px; padding:7px 9px; border:1px solid #c5d8dc; border-radius:8px; background:#fff; color:#36535d; text-align:left; cursor:pointer; }
+.order-method-options button:hover { border-color:#70bbb5; background:#f1faf8; }
+.order-method-options button.active { border-color:#07998e; background:#dff5f1; color:#076d66; box-shadow:0 0 0 1px #07998e inset; }
+.order-method-options svg { width:18px; height:18px; flex:0 0 auto; }
+.order-method-options span,.order-method-options b,.order-method-options small { display:block; }
+.order-method-options b { font-size:12px; white-space:nowrap; }
+.order-method-options small { margin-top:2px; color:#6a7f86; font-size:10px; white-space:nowrap; }
 .po-lines-head {
   align-items: center;
   justify-content: space-between;

@@ -33,7 +33,7 @@ import "./actions.css";
 import "./reports.css";
 import "./tables.css";
 
-const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api/v1";
+const API = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
 type Supplier = {
   id: number;
   code: string;
@@ -580,6 +580,7 @@ function SalesPage({
     [editingTransaction, setEditingTransaction] = useState<any>(null),
     [editingArticle, setEditingArticle] = useState<any>(null),
     [editingPo, setEditingPo] = useState<any>(null),
+    [convertingPo, setConvertingPo] = useState<any>(null),
     [dispatchOrder, setDispatchOrder] = useState<any>(null),
     [poInvoiceOpen, setPoInvoiceOpen] = useState(false),
     [viewing, setViewing] = useState<any>(null),
@@ -1034,15 +1035,9 @@ function SalesPage({
                       {page === "Customer POs" && r.status === "draft" && (
                         <button
                           className="approve"
-                          onClick={async () => {
-                            try {
-                              await post(`customer-pos/${r.id}/convert`);
-                            } catch (e) {
-                              setError((e as Error).message);
-                            }
-                          }}
+                          onClick={() => setConvertingPo(r)}
                         >
-                          <Check /> Create sales order
+                          <Check /> Review &amp; create
                         </button>
                       )}
                       {page === "Sales Orders" &&
@@ -1198,6 +1193,22 @@ function SalesPage({
               setError("");
               await post(`sales-orders/${dispatchOrder.id}/invoice`, body);
               setDispatchOrder(null);
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        />
+      )}
+      {convertingPo && (
+        <ConvertPoModal
+          po={convertingPo}
+          data={data}
+          close={() => setConvertingPo(null)}
+          save={async (body) => {
+            try {
+              setError("");
+              await post(`customer-pos/${convertingPo.id}/convert`, body);
+              setConvertingPo(null);
             } catch (e) {
               setError((e as Error).message);
             }
@@ -1435,6 +1446,50 @@ function salesCells(page: string, r: any) {
     </>
   );
 }
+function ConvertPoModal({ po, data, close, save }: { po: any; data: any; close: () => void; save: (body: any) => Promise<void> }) {
+  const lines = useMemo(() => {
+    const expanded: any[] = [];
+    po.lines.forEach((line: any) => {
+      const article = data.articles.find((a: any) => Number(a.id) === Number(line.article_id));
+      const set = article?.sets.find((s: any) => Number(s.id) === Number(line.set_template_id));
+      if (line.order_mode === "size") {
+        const item = set?.items.find((i: any) => Number(i.id) === Number(line.set_item_id));
+        if (item) expanded.push({ key: `${line.id}|${item.id}`, po_line_id: line.id, set_item_id: item.id, article_code: line.article_code, article_name: line.article_name, size_label: item.size_label, colour: line.colour, ordered: Number(line.pieces), rate: Number(item.unit_price) });
+      } else {
+        set?.items.forEach((item: any) => expanded.push({ key: `${line.id}|${item.id}`, po_line_id: line.id, set_item_id: item.id, article_code: line.article_code, article_name: line.article_name, size_label: item.size_label, colour: line.colour, ordered: Number(item.quantity) * Number(line.sets), rate: Number(item.unit_price) }));
+      }
+    });
+    return expanded;
+  }, [po, data.articles]);
+  const [quantities, setQuantities] = useState<Record<string, number>>(Object.fromEntries(lines.map((line: any) => [line.key, line.ordered])));
+  const [busy, setBusy] = useState(false);
+  const total = lines.reduce((sum: number, line: any) => sum + Number(quantities[line.key] || 0) * line.rate, 0);
+  const changed = lines.filter((line: any) => Number(quantities[line.key] || 0) < line.ordered).length;
+  return <div className="backdrop" onMouseDown={close}><form className="modal dispatch-modal" onMouseDown={e => e.stopPropagation()} onSubmit={async e => {
+    e.preventDefault(); setBusy(true);
+    const form = new FormData(e.currentTarget);
+    try { await save({ order_date: form.get("order_date"), lines: lines.map((line: any) => ({ customer_po_line_id: line.po_line_id, set_item_id: line.set_item_id, quantity: Number(quantities[line.key] || 0) })) }); }
+    finally { setBusy(false); }
+  }}>
+    <button type="button" className="close" onClick={close}><X /></button>
+    <span>SALES ORDER REVIEW</span><h2>Confirm goods for sales order</h2>
+    <p><b>{po.customer_name}</b> — review every size before creating the order. Enter 0 for unavailable goods; reduced or missing quantities will not be added to this sales order.</p>
+    <label>Sales order date<input name="order_date" type="date" defaultValue={po.po_date || new Date().toISOString().slice(0, 10)} required /></label>
+    <div className="dispatch-lines">
+      <div className="dispatch-head"><b>Article / colour</b><b>Size</b><b>PO quantity</b><b>Order quantity</b><b>Difference</b><b>Amount</b></div>
+      {lines.map((line: any) => { const qty = Number(quantities[line.key] || 0); return <div className="dispatch-row" key={line.key}>
+        <span><b>{line.article_code}</b><small>{line.article_name}{line.colour ? ` · ${line.colour}` : ""}</small></span>
+        <span>{line.size_label}</span><span>{line.ordered}</span>
+        <input aria-label={`Order quantity for ${line.article_code} size ${line.size_label}`} type="number" min="0" max={line.ordered} step="1" value={qty} onChange={e => setQuantities(current => ({ ...current, [line.key]: Number(e.target.value) }))} />
+        <span>{qty === line.ordered ? "Full" : `${line.ordered - qty} missing`}</span><b>{money(qty * line.rate)}</b>
+      </div> })}
+    </div>
+    {changed > 0 && <div className="info">{changed} size line{changed === 1 ? " has" : "s have"} a reduced or missing quantity.</div>}
+    <div className="po-grand-total"><span>Reviewed sales order total</span><strong>{money(total)}</strong></div>
+    <div className="modal-actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy || total <= 0}>{busy ? <Loader2 /> : <Check />} Create reviewed sales order</button></div>
+  </form></div>;
+}
+
 function PoInvoiceModal({ data, close, save }: { data: any; close: () => void; save: (poId: number, body: any) => Promise<void> }) {
   const eligible=data.pos.filter((po:any)=>["draft","ordered"].includes(po.status));
   const [poId,setPoId]=useState<number>(Number(eligible[0]?.id||0));
@@ -2173,11 +2228,13 @@ function SalesCreateModal({
                     <button type="button" className={`article-details-button ${expandedPoLine===index?"active":""}`} aria-expanded={expandedPoLine===index} title={expandedPoLine===index?"Hide article details":"Show article details"} onClick={()=>setExpandedPoLine(expandedPoLine===index?null:index)}><Eye /><span>Details</span><ChevronDown /></button>
                     </div>
                   </label>
-                  <label>Order method
-                    <select value={line.order_mode} onChange={(e) => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, order_mode: e.target.value, custom_sizes: e.target.value === "custom" ? (Object.keys(x.custom_sizes || {}).length ? x.custom_sizes : {}) : x.custom_sizes } : x))}>
-                      <option value="badge">Complete set</option><option value="custom">Customize order</option>
-                    </select>
-                  </label>
+                  <div className="order-method-field">
+                    <span>Order method</span>
+                    <div className="order-method-options" role="group" aria-label="Order method">
+                      <button type="button" className={line.order_mode === "badge" ? "active" : ""} aria-pressed={line.order_mode === "badge"} onClick={() => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, order_mode: "badge" } : x))}><ClipboardCheck /><span><b>Complete set</b><small>Default pack</small></span></button>
+                      <button type="button" className={line.order_mode === "custom" ? "active" : ""} aria-pressed={line.order_mode === "custom"} onClick={() => setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, order_mode: "custom", custom_sizes: Object.keys(x.custom_sizes || {}).length ? x.custom_sizes : {} } : x))}><Settings /><span><b>Customize</b><small>Sizes & colours</small></span></button>
+                    </div>
+                  </div>
                   <label>{line.order_mode === "custom" ? "Colours" : "Colour / variant"}
                     {line.order_mode === "custom" ? <div className="custom-size-summary">Choose colours per size below</div> : <select value={line.colour || ""} onChange={(e)=>setPoLines(lines=>lines.map((x,i)=>i===index?{...x,colour:e.target.value}:x))}>
                       <option value="">Any / not specified</option>
@@ -2209,7 +2266,7 @@ function SalesCreateModal({
                   </div>}
                   {expandedPoLine===index && <div className="po-article-details">
                     <div className="po-detail-head"><b>Size</b><b>Item code</b><b>Colours</b><b>Pieces/set</b><b>Price</b><b>Available stock</b></div>
-                    {(data.articles.find((article:any)=>Number(article.id)===Number(line.article_id))?.sets||[]).flatMap((set:any)=>set.items).filter((item:any)=>!line.colour||(item.colours||"").toLowerCase().split(",").map((x:string)=>x.trim()).includes(line.colour.toLowerCase())).map((item:any)=><div className="po-detail-row" key={item.id}><span>{item.size_label}</span><span>{item.item_code||"—"}</span><span>{item.colours||"—"}</span><span>{item.quantity}</span><span>{money(item.unit_price)}</span><span>{Number((data.finished_stock||[]).find((stock:any)=>Number(stock.article_id)===Number(line.article_id)&&stock.size_label===item.size_label)?.quantity||0).toLocaleString()}</span></div>)}
+                    {(data.articles.find((article:any)=>Number(article.id)===Number(line.article_id))?.sets||[]).flatMap((set:any)=>set.items).filter((item:any)=>!line.colour||(item.colours||"").toLowerCase().split(",").map((x:string)=>x.trim()).includes(line.colour.toLowerCase())).map((item:any)=><div className="po-detail-row" key={item.id}><span>{item.size_label}</span><span>{item.item_code||"—"}</span><span>{line.colour||item.colours||"—"}</span><span>{item.quantity}</span><span>{money(item.unit_price)}</span><span>{Number((data.finished_stock||[]).find((stock:any)=>Number(stock.article_id)===Number(line.article_id)&&stock.size_label===item.size_label)?.quantity||0).toLocaleString()}</span></div>)}
                   </div>}
                 </div>;
               })}

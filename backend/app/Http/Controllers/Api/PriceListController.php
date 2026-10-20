@@ -7,8 +7,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Str;
+use Illuminate\Database\Schema\Blueprint;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
@@ -118,20 +118,24 @@ final class PriceListController extends Controller
                 $articleCode = (string) $articleKey;
                 $firstRow = collect($variantGroups)->flatten(1)->first();
                 $category = $firstRow['category'];
+                $articleName = Str::title(Str::lower($category));
+                $articleName = strcasecmp($articleName, 'Slippon') === 0 ? 'Slipon' : $articleName;
                 $price = $firstRow['price'];
 
                 $article = DB::table('articles')->where('code', $articleCode)->first();
                 if (!$article) {
                     $articleId = DB::table('articles')->insertGetId([
-                        'code'=>$articleCode, 'name'=>$articleCode, 'category'=>$category, 'set_name'=>'Price List',
-                        'pieces_per_set'=>1, 'selling_price'=>$price, 'commission_rate'=>0, 'status'=>'active',
+                        'code'=>$articleCode, 'name'=>$articleName, 'category'=>$category, 'set_name'=>'Price List',
+                        'pieces_per_set'=>count(collect($variantGroups)->first()) * 2, 'selling_price'=>$price, 'commission_rate'=>0, 'status'=>'active',
                         'created_at'=>now(), 'updated_at'=>now(),
                     ]);
                     $stats['articles_created']++;
                 } else {
                     $articleId = $article->id;
                     DB::table('articles')->where('id', $articleId)->update([
+                        'name'=>$category === 'UNCATEGORIZED' ? $article->name : $articleName,
                         'category'=>$category === 'UNCATEGORIZED' ? $article->category : $category,
+                        'pieces_per_set'=>count(collect($variantGroups)->first()) * 2,
                         'selling_price'=>$price, 'status'=>'active', 'updated_at'=>now(),
                     ]);
                     $stats['articles_updated']++;
@@ -151,7 +155,7 @@ final class PriceListController extends Controller
                     foreach ($groupRows as $itemRow) {
                         $item = DB::table('article_set_items')->where('set_template_id', $setId)->where('size_label', $itemRow['size'])->first();
                         $values = [
-                            'item_code'=>$itemRow['item_code'], 'colours'=>$itemRow['colours'], 'production_cost'=>$itemRow['cost'], 'quantity'=>1,
+                            'item_code'=>$itemRow['item_code'], 'colours'=>$itemRow['colours'], 'production_cost'=>$itemRow['cost'], 'quantity'=>2,
                             'unit_price'=>$itemRow['price'], 'price_source'=>$upload->getClientOriginalName(), 'source_row'=>$itemRow['line'], 'price_updated_at'=>now(),
                             'sort_order'=>is_numeric($itemRow['size']) ? (int) $itemRow['size'] : 999, 'updated_at'=>now(),
                         ];
