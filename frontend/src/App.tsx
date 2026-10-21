@@ -1490,6 +1490,24 @@ function ConvertPoModal({ po, data, close, save }: { po: any; data: any; close: 
   </form></div>;
 }
 
+function ArticleSearchPicker({ articles, selectedId, listId, onSelect }: { articles: any[]; selectedId: number; listId: string; onSelect: (article: any) => void }) {
+  const selected = articles.find((article: any) => Number(article.id) === Number(selectedId));
+  const labelFor = (article: any) => `${article.code} — ${article.name}${article.category ? ` · ${article.category}` : ""}`;
+  const [query, setQuery] = useState(selected ? labelFor(selected) : "");
+  useEffect(() => { setQuery(selected ? labelFor(selected) : ""); }, [selectedId]);
+  const choose = (value: string) => {
+    setQuery(value);
+    const normalized = value.trim().toLowerCase();
+    const match = articles.find((article: any) => labelFor(article).toLowerCase() === normalized || String(article.code).toLowerCase() === normalized);
+    if (match) { onSelect(match); setQuery(labelFor(match)); }
+  };
+  return <div className="searchable-article-select">
+    <Search aria-hidden="true" />
+    <input value={query} list={listId} placeholder="Search code, name or category" onChange={event => choose(event.target.value)} onBlur={() => setQuery(selected ? labelFor(selected) : "")} autoComplete="off" />
+    <datalist id={listId}>{articles.map((article: any) => <option value={labelFor(article)} key={article.id} />)}</datalist>
+  </div>;
+}
+
 function PoInvoiceModal({ data, close, save }: { data: any; close: () => void; save: (poId: number, body: any) => Promise<void> }) {
   const eligible=data.pos.filter((po:any)=>["draft","ordered"].includes(po.status));
   const [poId,setPoId]=useState<number>(Number(eligible[0]?.id||0));
@@ -2222,9 +2240,7 @@ function SalesCreateModal({
                 return <div className="po-line" key={index}>
                   <label>Article
                     <div className="article-picker-control">
-                    <select value={line.article_id} onChange={(e) => { const article=data.articles.find((a:any)=>Number(a.id)===Number(e.target.value)); const set=article?.sets?.find((s:any)=>s.status!=="inactive"); setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, article_id: Number(e.target.value), colour: "", set_template_id: Number(set?.id||0), set_item_id: Number(set?.items?.[0]?.id||0), custom_sizes: {}, custom_colours: {}, custom_colour_quantities: {} } : x)); }} required>
-                      {data.articles.map((article: any) => <option value={article.id} key={article.id}>{article.code} — {article.name}</option>)}
-                    </select>
+                    <ArticleSearchPicker articles={data.articles} selectedId={Number(line.article_id)} listId={`po-article-options-${index}`} onSelect={(article) => { const set=article?.sets?.find((s:any)=>s.status!=="inactive"); setPoLines((lines) => lines.map((x, i) => i === index ? { ...x, article_id: Number(article.id), colour: "", set_template_id: Number(set?.id||0), set_item_id: Number(set?.items?.[0]?.id||0), custom_sizes: {}, custom_colours: {}, custom_colour_quantities: {} } : x)); }} />
                     <button type="button" className={`article-details-button ${expandedPoLine===index?"active":""}`} aria-expanded={expandedPoLine===index} title={expandedPoLine===index?"Hide article details":"Show article details"} onClick={()=>setExpandedPoLine(expandedPoLine===index?null:index)}><Eye /><span>Details</span><ChevronDown /></button>
                     </div>
                   </label>

@@ -635,6 +635,10 @@ aside .user:hover { background: #173443; }
 .po-line select,
 .po-line input { min-width: 0; }
 .article-picker-control { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px; align-items:center; }
+.searchable-article-select { position:relative; min-width:0; }
+.searchable-article-select > svg { position:absolute; left:13px; top:50%; width:18px; height:18px; color:#70838c; transform:translateY(-50%); pointer-events:none; }
+.searchable-article-select input { width:100%; padding-left:41px; }
+.searchable-article-select input:focus { border-color:#07998e; box-shadow:0 0 0 2px rgba(7,153,142,.12); }
 .article-details-button { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:52px; padding:8px 10px; border:1px solid #9fc9cc; border-radius:8px; background:#f5fbfb; color:#087d76; font-weight:700; white-space:nowrap; cursor:pointer; }
 .article-details-button:hover,.article-details-button.active { border-color:#07998e; background:#e2f5f2; }
 .article-details-button svg { width:16px; height:16px; }
