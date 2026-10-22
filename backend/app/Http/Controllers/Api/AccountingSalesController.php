@@ -280,7 +280,10 @@ final class AccountingSalesController extends Controller
         $data = $request->validate([
             'customer_id'=>['required','integer','exists:customers,id'], 'sales_rep_id'=>['required','integer','exists:sales_representatives,id'],
             'invoice_date'=>['required','date'], 'due_date'=>['required','date','after_or_equal:invoice_date'], 'sale_type'=>['required','in:cash,credit,mixed'],
-            'reference'=>['nullable','string','max:80'], 'discount'=>['nullable','numeric','gte:0'], 'tax'=>['nullable','numeric','gte:0'],
+            'reference'=>['nullable','string','max:80'], 'discount'=>['nullable','numeric','gte:0'], 'other_deduction'=>['nullable','numeric','gte:0'], 'other_deduction_description'=>['nullable','string','max:120'],
+            'tax_type'=>['nullable','in:percentage,fixed'], 'tax_rate'=>['nullable','numeric','between:0,100'], 'tax'=>['nullable','numeric','gte:0'], 'other_charges'=>['nullable','numeric','gte:0'], 'other_charges_description'=>['nullable','string','max:120'],
+            'deduction_adjustments'=>['nullable','array'], 'deduction_adjustments.*.description'=>['required','string','max:120'], 'deduction_adjustments.*.type'=>['required','in:fixed,percentage'], 'deduction_adjustments.*.value'=>['required','numeric','gte:0'],
+            'charge_adjustments'=>['nullable','array'], 'charge_adjustments.*.description'=>['required','string','max:120'], 'charge_adjustments.*.type'=>['required','in:fixed,percentage'], 'charge_adjustments.*.value'=>['required','numeric','gte:0'],
             'lines'=>['required','array','min:1'], 'lines.*.article_id'=>['required','integer','exists:articles,id'],
             'lines.*.size_label'=>['required','string','max:30'], 'lines.*.colour'=>['nullable','string','max:80'], 'lines.*.quantity'=>['required','numeric','gt:0'], 'lines.*.rate'=>['required','numeric','gte:0'],
         ]);
@@ -289,9 +292,17 @@ final class AccountingSalesController extends Controller
             abort_unless($invoice, 404, 'Invoice not found.');
             abort_if(DB::table('receipt_allocations')->where('invoice_id', $id)->exists(), 422, 'This invoice has collections. Delete the collections before changing customer, salesperson, amounts or item lines.');
             $subtotal = round(collect($data['lines'])->sum(fn ($line) => $line['quantity'] * $line['rate']), 2);
-            $discount = round((float) ($data['discount'] ?? 0), 2); $tax = round((float) ($data['tax'] ?? 0), 2);
-            abort_if($discount > $subtotal, 422, 'Discount cannot exceed the invoice subtotal.');
-            $total = round($subtotal - $discount + $tax, 2); abort_if($total <= 0, 422, 'Invoice total must be greater than zero.');
+            $discount = round((float) ($data['discount'] ?? 0), 2);
+            $deductionAdjustments = collect($data['deduction_adjustments'] ?? [])->map(fn ($row) => ['description'=>trim($row['description']), 'type'=>$row['type'], 'value'=>(float)$row['value']])->values();
+            $chargeAdjustments = collect($data['charge_adjustments'] ?? [])->map(fn ($row) => ['description'=>trim($row['description']), 'type'=>$row['type'], 'value'=>(float)$row['value']])->values();
+            abort_if($deductionAdjustments->contains(fn ($row) => $row['type'] === 'percentage' && $row['value'] > 100) || $chargeAdjustments->contains(fn ($row) => $row['type'] === 'percentage' && $row['value'] > 100), 422, 'Adjustment percentages cannot exceed 100%.');
+            $otherDeduction = $deductionAdjustments->isNotEmpty() ? round($deductionAdjustments->sum(fn ($row) => $row['type'] === 'percentage' ? $subtotal * $row['value'] / 100 : $row['value']), 2) : round((float) ($data['other_deduction'] ?? 0), 2);
+            $otherCharges = $chargeAdjustments->isNotEmpty() ? round($chargeAdjustments->sum(fn ($row) => $row['type'] === 'percentage' ? $subtotal * $row['value'] / 100 : $row['value']), 2) : round((float) ($data['other_charges'] ?? 0), 2);
+            $tax = round((float) ($data['tax'] ?? 0), 2);
+            abort_if($otherDeduction > 0 && blank($data['other_deduction_description'] ?? null), 422, 'Enter the reason for the other deduction.');
+            abort_if($otherCharges > 0 && blank($data['other_charges_description'] ?? null), 422, 'Enter the description for the other charges.');
+            abort_if($discount + $otherDeduction > $subtotal, 422, 'Discount and other deductions cannot exceed the invoice subtotal.');
+            $total = round($subtotal - $discount - $otherDeduction + $tax + $otherCharges, 2); abort_if($total <= 0, 422, 'Invoice total must be greater than zero.');
             if (Schema::hasTable('finished_goods_movements')) app(FinishedGoodsInventoryService::class)->restoreInvoice($id, $data['invoice_date']);
             $oldLines = DB::table('sales_invoice_lines')->where('sales_invoice_id', $id)->get();
             foreach ($oldLines as $line) if ($line->sales_order_size_line_id) DB::table('sales_order_size_lines')->where('id', $line->sales_order_size_line_id)->decrement('invoiced_quantity', $line->quantity, ['updated_at'=>now()]);
@@ -310,11 +321,11 @@ final class AccountingSalesController extends Controller
                 }
                 DB::table('sales_invoice_lines')->insert(['sales_invoice_id'=>$id,'sales_order_size_line_id'=>$orderLineId,'article_id'=>$line['article_id'],'size_label'=>$line['size_label'],'colour'=>$line['colour']??null,'quantity'=>$line['quantity'],'rate'=>$line['rate'],'line_total'=>round($line['quantity']*$line['rate'],2),'created_at'=>now(),'updated_at'=>now()]);
             }
-            DB::table('sales_invoices')->where('id', $id)->update(['customer_id'=>$data['customer_id'],'sales_rep_id'=>$data['sales_rep_id'],'invoice_date'=>$data['invoice_date'],'due_date'=>$data['due_date'],'sale_type'=>$data['sale_type'],'subtotal'=>$subtotal,'discount'=>$discount,'tax'=>$tax,'total'=>$total,'outstanding'=>$total,'status'=>'unpaid','updated_at'=>now()]);
+            DB::table('sales_invoices')->where('id', $id)->update(['customer_id'=>$data['customer_id'],'sales_rep_id'=>$data['sales_rep_id'],'invoice_date'=>$data['invoice_date'],'due_date'=>$data['due_date'],'sale_type'=>$data['sale_type'],'subtotal'=>$subtotal,'discount'=>$discount,'other_deduction'=>$otherDeduction,'other_deduction_description'=>mb_substr($deductionAdjustments->pluck('description')->join(', ') ?: ($data['other_deduction_description']??''),0,120) ?: null,'deduction_adjustments'=>$deductionAdjustments->isNotEmpty()?json_encode($deductionAdjustments->all()):null,'tax_type'=>$data['tax_type']??'fixed','tax_rate'=>$data['tax_rate']??0,'tax'=>$tax,'other_charges'=>$otherCharges,'other_charges_description'=>mb_substr($chargeAdjustments->pluck('description')->join(', ') ?: ($data['other_charges_description']??''),0,120) ?: null,'charge_adjustments'=>$chargeAdjustments->isNotEmpty()?json_encode($chargeAdjustments->all()):null,'total'=>$total,'outstanding'=>$total,'status'=>'unpaid','updated_at'=>now()]);
             DB::table('customer_pos')->where('id', DB::table('sales_orders')->where('id',$invoice->sales_order_id)->value('customer_po_id'))->update(['customer_po_reference'=>$data['reference']??null,'updated_at'=>now()]);
             if (Schema::hasTable('finished_goods_movements')) app(FinishedGoodsInventoryService::class)->issueInvoice($id, $data['invoice_date']);
             $journalId=DB::table('journal_entries')->where(['source_type'=>'sales_invoice','source_id'=>$id])->value('id');
-            if($journalId){DB::table('journal_lines')->where('journal_entry_id',$journalId)->delete();$lines=[['1100',$total,0,'Accounts receivable'],['4000',0,$subtotal-$discount,'Domestic sales revenue']];if($tax>0)$lines[]=['2300',0,$tax,'Sales tax payable'];foreach($lines as[$code,$debit,$credit,$description]){$account=DB::table('accounts')->where('code',$code)->value('id');if($account)DB::table('journal_lines')->insert(['journal_entry_id'=>$journalId,'account_id'=>$account,'debit'=>$debit,'credit'=>$credit,'description'=>$description,'created_at'=>now(),'updated_at'=>now()]);}DB::table('journal_entries')->where('id',$journalId)->update(['posting_date'=>$data['invoice_date'],'description'=>"Customer invoice {$invoice->number}",'updated_at'=>now()]);}
+            if($journalId){DB::table('journal_lines')->where('journal_entry_id',$journalId)->delete();$lines=[['1100',$total,0,'Accounts receivable'],['4000',0,$subtotal-$discount-$otherDeduction+$otherCharges,'Domestic sales revenue and charges']];if($tax>0)$lines[]=['2300',0,$tax,'Sales tax payable'];foreach($lines as[$code,$debit,$credit,$description]){$account=DB::table('accounts')->where('code',$code)->value('id');if($account)DB::table('journal_lines')->insert(['journal_entry_id'=>$journalId,'account_id'=>$account,'debit'=>$debit,'credit'=>$credit,'description'=>$description,'created_at'=>now(),'updated_at'=>now()]);}DB::table('journal_entries')->where('id',$journalId)->update(['posting_date'=>$data['invoice_date'],'description'=>"Customer invoice {$invoice->number}",'updated_at'=>now()]);}
             return response()->json(DB::table('sales_invoices')->find($id));
         });
     }
@@ -388,8 +399,10 @@ final class AccountingSalesController extends Controller
             'customer_id'=>['required','integer','exists:customers,id'],
             'sales_rep_id'=>['required','integer','exists:sales_representatives,id'],
             'invoice_date'=>['required','date'], 'due_date'=>['nullable','date','after_or_equal:invoice_date'],
-            'sale_type'=>['required','in:cash,credit,mixed'], 'discount'=>['nullable','numeric','gte:0'],
-            'tax'=>['nullable','numeric','gte:0'], 'reference'=>['nullable','string','max:80'],
+            'sale_type'=>['required','in:cash,credit,mixed'], 'discount'=>['nullable','numeric','gte:0'], 'other_deduction'=>['nullable','numeric','gte:0'], 'other_deduction_description'=>['nullable','string','max:120'],
+            'tax_type'=>['nullable','in:percentage,fixed'], 'tax_rate'=>['nullable','numeric','between:0,100'], 'tax'=>['nullable','numeric','gte:0'], 'other_charges'=>['nullable','numeric','gte:0'], 'other_charges_description'=>['nullable','string','max:120'], 'reference'=>['nullable','string','max:80'],
+            'deduction_adjustments'=>['nullable','array'], 'deduction_adjustments.*.description'=>['required','string','max:120'], 'deduction_adjustments.*.type'=>['required','in:fixed,percentage'], 'deduction_adjustments.*.value'=>['required','numeric','gte:0'],
+            'charge_adjustments'=>['nullable','array'], 'charge_adjustments.*.description'=>['required','string','max:120'], 'charge_adjustments.*.type'=>['required','in:fixed,percentage'], 'charge_adjustments.*.value'=>['required','numeric','gte:0'],
             'lines'=>['required','array','min:1'], 'lines.*.article_id'=>['required','integer','exists:articles,id'],
             'lines.*.size_label'=>['required','string','max:30'], 'lines.*.colour'=>['nullable','string','max:80'], 'lines.*.quantity'=>['required','numeric','gt:0'],
             'lines.*.rate'=>['required','numeric','gte:0'],
@@ -398,9 +411,16 @@ final class AccountingSalesController extends Controller
             $customer = DB::table('customers')->find($data['customer_id']);
             $subtotal = round(collect($data['lines'])->sum(fn ($line) => $line['quantity'] * $line['rate']), 2);
             $discount = round((float) ($data['discount'] ?? 0), 2);
+            $deductionAdjustments = collect($data['deduction_adjustments'] ?? [])->map(fn ($row) => ['description'=>trim($row['description']), 'type'=>$row['type'], 'value'=>(float)$row['value']])->values();
+            $chargeAdjustments = collect($data['charge_adjustments'] ?? [])->map(fn ($row) => ['description'=>trim($row['description']), 'type'=>$row['type'], 'value'=>(float)$row['value']])->values();
+            abort_if($deductionAdjustments->contains(fn ($row) => $row['type'] === 'percentage' && $row['value'] > 100) || $chargeAdjustments->contains(fn ($row) => $row['type'] === 'percentage' && $row['value'] > 100), 422, 'Adjustment percentages cannot exceed 100%.');
+            $otherDeduction = $deductionAdjustments->isNotEmpty() ? round($deductionAdjustments->sum(fn ($row) => $row['type'] === 'percentage' ? $subtotal * $row['value'] / 100 : $row['value']), 2) : round((float) ($data['other_deduction'] ?? 0), 2);
             $tax = round((float) ($data['tax'] ?? 0), 2);
-            abort_if($discount > $subtotal, 422, 'Discount cannot exceed the invoice subtotal.');
-            $total = round($subtotal - $discount + $tax, 2);
+            $otherCharges = $chargeAdjustments->isNotEmpty() ? round($chargeAdjustments->sum(fn ($row) => $row['type'] === 'percentage' ? $subtotal * $row['value'] / 100 : $row['value']), 2) : round((float) ($data['other_charges'] ?? 0), 2);
+            abort_if($otherDeduction > 0 && blank($data['other_deduction_description'] ?? null), 422, 'Enter the reason for the other deduction.');
+            abort_if($otherCharges > 0 && blank($data['other_charges_description'] ?? null), 422, 'Enter the description for the other charges.');
+            abort_if($discount + $otherDeduction > $subtotal, 422, 'Discount and other deductions cannot exceed the invoice subtotal.');
+            $total = round($subtotal - $discount - $otherDeduction + $tax + $otherCharges, 2);
             abort_if($total <= 0, 422, 'Invoice total must be greater than zero.');
             $sequence = str_pad((string) (DB::table('sales_invoices')->count() + 1), 4, '0', STR_PAD_LEFT);
             $poId = DB::table('customer_pos')->insertGetId([
@@ -418,7 +438,7 @@ final class AccountingSalesController extends Controller
             $invoiceId = DB::table('sales_invoices')->insertGetId([
                 'number'=>$number, 'sales_order_id'=>$orderId, 'customer_id'=>$data['customer_id'], 'sales_rep_id'=>$data['sales_rep_id'],
                 'invoice_date'=>$data['invoice_date'], 'due_date'=>$dueDate, 'sale_type'=>$data['sale_type'], 'status'=>'unpaid',
-                'subtotal'=>$subtotal, 'discount'=>$discount, 'tax'=>$tax, 'total'=>$total, 'received_amount'=>0,
+                'subtotal'=>$subtotal, 'discount'=>$discount, 'other_deduction'=>$otherDeduction, 'other_deduction_description'=>mb_substr($deductionAdjustments->pluck('description')->join(', ') ?: ($data['other_deduction_description']??''),0,120) ?: null, 'deduction_adjustments'=>$deductionAdjustments->isNotEmpty()?json_encode($deductionAdjustments->all()):null, 'tax_type'=>$data['tax_type']??'fixed', 'tax_rate'=>$data['tax_rate']??0, 'tax'=>$tax, 'other_charges'=>$otherCharges, 'other_charges_description'=>mb_substr($chargeAdjustments->pluck('description')->join(', ') ?: ($data['other_charges_description']??''),0,120) ?: null, 'charge_adjustments'=>$chargeAdjustments->isNotEmpty()?json_encode($chargeAdjustments->all()):null, 'total'=>$total, 'received_amount'=>0,
                 'outstanding'=>$total, 'created_at'=>now(), 'updated_at'=>now(),
             ]);
             foreach ($data['lines'] as $line) {
@@ -436,7 +456,7 @@ final class AccountingSalesController extends Controller
             app(FinishedGoodsInventoryService::class)->issueInvoice($invoiceId, $data['invoice_date']);
             $journalLines = [
                 ['account_code'=>'1100', 'debit'=>$total, 'credit'=>0, 'description'=>'Accounts receivable'],
-                ['account_code'=>'4000', 'debit'=>0, 'credit'=>$subtotal - $discount, 'description'=>'Domestic sales revenue'],
+                ['account_code'=>'4000', 'debit'=>0, 'credit'=>$subtotal - $discount - $otherDeduction + $otherCharges, 'description'=>'Domestic sales revenue and charges'],
             ];
             if ($tax > 0) $journalLines[] = ['account_code'=>'2300', 'debit'=>0, 'credit'=>$tax, 'description'=>'Sales tax payable'];
             $journalId = $posting->post('sales_invoice', $invoiceId, $data['invoice_date'], "Manual customer invoice {$number}", $journalLines);
