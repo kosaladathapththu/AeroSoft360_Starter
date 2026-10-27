@@ -528,6 +528,30 @@ final class AccountingSalesController extends Controller
         return response()->json(['message'=>'Finished-goods stock adjusted.'], 201);
     }
 
+    public function updateFinishedStock(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(['quantity'=>['required','numeric','gte:0']]);
+        abort_unless(DB::table('finished_goods_stock')->where('id', $id)->exists(), 404, 'Finished-goods stock record not found.');
+        DB::table('finished_goods_stock')->where('id', $id)->update(['quantity'=>$data['quantity'], 'updated_at'=>now()]);
+        $this->audit('finished_goods_stock.updated', 'finished_goods_stock', $id, $data);
+        return response()->json(DB::table('finished_goods_stock')->find($id));
+    }
+
+    public function deleteFinishedStock(int $id): JsonResponse
+    {
+        $deleted = DB::table('finished_goods_stock')->where('article_id', $id)->delete();
+        abort_unless($deleted > 0, 404, 'Finished-goods article stock was not found.');
+        $this->audit('finished_goods_stock.deleted', 'article', $id, ['size_records'=>$deleted]);
+        return response()->json(['message'=>'All size stock records for the article were deleted.', 'records'=>$deleted]);
+    }
+
+    public function temporaryFillFinishedStock(): JsonResponse
+    {
+        $updated = DB::table('finished_goods_stock')->update(['quantity'=>50, 'updated_at'=>now()]);
+        $this->audit('finished_goods_stock.temporary_fill', 'finished_goods_stock', 0, ['quantity'=>50, 'records'=>$updated]);
+        return response()->json(['message'=>'Every finished-goods stock record was set to 50 pieces.', 'records'=>$updated]);
+    }
+
     private function audit(string $event, string $type, int $id, array $payload): void
     {
         DB::table('audit_logs')->insert(['event'=>$event, 'entity_type'=>$type, 'entity_id'=>$id, 'payload'=>json_encode($payload), 'created_at'=>now()]);

@@ -607,6 +607,7 @@ function SalesPage({
     [inventoryQuery, setInventoryQuery] = useState(""),
     [inventoryType, setInventoryType] = useState("all"),
     [inventoryCategory, setInventoryCategory] = useState("all"),
+    [inventoryRecord, setInventoryRecord] = useState<{ mode: "view" | "edit"; row: any } | null>(null),
     [expandedPriceArticles, setExpandedPriceArticles] = useState<Set<number>>(new Set());
   const priceFileRef = useRef<HTMLInputElement>(null);
   const salesTableRef = useRef<HTMLDivElement>(null);
@@ -975,14 +976,25 @@ function SalesPage({
     "Finished Goods Stock": ["Article", "Category", "Size", "Available quantity"],
     "Inventory Overview": ["Type", "Item", "Category", "Variant / batch", "Available quantity", "Unit"],
   };
+  const groupedFinishedStock = Object.values((data.finished_stock || []).reduce((groups: any, item: any) => {
+    const key = String(item.article_id);
+    if (!groups[key]) groups[key] = { ...item, id: `finished-article-${item.article_id}`, record_id: item.article_id, inventory_kind: "finished", type: "Finished goods", item: `${item.article_code} — ${item.article_name}`, category: item.category || "Uncategorized", quantity: 0, unit: "pcs", details: [] };
+    const article = (data.articles || []).find((entry: any) => Number(entry.id) === Number(item.article_id));
+    const colours = [...new Set((article?.sets || []).flatMap((set: any) => (set.items || []).filter((setItem: any) => String(setItem.size_label) === String(item.size_label)).flatMap((setItem: any) => splitColours(setItem.colours || ""))))] as string[];
+    groups[key].details.push({ ...item, colours });
+    groups[key].quantity += Number(item.quantity || 0);
+    groups[key].variant = `${groups[key].details.length} sizes`;
+    groups[key].size_labels = groups[key].details.map((entry: any) => entry.size_label).join(", ");
+    return groups;
+  }, {})) as any[];
   const inventoryRows = page === "Inventory Overview" ? [
-    ...(data.finished_stock || []).map((item: any) => ({ id: `finished-${item.id}`, type: "Finished goods", item: `${item.article_code} — ${item.article_name}`, category: item.category || "Uncategorized", variant: `Size ${item.size_label}`, quantity: Number(item.quantity || 0), unit: "pcs" })),
-    ...rawStock.map((item: Stock) => ({ id: `raw-${item.id}`, type: "Raw materials", item: `${item.code} — ${item.name}`, category: item.category || "Uncategorized", variant: `Batch ${item.batch_number}`, quantity: Number(item.quantity || 0), unit: "stock units" })),
+    ...groupedFinishedStock,
+    ...rawStock.map((item: Stock) => ({ ...item, id: `raw-${item.id}`, record_id: item.id, inventory_kind: "raw", type: "Raw materials", item: `${item.code} — ${item.name}`, category: item.category || "Uncategorized", variant: `Batch ${item.batch_number}`, quantity: Number(item.quantity || 0), unit: "stock units" })),
   ] : [];
   const inventoryCategories = [...new Set(inventoryRows.map((item: any) => item.category))].sort();
   const visibleInventoryRows = inventoryRows.filter((item: any) => {
     const query = inventoryQuery.trim().toLowerCase();
-    return (inventoryType === "all" || item.type === inventoryType) && (inventoryCategory === "all" || item.category === inventoryCategory) && (!query || `${item.item} ${item.category} ${item.variant} ${item.type}`.toLowerCase().includes(query));
+    return (inventoryType === "all" || item.type === inventoryType) && (inventoryCategory === "all" || item.category === inventoryCategory) && (!query || `${item.item} ${item.category} ${item.variant} ${item.size_labels || ""} ${item.type}`.toLowerCase().includes(query));
   });
   const finishedQuantity = inventoryRows.filter((item: any) => item.type === "Finished goods").reduce((sum: number, item: any) => sum + item.quantity, 0);
   const rawQuantity = inventoryRows.filter((item: any) => item.type === "Raw materials").reduce((sum: number, item: any) => sum + item.quantity, 0);
@@ -1036,15 +1048,15 @@ function SalesPage({
           <button type="button" onClick={() => setInventoryType("all")} className={inventoryType === "all" ? "active" : ""}><Warehouse /><span><small>All inventory records</small><b>{inventoryRows.length.toLocaleString()}</b></span></button>
           <button type="button" onClick={() => setInventoryType("Finished goods")} className={inventoryType === "Finished goods" ? "active" : ""}><PackagePlus /><span><small>Finished goods</small><b>{finishedQuantity.toLocaleString()} pcs</b></span></button>
           <button type="button" onClick={() => setInventoryType("Raw materials")} className={inventoryType === "Raw materials" ? "active" : ""}><Factory /><span><small>Raw materials</small><b>{rawQuantity.toLocaleString()} units</b></span></button>
-          <div className="inventory-manage-links"><small>Stock management</small><button type="button" onClick={() => go("Finished Goods Stock")}>Finished goods</button><button type="button" onClick={() => go("Raw Material Stock")}>Raw materials</button></div>
+          <div className="inventory-manage-links"><small>Stock management</small><button type="button" onClick={() => go("Finished Goods Stock")}>Finished goods</button><button type="button" onClick={() => go("Raw Material Stock")}>Raw materials</button><button type="button" className="temporary-stock-button" onClick={async()=>{if(!confirm("Set every finished-goods size balance to 50 pieces?"))return;try{await post("finished-stock/temporary-fill");}catch(e){setError((e as Error).message)}}}>Set all to 50 temporarily</button></div>
         </div>
         <div className="inventory-filters">
           <label>Search inventory<div><Search /><input value={inventoryQuery} onChange={event => setInventoryQuery(event.target.value)} placeholder="Article, product, size or batch" /></div></label>
           <label>Inventory type<select value={inventoryType} onChange={event => setInventoryType(event.target.value)}><option value="all">All inventory</option><option value="Finished goods">Finished goods</option><option value="Raw materials">Raw materials</option></select></label>
           <label>Category<select value={inventoryCategory} onChange={event => setInventoryCategory(event.target.value)}><option value="all">All categories</option>{inventoryCategories.map(category => <option value={category} key={category}>{category}</option>)}</select></label>
         </div>
-        <div className="table-card inventory-table-card"><table><thead><tr>{heads[page].map((heading: string) => <th key={heading}>{heading}</th>)}</tr></thead><tbody>
-          {visibleInventoryRows.length ? visibleInventoryRows.map((item: any) => <tr key={item.id}><td><span className={`inventory-type ${item.type === "Finished goods" ? "finished" : "raw"}`}>{item.type}</span></td><td><b>{item.item}</b></td><td>{item.category}</td><td>{item.variant}</td><td><b>{item.quantity.toLocaleString()}</b></td><td>{item.unit}</td></tr>) : <tr><td colSpan={heads[page].length}>No matching inventory records.</td></tr>}
+        <div className="table-card inventory-table-card"><table><thead><tr>{heads[page].map((heading: string) => <th key={heading}>{heading}</th>)}<th>Actions</th></tr></thead><tbody>
+          {visibleInventoryRows.length ? visibleInventoryRows.map((item: any) => <tr key={item.id}><td><span className={`inventory-type ${item.type === "Finished goods" ? "finished" : "raw"}`}>{item.type}</span></td><td><b>{item.item}</b></td><td>{item.category}</td><td>{item.variant}</td><td><b>{item.quantity.toLocaleString()}</b></td><td>{item.unit}</td><td><div className="row-actions"><button className="icon-action view" title="View all stock details" onClick={()=>setInventoryRecord({mode:"view",row:item})}><Eye/></button><button className="icon-action edit" title="Edit stock" onClick={()=>setInventoryRecord({mode:"edit",row:item})}><Pencil/></button><button className="icon-action delete" title="Delete stock record" onClick={async()=>{if(!confirm(`Delete ${item.item}, ${item.variant}?`))return;try{await post(item.inventory_kind==="finished"?`finished-stock/${item.record_id}`:`stock/${item.record_id}`,undefined,"DELETE");if(item.inventory_kind==="raw")window.location.reload();}catch(e){setError((e as Error).message)}}}><Trash2/></button></div></td></tr>) : <tr><td colSpan={heads[page].length+1}>No matching inventory records.</td></tr>}
         </tbody></table></div>
       </div> : <div ref={salesTableRef} className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}>
         <table>
@@ -1263,6 +1275,7 @@ function SalesPage({
       {viewing && (
         <RecordView page={page} row={viewing} close={() => setViewing(null)} />
       )}
+      {inventoryRecord && <InventoryRecordModal record={inventoryRecord} close={()=>setInventoryRecord(null)} save={post} fail={setError}/>}
       {pricePreview && (
         <div className="backdrop" onMouseDown={() => !priceImporting && setPricePreview(null)}>
           <div className="modal price-validation-modal" onMouseDown={(event) => event.stopPropagation()}>
@@ -1288,6 +1301,10 @@ function SalesPage({
       )}
     </>
   );
+}
+function InventoryRecordModal({record,close,save,fail}:{record:{mode:"view"|"edit";row:any};close:()=>void;save:(path:string,body?:any,method?:string)=>Promise<any>;fail:(message:string)=>void}) {
+  const row=record.row;
+  return <div className="backdrop" onMouseDown={close}><form className="modal inventory-record-modal" onMouseDown={event=>event.stopPropagation()} onSubmit={async event=>{event.preventDefault();const form=new FormData(event.currentTarget);try{if(row.inventory_kind==="finished")await Promise.all((row.details||[]).map((detail:any)=>save(`finished-stock/${detail.id}`,{quantity:Number(form.get(`quantity_${detail.id}`))},"PUT")));else{await save(`stock/${row.record_id}`,{batch_number:form.get("batch_number"),quantity:Number(form.get("quantity")),unit_cost:Number(form.get("unit_cost"))},"PUT");window.location.reload();}close();}catch(error){fail((error as Error).message)}}}><button type="button" className="close" onClick={close}><X/></button><span>INVENTORY RECORD</span><h2>{record.mode==="view"?row.item:`Edit ${row.item}`}</h2><div className="inventory-detail-grid inventory-summary-details"><div><small>Inventory type</small><b>{row.type}</b></div><div><small>Category</small><b>{row.category}</b></div><div><small>Total available</small><b>{Number(row.quantity).toLocaleString()} {row.unit}</b></div><div><small>{row.inventory_kind==="finished"?"Article code":"Material code"}</small><b>{row.article_code||row.code}</b></div></div>{row.inventory_kind==="finished"?<div className="inventory-size-details"><div className="inventory-size-head"><b>Size</b><b>Colours</b><b>Stock record</b><b>Available quantity</b></div>{(row.details||[]).map((detail:any)=><div className="inventory-size-line" key={detail.id}><b>Size {detail.size_label}</b><div className="inventory-colour-list">{detail.colours?.length?detail.colours.map((colour:string)=><span key={colour}><i className="colour-swatch" style={{background:colourHex(colour)}}/>{colour}</span>):<small>No colour specified</small>}</div><span>#{detail.id}</span>{record.mode==="edit"?<input name={`quantity_${detail.id}`} type="number" min="0" step="0.01" defaultValue={detail.quantity} required/>:<strong>{Number(detail.quantity).toLocaleString()} pcs</strong>}</div>)}</div>:record.mode==="edit"?<div className="inventory-edit-fields"><label>Batch number<input name="batch_number" defaultValue={row.batch_number} required/></label><label>Available quantity<input name="quantity" type="number" min="0" step="0.01" defaultValue={row.quantity} required/></label><label>Unit cost<input name="unit_cost" type="number" min="0" step="0.01" defaultValue={row.unit_cost} required/></label></div>:<div className="inventory-detail-grid"><div><small>Batch number</small><b>{row.batch_number}</b></div><div><small>Material name</small><b>{row.name}</b></div><div><small>Unit cost</small><b>{money(row.unit_cost)}</b></div><div><small>Stock record</small><b>#{row.record_id}</b></div></div>}<div className="actions"><button type="button" onClick={close}>Close</button>{record.mode==="edit"&&<button className="primary" type="submit"><Check/> Save all sizes</button>}</div></form></div>;
 }
 function SalesTransactionEditModal({ page, row, data, close, save }: { page: string; row: any; data: any; close: () => void; save: (path: string, body: any) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
@@ -1506,31 +1523,51 @@ function ConvertPoModal({ po, data, close, save }: { po: any; data: any; close: 
     return expanded;
   }, [po, data.articles]);
   const [quantities, setQuantities] = useState<Record<string, number>>(Object.fromEntries(lines.map((line: any) => [line.key, line.ordered])));
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const total = lines.reduce((sum: number, line: any) => sum + Number(quantities[line.key] || 0) * line.rate, 0);
-  const changed = lines.filter((line: any) => Number(quantities[line.key] || 0) < line.ordered).length;
-  return <div className="backdrop" onMouseDown={close}><form className="modal dispatch-modal" onMouseDown={e => e.stopPropagation()} onSubmit={async e => {
-    e.preventDefault(); setBusy(true);
+  const quantityFor = (line: any) => removed.has(line.key) ? 0 : Number(quantities[line.key] || 0);
+  const total = lines.reduce((sum: number, line: any) => sum + Math.round(quantityFor(line) * line.rate * 100) / 100, 0);
+  const pieces = lines.reduce((sum: number, line: any) => sum + quantityFor(line), 0);
+  const included = lines.filter((line: any) => quantityFor(line) > 0).length;
+  const invalid = lines.some((line: any) => !Number.isInteger(quantityFor(line)) || quantityFor(line) < 0 || quantityFor(line) > line.ordered);
+  return <div className="backdrop" onMouseDown={() => { if (!busy) close(); }}><form className="modal dispatch-modal order-review" role="dialog" aria-modal="true" aria-labelledby="order-review-title" onMouseDown={e => e.stopPropagation()} onKeyDown={e => { if (e.key === "Escape" && !busy) close(); }} onSubmit={async e => {
+    e.preventDefault();
+    if (busy || invalid || included === 0 || total <= 0) return;
+    setBusy(true);
     const form = new FormData(e.currentTarget);
-    try { await save({ order_date: form.get("order_date"), lines: lines.map((line: any) => ({ customer_po_line_id: line.po_line_id, set_item_id: line.set_item_id, quantity: Number(quantities[line.key] || 0) })) }); }
+    try { await save({ order_date: form.get("order_date"), lines: lines.map((line: any) => ({ customer_po_line_id: line.po_line_id, set_item_id: line.set_item_id, quantity: quantityFor(line) })) }); }
     finally { setBusy(false); }
   }}>
-    <button type="button" className="close" onClick={close}><X /></button>
-    <span>SALES ORDER REVIEW</span><h2>Confirm goods for sales order</h2>
-    <p><b>{po.customer_name}</b> — review every size before creating the order. Enter 0 for unavailable goods; reduced or missing quantities will not be added to this sales order.</p>
-    <label>Sales order date<input name="order_date" type="date" defaultValue={po.po_date || new Date().toISOString().slice(0, 10)} required /></label>
+    <div className="order-review-header">
+    <button type="button" className="close" aria-label="Close review" disabled={busy} onClick={close}><X /></button>
+    <span>SALES ORDER REVIEW</span><h2 id="order-review-title">Review your order</h2>
+    <p>Edit quantities or remove sizes before creating the sales order.</p>
+    </div>
+    <div className="order-review-body">
+    <div className="order-review-context"><div><small>CUSTOMER</small><strong>{po.customer_name}</strong><span>{po.number || "Customer purchase order"}</span></div>
+    <label>Sales order date<input name="order_date" type="date" defaultValue={po.po_date || new Date().toISOString().slice(0, 10)} required disabled={busy} /></label></div>
+    <div className="order-review-section"><h3>Order items <span>{lines.length}</span></h3><span><Pencil size={14} /> Edit order quantities below</span></div>
     <div className="dispatch-lines">
-      <div className="dispatch-head"><b>Article / colour</b><b>Size</b><b>PO quantity</b><b>Order quantity</b><b>Difference</b><b>Amount</b></div>
-      {lines.map((line: any) => { const qty = Number(quantities[line.key] || 0); return <div className="dispatch-row" key={line.key}>
+      <div className="dispatch-head"><b>Article / colour</b><b>Size</b><b>PO qty</b><b>Order qty</b><b>Status</b><b>Amount</b><b>Action</b></div>
+      {lines.map((line: any) => {
+        const qty = quantityFor(line); const isRemoved = removed.has(line.key);
+        const label = `${line.article_code}, ${line.colour || "no colour"}, size ${line.size_label}`;
+        return <div className={`dispatch-row ${isRemoved ? "is-removed" : ""}`} key={line.key}>
         <span><b>{line.article_code}</b><small>{line.article_name}{line.colour ? ` · ${line.colour}` : ""}</small></span>
-        <span>{line.size_label}</span><span>{line.ordered}</span>
-        <input aria-label={`Order quantity for ${line.article_code} size ${line.size_label}`} type="number" min="0" max={line.ordered} step="1" value={qty} onChange={e => setQuantities(current => ({ ...current, [line.key]: Number(e.target.value) }))} />
-        <span>{qty === line.ordered ? "Full" : `${line.ordered - qty} missing`}</span><b>{money(qty * line.rate)}</b>
+        <span className="order-review-size">{line.size_label}</span><span className="order-review-original">{line.ordered}</span>
+        <input aria-label={`Order quantity for ${label}`} type="number" min="0" max={line.ordered} step="1" required disabled={busy || isRemoved} value={isRemoved ? 0 : quantities[line.key]} onChange={e => setQuantities(current => ({ ...current, [line.key]: Number(e.target.value) }))} />
+        <span className={`order-review-status ${isRemoved || qty === 0 ? "excluded" : qty === line.ordered ? "full" : "partial"}`}>{isRemoved ? "Removed" : qty === 0 ? "Excluded" : qty === line.ordered ? "Full quantity" : `${line.ordered - qty} fewer`}</span>
+        <span className="order-review-amount"><b>{money(qty * line.rate)}</b><small>{money(line.rate)} / piece</small></span>
+        <button type="button" className={`order-review-remove ${isRemoved ? "restore" : ""}`} disabled={busy} aria-label={`${isRemoved ? "Restore" : "Remove"} ${label}`} title={isRemoved ? "Restore item" : "Remove item"} onClick={() => setRemoved(current => { const next = new Set(current); if (next.has(line.key)) next.delete(line.key); else next.add(line.key); return next; })}>{isRemoved ? <><RefreshCw size={14} /> Undo</> : <Trash2 size={17} />}</button>
       </div> })}
     </div>
-    {changed > 0 && <div className="info">{changed} size line{changed === 1 ? " has" : "s have"} a reduced or missing quantity.</div>}
-    <div className="po-grand-total"><span>Reviewed sales order total</span><strong>{money(total)}</strong></div>
-    <div className="modal-actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy || total <= 0}>{busy ? <Loader2 /> : <Check />} Create reviewed sales order</button></div>
+    <p className="order-review-note">Removed items and quantities of 0 are excluded from this sales order. Undo a removal to restore its quantity.</p>
+    </div>
+    <div className="order-review-footer">
+    <div className="po-grand-total" aria-live="polite"><div><span>Reviewed order total</span><small>{included} sizes included · {pieces.toLocaleString()} pieces{removed.size > 0 ? ` · ${removed.size} removed` : ""}</small></div><strong>{money(total)}</strong></div>
+    {included === 0 && <p className="order-review-note" role="status">Restore an item or enter a quantity to create an order.</p>}
+    <div className="modal-actions"><button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy || invalid || total <= 0 || included === 0}>{busy ? <Loader2 /> : <Check />} {busy ? "Creating order…" : "Create sales order"}</button></div>
+    </div>
   </form></div>;
 }
 
