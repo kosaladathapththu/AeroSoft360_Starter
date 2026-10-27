@@ -2016,7 +2016,7 @@ function SalesCreateModal({
   return (
     <div className="backdrop" onMouseDown={close}>
       <form
-        className={`modal ${type === "po" || type === "sales_order" || type === "invoice" ? "po-modal" : type === "article" ? "price-modal" : ""}`}
+        className={`modal ${type === "po" || type === "sales_order" || type === "invoice" ? "po-modal" : type === "article" ? "price-modal" : type === "commission" ? "commission-modal" : ""}`}
         onSubmit={submit}
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -2533,21 +2533,23 @@ function SalesCreateModal({
             </div>
           </>
         ) : type === "commission" ? (
-          <>
-            <div className="form-row">
+          <div className="commission-body">
+            <section className="commission-section"><h3>Commission details</h3><p>Choose who receives the commission and when.</p><div className="form-row">
               <label>Salesperson<select name="sales_rep_id" required defaultValue={initial?.sales_rep_id}>{data.reps.map((rep: any) => <option value={rep.id} key={rep.id}>{rep.code} — {rep.name}</option>)}</select></label>
               <label>Commission date<input name="commission_date" type="date" required defaultValue={initial?.receipt_date || new Date().toISOString().slice(0, 10)} /></label>
-              <label>Customer (optional)<select name="customer_id" defaultValue={initial?.customer_id || ""}><option value="">Not linked</option>{data.customers.map((customer: any) => <option value={customer.id} key={customer.id}>{customer.code} — {customer.name}</option>)}</select></label>
-              <label>Invoice (optional)<select name="invoice_id" defaultValue={initial?.invoice_id || ""}><option value="">Not linked</option>{data.invoices.map((invoice: any) => <option value={invoice.id} key={invoice.id}>{invoice.number} — {invoice.customer_name}</option>)}</select></label>
-              <label>Receipt (optional)<select name="receipt_id" defaultValue={initial?.receipt_id || ""}><option value="">Not linked</option>{data.receipts.map((receipt: any) => <option value={receipt.id} key={receipt.id}>{receipt.number} — {receipt.customer_name}</option>)}</select></label>
-              <label>Basis quantity / pieces<input name="basis_amount" type="number" min="0" step="0.01" value={commissionBasis} onChange={(event) => setCommissionBasis(Number(event.target.value))} required /></label>
+            </div></section><section className="commission-section"><h3>Linked records <span>Optional</span></h3><div className="commission-links">
+              <label>Customer<select name="customer_id" defaultValue={initial?.customer_id || ""}><option value="">Not linked</option>{data.customers.map((customer: any) => <option value={customer.id} key={customer.id}>{customer.code} — {customer.name}</option>)}</select></label>
+              <label>Invoice<select name="invoice_id" defaultValue={initial?.invoice_id || ""}><option value="">Not linked</option>{data.invoices.map((invoice: any) => <option value={invoice.id} key={invoice.id}>{invoice.number} — {invoice.customer_name}</option>)}</select></label>
+              <label>Receipt<select name="receipt_id" defaultValue={initial?.receipt_id || ""}><option value="">Not linked</option>{data.receipts.map((receipt: any) => <option value={receipt.id} key={receipt.id}>{receipt.number} — {receipt.customer_name}</option>)}</select></label>
+            </div></section><section className="commission-section commission-calculation"><h3>Calculate commission</h3><p>Quantity multiplied by the rate per piece.</p><div className="form-row">
+              <label>Quantity (pieces)<input name="basis_amount" type="number" min="0" step="0.01" value={commissionBasis} onChange={(event) => setCommissionBasis(Number(event.target.value))} required /></label>
               <label>Rate per piece<input name="commission_rate" type="number" min="0" step="0.01" value={commissionRate} onChange={(event) => setCommissionRate(Number(event.target.value))} required /></label>
-              <label>Commission amount<input name="commission_amount" type="number" value={calculatedCommission} readOnly required /></label>
+              <label className="commission-result">Total commission (LKR)<input name="commission_amount" type="number" value={calculatedCommission} readOnly required /></label>
               {initial?.source_type === "automatic" && <label>Status<select name="commission_status" defaultValue={initial?.commission_status || "eligible"}><option value="eligible">Eligible</option><option value="blocked_late">Blocked late</option><option value="void">Void</option></select></label>}
             </div>
-            <label>Notes<input name="notes" maxLength={255} defaultValue={initial?.notes} placeholder="Reason or approval reference" /></label>
-            <p className="report-note">{initial?.source_type === "automatic" ? "Changes update the commission portion of the linked receipt journal without changing the customer payment." : "Saving posts the commission expense and commission payable journal automatically."}</p>
-          </>
+            </section><section className="commission-section"><label>Notes <span className="commission-optional">Optional</span><input name="notes" maxLength={255} defaultValue={initial?.notes} placeholder="Reason or approval reference" /></label>
+            </section><p className="report-note">{initial?.source_type === "automatic" ? "Changes update the commission portion of the linked receipt journal without changing the customer payment." : "Saving posts the commission expense and commission payable journal automatically."}</p>
+          </div>
         ) : (
           <>
             <label>

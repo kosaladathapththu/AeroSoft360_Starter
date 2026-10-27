@@ -908,6 +908,36 @@ aside .user:hover { background: #173443; }
 .po-total-pieces { display:flex; align-items:baseline; gap:8px; margin-left:auto; margin-right:32px; }
 .po-total-pieces small { color:#bfe1e3; font-size:12px; }
 .po-total-pieces b { font-size:18px; }
+.modal.commission-modal { width:min(820px,100%); max-height:90dvh; padding:26px 0 0; display:flex; flex-direction:column; overflow:hidden; border:1px solid #dce5eb; border-radius:16px; box-shadow:0 24px 80px #071d3540; }
+.commission-modal > span { margin:0 28px; color:#718491; font-size:10px; letter-spacing:1.6px; flex-shrink:0; }
+.commission-modal > h2 { margin:8px 60px 22px 28px; font-size:25px; color:#183747; flex-shrink:0; }
+.commission-modal .close { width:32px; height:32px; display:grid; place-items:center; border-radius:8px; color:#647785; background:#f2f5f7; }
+.commission-body { min-height:0; overflow-y:auto; padding:0 28px 20px; border-top:1px solid #e6edf0; background:#f7f9fb; }
+.commission-section { margin-top:16px; padding:18px 20px; background:white; border:1px solid #e0e7ec; border-radius:10px; }
+.commission-section h3 { margin:0; color:#254657; font-size:14px; font-weight:800; }
+.commission-section h3 > span,.commission-optional { margin-left:6px; font-size:11px; font-weight:400; color:#81919d; }
+.commission-section > p { margin:5px 0 0; font-size:12px; line-height:1.5; color:#7b8c98; }
+.commission-modal .form-row { gap:12px 18px; }
+.commission-modal label { margin-top:14px; color:#4b6474; font-size:12px; font-weight:600; }
+.commission-modal input,.commission-modal select { margin-top:7px; padding:10px 12px; min-height:42px; font-size:13px; font-weight:500; border-color:#d6e0e7; border-radius:7px; }
+.commission-modal input:focus-visible,.commission-modal select:focus-visible,.commission-modal button:focus-visible { outline:3px solid #6ac3ba; outline-offset:2px; }
+.commission-links { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+.commission-links select { min-width:0; text-overflow:ellipsis; }
+.commission-calculation .commission-result { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 16px; border:1px solid #cce4df; border-radius:8px; background:#f0f8f5; color:#277265; }
+.commission-calculation .commission-result input { margin:0; width:45%; min-height:0; padding:0; border:0; background:transparent; font-size:24px; font-weight:800; text-align:right; color:#146659; font-variant-numeric:tabular-nums; }
+.commission-section > label { margin-top:0; }
+.commission-modal .report-note { margin:14px 0 0; padding:0 2px; border:0; background:transparent; color:#7a8b98; font-size:11px; line-height:1.6; }
+.commission-modal > .actions { flex-shrink:0; margin:0; padding:16px 28px; border-top:1px solid #dfe7ec; background:white; gap:10px; }
+.commission-modal > .actions button:first-child { color:#586e7d; font-size:13px; font-weight:600; padding:11px 20px; }
+@media(max-width:600px) {
+  .modal.commission-modal { max-height:94dvh; padding-top:20px; }
+  .commission-modal > span { margin-left:18px; }
+  .commission-modal > h2 { margin-left:18px; font-size:21px; }
+  .commission-body { padding:0 14px 14px; }
+  .commission-section { padding:16px; }
+  .commission-links,.commission-modal .form-row { grid-template-columns:1fr; gap:0; }
+  .commission-modal > .actions { padding:14px 18px; }
+}
 .dispatch-modal { width: min(1050px, calc(100vw - 40px)); }
 .dispatch-lines { margin-top: 16px; border: 1px solid #cbdde1; border-radius: 10px; overflow: auto; }
 .dispatch-head,
