@@ -32,6 +32,8 @@ import "./styles.css";
 import "./actions.css";
 import "./reports.css";
 import "./tables.css";
+import "./popups.css";
+import { confirmDialog, showNotice } from "./AppDialogs";
 
 const API = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
 type Supplier = {
@@ -297,7 +299,7 @@ export default function App() {
           : page === "General Ledger"
             ? "journal"
             : "purchase order";
-    if (!window.confirm(`Delete this ${kind}? This action cannot be undone.`))
+    if (!await confirmDialog(`Delete this ${kind}? This action cannot be undone.`))
       return;
     const path =
       page === "Suppliers"
@@ -1278,10 +1280,12 @@ function SalesPage({
       {inventoryRecord && <InventoryRecordModal record={inventoryRecord} close={()=>setInventoryRecord(null)} save={post} fail={setError}/>}
       {pricePreview && (
         <div className="backdrop" onMouseDown={() => !priceImporting && setPricePreview(null)}>
-          <div className="modal price-validation-modal" onMouseDown={(event) => event.stopPropagation()}>
-            <button type="button" className="close" disabled={priceImporting} onClick={() => setPricePreview(null)}><X /></button>
+          <div className="modal price-validation-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+            <button type="button" className="close" disabled={priceImporting} onClick={() => setPricePreview(null)} aria-label="Close dialog"><X /></button>
             <span>PRICE LIST VALIDATION</span>
-            <h2>Review before import</h2>
+            <h2>Review before import</h2></div>
+<div className="popup-body">
             <p><b>{pricePreview.file_name}</b> · Sheet: {pricePreview.sheet_name}</p>
             <div className="validation-summary">
               <article><span>Valid rows</span><b>{pricePreview.valid_rows}</b></article>
@@ -1292,10 +1296,11 @@ function SalesPage({
             {pricePreview.missing_columns.length > 0 && <div className="error">Missing required columns: {pricePreview.missing_columns.join(", ")}</div>}
             {pricePreview.warnings.length > 0 && <div className="validation-warnings"><b>Validation warnings</b><ul>{pricePreview.warnings.slice(0, 12).map((warning: string) => <li key={warning}>{warning}</li>)}</ul>{pricePreview.warnings.length > 12 && <small>And {pricePreview.warnings.length - 12} more warnings.</small>}</div>}
             {pricePreview.sample.length > 0 && <div className="validation-preview"><b>First validated rows</b><div className="table-card"><table><thead><tr><th>Row</th><th>Article</th><th>Item code</th><th>Size</th><th>Selling price</th></tr></thead><tbody>{pricePreview.sample.map((row: any) => <tr key={row.row}><td>{row.row}</td><td>{row.article}</td><td>{row.item_code}</td><td>{row.size}</td><td>{money(row.selling_price)}</td></tr>)}</tbody></table></div></div>}
-            <div className="actions">
+            </div>
+<div className="popup-footer"><div className="actions">
               <button type="button" disabled={priceImporting} onClick={() => { setPricePreview(null); setPendingPriceFile(null); if (priceFileRef.current) priceFileRef.current.value = ""; }}>Cancel</button>
               <button type="button" className="primary" disabled={!pricePreview.can_import || priceImporting} onClick={confirmPriceImport}>{priceImporting ? <Loader2 /> : <Check />} Confirm import</button>
-            </div>
+            </div></div>
           </div>
         </div>
       )}
@@ -1304,7 +1309,10 @@ function SalesPage({
 }
 function InventoryRecordModal({record,close,save,fail}:{record:{mode:"view"|"edit";row:any};close:()=>void;save:(path:string,body?:any,method?:string)=>Promise<any>;fail:(message:string)=>void}) {
   const row=record.row;
-  return <div className="backdrop" onMouseDown={close}><form className="modal inventory-record-modal" onMouseDown={event=>event.stopPropagation()} onSubmit={async event=>{event.preventDefault();const form=new FormData(event.currentTarget);try{if(row.inventory_kind==="finished")await Promise.all((row.details||[]).map((detail:any)=>save(`finished-stock/${detail.id}`,{quantity:Number(form.get(`quantity_${detail.id}`))},"PUT")));else{await save(`stock/${row.record_id}`,{batch_number:form.get("batch_number"),quantity:Number(form.get("quantity")),unit_cost:Number(form.get("unit_cost"))},"PUT");window.location.reload();}close();}catch(error){fail((error as Error).message)}}}><button type="button" className="close" onClick={close}><X/></button><span>INVENTORY RECORD</span><h2>{record.mode==="view"?row.item:`Edit ${row.item}`}</h2><div className="inventory-detail-grid inventory-summary-details"><div><small>Inventory type</small><b>{row.type}</b></div><div><small>Category</small><b>{row.category}</b></div><div><small>Total available</small><b>{Number(row.quantity).toLocaleString()} {row.unit}</b></div><div><small>{row.inventory_kind==="finished"?"Article code":"Material code"}</small><b>{row.article_code||row.code}</b></div></div>{row.inventory_kind==="finished"?<div className="inventory-size-details"><div className="inventory-size-head"><b>Size</b><b>Colours</b><b>Stock record</b><b>Available quantity</b></div>{(row.details||[]).map((detail:any)=><div className="inventory-size-line" key={detail.id}><b>Size {detail.size_label}</b><div className="inventory-colour-list">{detail.colours?.length?detail.colours.map((colour:string)=><span key={colour}><i className="colour-swatch" style={{background:colourHex(colour)}}/>{colour}</span>):<small>No colour specified</small>}</div><span>#{detail.id}</span>{record.mode==="edit"?<input name={`quantity_${detail.id}`} type="number" min="0" step="0.01" defaultValue={detail.quantity} required/>:<strong>{Number(detail.quantity).toLocaleString()} pcs</strong>}</div>)}</div>:record.mode==="edit"?<div className="inventory-edit-fields"><label>Batch number<input name="batch_number" defaultValue={row.batch_number} required/></label><label>Available quantity<input name="quantity" type="number" min="0" step="0.01" defaultValue={row.quantity} required/></label><label>Unit cost<input name="unit_cost" type="number" min="0" step="0.01" defaultValue={row.unit_cost} required/></label></div>:<div className="inventory-detail-grid"><div><small>Batch number</small><b>{row.batch_number}</b></div><div><small>Material name</small><b>{row.name}</b></div><div><small>Unit cost</small><b>{money(row.unit_cost)}</b></div><div><small>Stock record</small><b>#{row.record_id}</b></div></div>}<div className="actions"><button type="button" onClick={close}>Close</button>{record.mode==="edit"&&<button className="primary" type="submit"><Check/> Save all sizes</button>}</div></form></div>;
+  return <div className="backdrop" onMouseDown={close}><form className="modal inventory-record-modal" onMouseDown={event=>event.stopPropagation()} onSubmit={async event=>{event.preventDefault();const form=new FormData(event.currentTarget);try{if(row.inventory_kind==="finished")await Promise.all((row.details||[]).map((detail:any)=>save(`finished-stock/${detail.id}`,{quantity:Number(form.get(`quantity_${detail.id}`))},"PUT")));else{await save(`stock/${row.record_id}`,{batch_number:form.get("batch_number"),quantity:Number(form.get("quantity")),unit_cost:Number(form.get("unit_cost"))},"PUT");window.location.reload();}close();}catch(error){fail((error as Error).message)}}} role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header"><button type="button" className="close" onClick={close} aria-label="Close dialog"><X/></button><span>INVENTORY RECORD</span><h2>{record.mode==="view"?row.item:`Edit ${row.item}`}</h2></div>
+<div className="popup-body"><div className="inventory-detail-grid inventory-summary-details"><div><small>Inventory type</small><b>{row.type}</b></div><div><small>Category</small><b>{row.category}</b></div><div><small>Total available</small><b>{Number(row.quantity).toLocaleString()} {row.unit}</b></div><div><small>{row.inventory_kind==="finished"?"Article code":"Material code"}</small><b>{row.article_code||row.code}</b></div></div>{row.inventory_kind==="finished"?<div className="inventory-size-details"><div className="inventory-size-head"><b>Size</b><b>Colours</b><b>Stock record</b><b>Available quantity</b></div>{(row.details||[]).map((detail:any)=><div className="inventory-size-line" key={detail.id}><b>Size {detail.size_label}</b><div className="inventory-colour-list">{detail.colours?.length?detail.colours.map((colour:string)=><span key={colour}><i className="colour-swatch" style={{background:colourHex(colour)}}/>{colour}</span>):<small>No colour specified</small>}</div><span>#{detail.id}</span>{record.mode==="edit"?<input name={`quantity_${detail.id}`} type="number" min="0" step="0.01" defaultValue={detail.quantity} required/>:<strong>{Number(detail.quantity).toLocaleString()} pcs</strong>}</div>)}</div>:record.mode==="edit"?<div className="inventory-edit-fields"><label>Batch number<input name="batch_number" defaultValue={row.batch_number} required/></label><label>Available quantity<input name="quantity" type="number" min="0" step="0.01" defaultValue={row.quantity} required/></label><label>Unit cost<input name="unit_cost" type="number" min="0" step="0.01" defaultValue={row.unit_cost} required/></label></div>:<div className="inventory-detail-grid"><div><small>Batch number</small><b>{row.batch_number}</b></div><div><small>Material name</small><b>{row.name}</b></div><div><small>Unit cost</small><b>{money(row.unit_cost)}</b></div><div><small>Stock record</small><b>#{row.record_id}</b></div></div>}</div>
+<div className="popup-footer"><div className="actions"><button type="button" onClick={close}>Close</button>{record.mode==="edit"&&<button className="primary" type="submit"><Check/> Save all sizes</button>}</div></div></form></div>;
 }
 function SalesTransactionEditModal({ page, row, data, close, save }: { page: string; row: any; data: any; close: () => void; save: (path: string, body: any) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
@@ -1651,14 +1659,17 @@ function PoInvoiceModal({ data, close, save }: { data: any; close: () => void; s
   },[po,poId,data.orders,data.articles]);
   useEffect(()=>{setQuantities(Object.fromEntries(lines.map((line:any)=>[`${line.article_id}|${line.size_label}`,line.remaining])));},[poId,lines.length]);
   const total=lines.reduce((sum:number,line:any)=>sum+Number(quantities[`${line.article_id}|${line.size_label}`]||0)*line.rate,0);
-  return <div className="backdrop" onMouseDown={close}><form className="modal po-modal" onMouseDown={e=>e.stopPropagation()} onSubmit={async e=>{e.preventDefault();setBusy(true);const f=new FormData(e.currentTarget);try{await save(poId,{invoice_date:f.get("invoice_date"),sale_type:f.get("sale_type"),lines:lines.map((line:any)=>({article_id:line.article_id,size_label:line.size_label,quantity:Number(quantities[`${line.article_id}|${line.size_label}`]||0)}))});}finally{setBusy(false);}}}>
-    <button type="button" className="close" onClick={close}><X /></button><span>PO FULFILMENT</span><h2>Create invoice from customer PO</h2><p>Select the supplied quantities. Any quantity left below the ordered amount remains pending for a later invoice.</p>
+  return <div className="backdrop" onMouseDown={close}><form className="modal po-modal" onMouseDown={e=>e.stopPropagation()} onSubmit={async e=>{e.preventDefault();setBusy(true);const f=new FormData(e.currentTarget);try{await save(poId,{invoice_date:f.get("invoice_date"),sale_type:f.get("sale_type"),lines:lines.map((line:any)=>({article_id:line.article_id,size_label:line.size_label,quantity:Number(quantities[`${line.article_id}|${line.size_label}`]||0)}))});}finally{setBusy(false);}}} role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+    <button type="button" className="close" onClick={close} aria-label="Close dialog"><X /></button><span>PO FULFILMENT</span><h2>Create invoice from customer PO</h2></div>
+<div className="popup-body"><p>Select the supplied quantities. Any quantity left below the ordered amount remains pending for a later invoice.</p>
     {eligible.length===0?<div className="error">There are no open customer POs available for invoicing.</div>:<>
       <div className="form-row"><label>Customer PO<select value={poId} onChange={e=>setPoId(Number(e.target.value))}>{eligible.map((item:any)=><option value={item.id} key={item.id}>{item.number} — {item.customer_name}</option>)}</select></label><label>Sale type<select name="sale_type" defaultValue={po?.sale_type==="cash"?"cash":"credit"} key={`${poId}-type`}><option value="cash">Cash sale</option><option value="credit">Credit sale</option></select></label><label>Invoice date<input name="invoice_date" type="date" defaultValue={new Date().toISOString().slice(0,10)} required /></label></div>
       <div className="dispatch-lines"><div className="dispatch-line head"><b>Article</b><b>Size</b><b>Ordered / pending</b><b>Supply now</b><b>Rate</b></div>{lines.map((line:any)=>{const key=`${line.article_id}|${line.size_label}`;return <div className="dispatch-line" key={key}><span><b>{line.article_code}</b><small>{line.article_name}</small></span><span>{line.size_label}</span><span>{line.remaining}</span><input type="number" min="0" max={line.remaining} step="0.01" value={quantities[key]??0} onChange={e=>setQuantities(current=>({...current,[key]:Number(e.target.value)}))}/><span>{money(line.rate)}</span></div>})}</div>
       <div className="po-grand-total"><span>Invoice total for supplied goods</span><strong>{money(total)}</strong></div>
     </>}
-    <div className="actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy||!eligible.length||total<=0}>{busy?<Loader2/>:<Check/>} Create invoice</button></div>
+    </div>
+<div className="popup-footer"><div className="actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy||!eligible.length||total<=0}>{busy?<Loader2/>:<Check/>} Create invoice</button></div></div>
   </form></div>;
 }
 
@@ -1679,10 +1690,12 @@ function DispatchInvoiceModal({ order, close, save }: { order: any; close: () =>
         const f = new FormData(e.currentTarget);
         try { await save({ invoice_date: f.get("invoice_date"), lines: available.map((line: any) => ({ sales_order_size_line_id: line.id, quantity: Number(quantities[line.id] || 0) })) }); }
         finally { setBusy(false); }
-      }}>
-        <button type="button" className="close" onClick={close}><X /></button>
+      }} role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+        <button type="button" className="close" onClick={close} aria-label="Close dialog"><X /></button>
         <span>PARTIAL FULFILMENT</span>
-        <h2>Dispatch and create invoice</h2>
+        <h2>Dispatch and create invoice</h2></div>
+<div className="popup-body">
         <p>{order.number} — {order.customer_name}. Enter only the quantity being sent now; the balance remains as backorder.</p>
         <label>Invoice / dispatch date<input name="invoice_date" type="date" required /></label>
         <div className="dispatch-lines">
@@ -1699,7 +1712,8 @@ function DispatchInvoiceModal({ order, close, save }: { order: any; close: () =>
           ))}
         </div>
         <div className="po-grand-total"><span>Invoice total for this dispatch</span><strong>{money(total)}</strong></div>
-        <div className="modal-actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy || total <= 0}><Check /> Create partial invoice</button></div>
+        </div>
+<div className="popup-footer"><div className="modal-actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy || total <= 0}><Check /> Create partial invoice</button></div></div>
       </form>
     </div>
   );
@@ -1916,13 +1930,13 @@ function SalesCreateModal({
             : [{ ...line, colour: null, selected_colours: undefined }]),
       };
       if (poLines.some((line: any) => line.order_mode === "custom" && !Object.values(line.custom_sizes || {}).some((quantity: any) => Number(quantity) > 0))) {
-        alert("Select at least one size for every customized article.");
+        showNotice("Select at least one size for every customized article.");
         setBusy(false);
         return;
       }
       const allItems = data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items));
       if (poLines.some((line: any) => line.order_mode === "custom" && Object.entries(line.custom_sizes || {}).some(([itemId, quantity]: any) => Number(quantity) > 0 && String(allItems.find((item: any) => Number(item.id) === Number(itemId))?.colours || "").trim() && !(line.custom_colours?.[itemId] || []).length))) {
-        alert("Choose at least one colour for every selected size.");
+        showNotice("Choose at least one colour for every selected size.");
         setBusy(false);
         return;
       }
@@ -1932,12 +1946,12 @@ function SalesCreateModal({
         const set = article?.sets?.find((item: any) => Number(item.id) === Number(line.set_template_id)) || article?.sets?.[0];
         return line.order_mode !== "custom" && (set?.items || []).some((item: any) => splitColours(item.colours || "").length) && !line.colour;
       })) {
-        alert("Select a colour for every invoice article.");
+        showNotice("Select a colour for every invoice article.");
         setBusy(false);
         return;
       }
       if (invoiceLines.some((line: any) => line.order_mode === "custom" && !Object.values(line.custom_sizes || {}).some((quantity: any) => Number(quantity) > 0))) {
-        alert("Select at least one size for every customized invoice article.");
+        showNotice("Select at least one size for every customized invoice article.");
         setBusy(false);
         return;
       }
@@ -1947,7 +1961,7 @@ function SalesCreateModal({
         const set = article?.sets?.find((item: any) => Number(item.id) === Number(line.set_template_id)) || article?.sets?.[0];
         return (set?.items || []).some((item: any) => Number(line.custom_sizes?.[item.id] || 0) > 0 && splitColours(item.colours || "").length > 0 && !(line.custom_colours?.[item.id] || []).length);
       })) {
-        alert("Choose at least one colour for every selected invoice size.");
+        showNotice("Choose at least one colour for every selected invoice size.");
         setBusy(false);
         return;
       }
@@ -2019,8 +2033,9 @@ function SalesCreateModal({
         className={`modal ${type === "po" || type === "sales_order" || type === "invoice" ? "po-modal" : type === "article" ? "price-modal" : type === "commission" ? "commission-modal" : ""}`}
         onSubmit={submit}
         onMouseDown={(e) => e.stopPropagation()}
-      >
-        <button type="button" className="close" onClick={close}>
+       role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+        <button type="button" className="close" onClick={close} aria-label="Close dialog">
           <X />
         </button>
         <span>SALES MASTER AND TRANSACTION</span>
@@ -2040,7 +2055,8 @@ function SalesCreateModal({
               : initial && type === "article"
                 ? "Edit article and set types"
                 : `Add ${type}`}
-        </h2>
+        </h2></div>
+<div className="popup-body">
         {type === "customer" ? (
           <>
             <div className="form-row">
@@ -2621,14 +2637,15 @@ function SalesCreateModal({
             <p className="report-note">The invoice salesperson remains unchanged. Management can pay commission to that salesperson, transfer it to the actual collector, or cancel it. The {data.commission_settings?.max_collection_days || 100}-day eligibility policy still applies.</p>
           </>
         )}
-        <div className="actions">
+        </div>
+<div className="popup-footer"><div className="actions">
           <button type="button" onClick={close}>
             Cancel
           </button>
           <button className="primary" disabled={busy}>
             {busy ? <Loader2 /> : <Check />} {type === "invoice" ? initial ? "Save invoice" : "Create invoice" : type === "sales_order" ? "Create sales order" : type === "commission" ? "Post commission" : "Save"}
           </button>
-        </div>
+        </div></div>
       </form>
     </div>
   );
@@ -2924,12 +2941,14 @@ function RecordView({
   const hidden = ["id", "lines", "items", "created_at", "updated_at"];
   return (
     <div className="backdrop" onMouseDown={close}>
-      <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-        <button className="close" onClick={close}>
+      <div className="modal" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+        <button className="close" onClick={close} aria-label="Close dialog">
           <X />
         </button>
         <span>RECORD DETAILS</span>
-        <h2>{page}</h2>
+        <h2>{page}</h2></div>
+<div className="popup-body">
         <div className="detail-grid">
           {Object.entries(row)
             .filter(([k]) => !hidden.includes(k))
@@ -2970,11 +2989,12 @@ function RecordView({
             ))}
           </div>
         )}
-        <div className="actions">
+        </div>
+<div className="popup-footer"><div className="actions">
           <button type="button" onClick={close}>
             Close
           </button>
-        </div>
+        </div></div>
       </div>
     </div>
   );
@@ -3434,7 +3454,10 @@ function AccessPage({ token, currentUserId }: { token: string; currentUserId: nu
     {error&&<div className="error">{error}</div>}
     <div className="report-tabs"><button className={tab==="users"?"active":""} onClick={()=>setTab("users")}>Users <small>{data.users.length}</small></button><button className={tab==="roles"?"active":""} onClick={()=>setTab("roles")}>Roles and permissions <small>{data.roles.length}</small></button></div>
     <div className="table-card"><table><thead><tr>{(tab==="users"?["User","Email","Role","Linked salesperson","Status"]:["Role","Code","Permissions","Assigned users"]).map(h=><th key={h}>{h}</th>)}<th>Actions</th></tr></thead><tbody>{(tab==="users"?data.users:data.roles).map((row:any)=><tr key={row.id}>{tab==="users"?<><td><b>{row.name}</b>{row.id===currentUserId&&<small><br />Current user</small>}</td><td>{row.email}</td><td>{row.role_name}</td><td>{row.sales_rep_name || "Not linked"}</td><td>{status(row.active?"active":"inactive")}</td></>:<><td><b>{row.name}</b></td><td>{row.code}</td><td>{row.permission_ids.length} permissions</td><td>{data.users.filter((u:any)=>u.role_id===row.id).length}</td></>}<td><div className="row-actions"><button className="icon-action edit" onClick={()=>{setCreating(false);setEditing(row)}}><Pencil /></button><button className="icon-action delete" disabled={tab==="users"&&row.id===currentUserId} onClick={()=>remove(row)}><Trash2 /></button></div></td></tr>)}</tbody></table></div>
-    {(creating||editing)&&<div className="backdrop" onMouseDown={()=>{setCreating(false);setEditing(null)}}><form className="modal" onSubmit={save} onMouseDown={e=>e.stopPropagation()}><button type="button" className="close" onClick={()=>{setCreating(false);setEditing(null)}}><X /></button><span>ACCESS ADMINISTRATION</span><h2>{editing?"Edit":"Add"} {tab==="users"?"user":"role"}</h2>{tab==="users"?<><div className="form-row"><label>Name<input name="name" defaultValue={record.name} required /></label><label>Email<input name="email" type="email" defaultValue={record.email} required /></label><label>Role<select name="role_id" defaultValue={record.role_id} required>{data.roles.map((role:any)=><option value={role.id} key={role.id}>{role.name}</option>)}</select></label><label>Linked salesperson<select name="sales_rep_id" defaultValue={record.sales_rep_id || ""}><option value="">Not a salesperson login</option>{(data.sales_reps || []).map((rep:any)=><option value={rep.id} key={rep.id}>{rep.code} — {rep.name}</option>)}</select></label><label>Password<input name="password" type="password" minLength={8} required={!editing} placeholder={editing?"Leave blank to keep current password":"Minimum 8 characters"} /></label></div><p className="report-note">For a salesperson login, choose the Salesperson role and link the matching salesperson profile. Their sales documents will then use that identity automatically.</p><label className="access-check"><input name="active" type="checkbox" defaultChecked={editing?Boolean(record.active):true} /> Active account</label></>:<><div className="form-row"><label>Role name<input name="name" defaultValue={record.name} required /></label><label>Role code<input name="code" defaultValue={record.code} pattern="[A-Za-z0-9_-]+" required readOnly={record.code==="administrator"} /></label></div><div className="permission-grid">{data.permissions.map((permission:any)=><label className="access-check" key={permission.id}><input name={`permission_${permission.id}`} type="checkbox" defaultChecked={record.permission_ids?.includes(permission.id)} /> <span><b>{permission.name}</b><small>{permission.code}</small></span></label>)}</div></>}<div className="actions"><button type="button" onClick={()=>{setCreating(false);setEditing(null)}}>Cancel</button><button className="primary"><Check /> Save</button></div></form></div>}
+    {(creating||editing)&&<div className="backdrop" onMouseDown={()=>{setCreating(false);setEditing(null)}}><form className="modal" onSubmit={save} onMouseDown={e=>e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header"><button type="button" className="close" onClick={()=>{setCreating(false);setEditing(null)}} aria-label="Close dialog"><X /></button><span>ACCESS ADMINISTRATION</span><h2>{editing?"Edit":"Add"} {tab==="users"?"user":"role"}</h2></div>
+<div className="popup-body">{tab==="users"?<><div className="form-row"><label>Name<input name="name" defaultValue={record.name} required /></label><label>Email<input name="email" type="email" defaultValue={record.email} required /></label><label>Role<select name="role_id" defaultValue={record.role_id} required>{data.roles.map((role:any)=><option value={role.id} key={role.id}>{role.name}</option>)}</select></label><label>Linked salesperson<select name="sales_rep_id" defaultValue={record.sales_rep_id || ""}><option value="">Not a salesperson login</option>{(data.sales_reps || []).map((rep:any)=><option value={rep.id} key={rep.id}>{rep.code} — {rep.name}</option>)}</select></label><label>Password<input name="password" type="password" minLength={8} required={!editing} placeholder={editing?"Leave blank to keep current password":"Minimum 8 characters"} /></label></div><p className="report-note">For a salesperson login, choose the Salesperson role and link the matching salesperson profile. Their sales documents will then use that identity automatically.</p><label className="access-check"><input name="active" type="checkbox" defaultChecked={editing?Boolean(record.active):true} /> Active account</label></>:<><div className="form-row"><label>Role name<input name="name" defaultValue={record.name} required /></label><label>Role code<input name="code" defaultValue={record.code} pattern="[A-Za-z0-9_-]+" required readOnly={record.code==="administrator"} /></label></div><div className="permission-grid">{data.permissions.map((permission:any)=><label className="access-check" key={permission.id}><input name={`permission_${permission.id}`} type="checkbox" defaultChecked={record.permission_ids?.includes(permission.id)} /> <span><b>{permission.name}</b><small>{permission.code}</small></span></label>)}</div></>}</div>
+<div className="popup-footer"><div className="actions"><button type="button" onClick={()=>{setCreating(false);setEditing(null)}}>Cancel</button><button className="primary"><Check /> Save</button></div></div></form></div>}
   </>;
 }
 
@@ -3457,15 +3480,18 @@ function ModalShell({
         className="modal"
         onSubmit={onSubmit}
         onMouseDown={(e) => e.stopPropagation()}
-      >
-        <button type="button" className="close" onClick={close}>
+       role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+        <button type="button" className="close" onClick={close} aria-label="Close dialog">
           <X />
         </button>
         <span>CONTROLLED TRANSACTION</span>
-        <h2>{title}</h2>
+        <h2>{title}</h2></div>
+<div className="popup-body">
         <p>Review the information before saving this business record.</p>
         {children}
-        <div className="actions">
+        </div>
+<div className="popup-footer"><div className="actions">
           <button type="button" onClick={close}>
             Cancel
           </button>
@@ -3473,7 +3499,7 @@ function ModalShell({
             {busy ? <Loader2 /> : <Check />}
             {busy ? "Saving…" : "Save changes"}
           </button>
-        </div>
+        </div></div>
       </form>
     </div>
   );
@@ -3643,7 +3669,7 @@ function EmployeesPage({ token }: { token: string }) {
   }, [token]);
   useEffect(loadEmployees, [loadEmployees]);
   const remove = async (employee: any) => {
-    if (!window.confirm(`Delete employee ${employee.name}?`)) return;
+    if (!await confirmDialog(`Delete employee ${employee.name}?`)) return;
     const response = await fetch(`${API}/employees/${employee.id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -3869,12 +3895,14 @@ function EmployeeProfileModal({
       <div
         className="modal employee-profile-modal"
         onMouseDown={(event) => event.stopPropagation()}
-      >
-        <button className="close" onClick={close}>
+       role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+        <button className="close" onClick={close} aria-label="Close dialog">
           <X />
         </button>
         <span>EMPLOYEE PROFILE</span>
-        <h2>{employee.name}</h2>
+        <h2>{employee.name}</h2></div>
+<div className="popup-body">
         <p>
           {employee.employee_no} · {employee.department} ·{" "}
           {employee.designation}
@@ -3962,9 +3990,10 @@ function EmployeeProfileModal({
             </tbody>
           </table>
         </div>
-        <div className="actions">
-          <button onClick={close}>Close</button>
         </div>
+<div className="popup-footer"><div className="actions">
+          <button onClick={close}>Close</button>
+        </div></div>
       </div>
     </div>
   );
@@ -3990,7 +4019,7 @@ function PayrollPage({ token }: { token: string }) {
   }, [token]);
   useEffect(loadPayroll, [loadPayroll]);
   const remove = async (type: string, row: any) => {
-    if (!window.confirm(`Delete ${type} ${row.name || row.number}?`)) return;
+    if (!await confirmDialog(`Delete ${type} ${row.name || row.number}?`)) return;
     const path =
       type === "employee" ? `employees/${row.id}` : `payroll-runs/${row.id}`;
     const r = await fetch(`${API}/${path}`, {
@@ -4378,8 +4407,9 @@ function AttendanceFilesModal({
       <div
         className="modal attendance-history-modal"
         onMouseDown={(event) => event.stopPropagation()}
-      >
-        <button type="button" className="close" onClick={close}>
+       role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+        <button type="button" className="close" onClick={close} aria-label="Close dialog">
           <X />
         </button>
         <span>ATTENDANCE MANAGEMENT</span>
@@ -4393,7 +4423,8 @@ function AttendanceFilesModal({
           <button type="button" className="primary" onClick={upload}>
             <FileUp /> Upload attendance
           </button>
-        </div>
+        </div></div>
+<div className="popup-body">
         <div className="table-card">
           <table>
             <thead>
@@ -4468,11 +4499,12 @@ function AttendanceFilesModal({
             </tbody>
           </table>
         </div>
-        <div className="actions">
+        </div>
+<div className="popup-footer"><div className="actions">
           <button type="button" onClick={close}>
             Close
           </button>
-        </div>
+        </div></div>
       </div>
     </div>
   );
@@ -4540,12 +4572,14 @@ function PayrollSettingsModal({
         className="modal payroll-settings-modal"
         onSubmit={submit}
         onMouseDown={(event) => event.stopPropagation()}
-      >
-        <button type="button" className="close" onClick={close}>
+       role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+        <button type="button" className="close" onClick={close} aria-label="Close dialog">
           <X />
         </button>
         <span>MANUAL SALARY MASTER</span>
-        <h2>Payroll settings</h2>
+        <h2>Payroll settings</h2></div>
+<div className="popup-body">
         <p>
           Maintain salary values manually. Attendance uploads provide only paid
           days, no-pay days and overtime hours.
@@ -4666,14 +4700,15 @@ function PayrollSettingsModal({
             )}
           </b>
         </div>
-        <div className="actions">
+        </div>
+<div className="popup-footer"><div className="actions">
           <button type="button" onClick={close}>
             Cancel
           </button>
           <button className="primary" disabled={busy}>
             {busy ? <Loader2 /> : <Check />} Save settings
           </button>
-        </div>
+        </div></div>
       </form>
     </div>
   );
@@ -4727,12 +4762,14 @@ function AttendanceUploadModal({
         className="modal"
         onSubmit={submit}
         onMouseDown={(event) => event.stopPropagation()}
-      >
-        <button type="button" className="close" onClick={close}>
+       role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+        <button type="button" className="close" onClick={close} aria-label="Close dialog">
           <X />
         </button>
         <span>ATTENDANCE IMPORT</span>
-        <h2>Upload attendance sheet</h2>
+        <h2>Upload attendance sheet</h2></div>
+<div className="popup-body">
         <p>
           Upload CSV, XLS or XLSX from the attendance system. Required columns:{" "}
           <b>employee_no</b>, <b>date</b>, <b>status</b>. Optional:{" "}
@@ -4757,7 +4794,8 @@ function AttendanceUploadModal({
           Accepted statuses: present, absent, paid_leave, holiday, off, half_day
           and no_pay.
         </p>
-        <div className="actions">
+        </div>
+<div className="popup-footer"><div className="actions">
           <button type="button" onClick={close}>
             Cancel
           </button>
@@ -4765,7 +4803,7 @@ function AttendanceUploadModal({
             {busy ? <Loader2 /> : <FileUp />}{" "}
             {busy ? "Validating..." : "Upload and validate"}
           </button>
-        </div>
+        </div></div>
       </form>
     </div>
   );
@@ -4836,8 +4874,9 @@ function PayrollEditModal({
         className="modal"
         onSubmit={submit}
         onMouseDown={(e) => e.stopPropagation()}
-      >
-        <button type="button" className="close" onClick={close}>
+       role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+        <button type="button" className="close" onClick={close} aria-label="Close dialog">
           <X />
         </button>
         <span>PAYROLL RECORD</span>
@@ -4845,7 +4884,8 @@ function PayrollEditModal({
           {type === "employee" && !row.id
             ? "Add Employee"
             : `Edit ${type === "employee" ? "Employee" : "Payroll Run"}`}
-        </h2>
+        </h2></div>
+<div className="popup-body">
         {error && <div className="error">{error}</div>}
         {type === "employee" ? (
           <>
@@ -4933,7 +4973,8 @@ function PayrollEditModal({
             </label>
           </>
         )}
-        <div className="actions">
+        </div>
+<div className="popup-footer"><div className="actions">
           <button type="button" onClick={close}>
             Cancel
           </button>
@@ -4944,7 +4985,7 @@ function PayrollEditModal({
                 ? "Add employee"
                 : "Save changes"}
           </button>
-        </div>
+        </div></div>
       </form>
     </div>
   );
@@ -4963,8 +5004,10 @@ function PayrollItemEditModal({ item, token, close, saved }: { item: any; token:
       saved();
     } catch (exception) { setError((exception as Error).message); } finally { setBusy(false); }
   };
-  return <div className="backdrop" onMouseDown={close}><form className="modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
-    <button type="button" className="close" onClick={close}><X /></button><span>EMPLOYEE MONTHLY PAY</span><h2>Edit {item.name}</h2>
+  return <div className="backdrop" onMouseDown={close}><form className="modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="Business record dialog">
+<div className="popup-header">
+    <button type="button" className="close" onClick={close} aria-label="Close dialog"><X /></button><span>EMPLOYEE MONTHLY PAY</span><h2>Edit {item.name}</h2></div>
+<div className="popup-body">
     {error && <div className="error">{error}</div>}
     <div className="form-row">
       <label>Basic salary<input name="basic_salary" type="number" min="0" step="0.01" defaultValue={item.basic_salary} required /></label>
@@ -4977,7 +5020,8 @@ function PayrollItemEditModal({ item, token, close, saved }: { item: any; token:
       <label>Other deductions<input name="other_deductions" type="number" min="0" step="0.01" defaultValue={item.other_deductions} required /></label>
       <label>No-pay deduction<input name="no_pay_amount" type="number" min="0" step="0.01" defaultValue={item.no_pay_amount || 0} required /></label>
     </div>
-    <div className="actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save and recalculate"}</button></div>
+    </div>
+<div className="popup-footer"><div className="actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save and recalculate"}</button></div></div>
   </form></div>;
 }
 function ReportsPage({ token }: { token: string }) {
