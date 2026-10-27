@@ -12,6 +12,25 @@ use Illuminate\Support\Facades\Schema;
 
 final class AccountingSalesController extends Controller
 {
+    public function invoiceBill(int $id): JsonResponse
+    {
+        $invoice = DB::table('sales_invoices as invoice')
+            ->join('customers as customer', 'customer.id', '=', 'invoice.customer_id')
+            ->join('sales_representatives as rep', 'rep.id', '=', 'invoice.sales_rep_id')
+            ->leftJoin('sales_orders as sales_order', 'sales_order.id', '=', 'invoice.sales_order_id')
+            ->leftJoin('customer_pos as po', 'po.id', '=', 'sales_order.customer_po_id')
+            ->select('invoice.*', 'customer.name as customer_name', 'customer.code as customer_code',
+                'customer.address as customer_address', 'customer.phone as customer_phone', 'customer.tin as customer_tin',
+                'rep.name as rep_name', 'sales_order.number as order_number', 'po.customer_po_reference as reference')
+            ->where('invoice.id', $id)->first();
+        abort_unless($invoice, 404, 'Invoice not found.');
+        $invoice->lines = DB::table('sales_invoice_lines as line')
+            ->join('articles as article', 'article.id', '=', 'line.article_id')
+            ->select('line.*', 'article.code as article_code', 'article.name as article_name')
+            ->where('line.sales_invoice_id', $id)->orderBy('line.id')->get();
+        return response()->json($invoice);
+    }
+
     public function dashboard(): JsonResponse
     {
         $recentInvoices = DB::table('sales_invoices as invoice')->join('customers as customer', 'customer.id', '=', 'invoice.customer_id')->join('sales_representatives as rep', 'rep.id', '=', 'invoice.sales_rep_id')->select('invoice.id', 'invoice.number', 'invoice.outstanding', 'invoice.status', 'customer.name as customer_name', 'rep.name as rep_name')->latest('invoice.id')->limit(5)->get();
@@ -486,10 +505,22 @@ final class AccountingSalesController extends Controller
     public function invoiceCustomerPo(Request $request, int $id, SalesController $sales, PostingService $posting): JsonResponse
     {
         $data=$request->validate(['invoice_date'=>['required','date'],'sale_type'=>['required','in:cash,credit'],'lines'=>['required','array','min:1'],'lines.*.article_id'=>['required','integer','exists:articles,id'],'lines.*.size_label'=>['required','string','max:30'],'lines.*.quantity'=>['required','numeric','min:0']]);
-        return DB::transaction(function()use($data,$id,$sales,$posting){
+        return DB::transaction(function()use($data,$id,$sales,$posting,$request){
             $po=DB::table('customer_pos')->lockForUpdate()->find($id);abort_unless($po,404,'Customer PO not found.');abort_if($po->status==='invoiced'||$po->status==='cancelled',422,'This customer PO is already closed.');
             DB::table('customer_pos')->where('id',$id)->update(['sale_type'=>$data['sale_type'],'updated_at'=>now()]);
-            $order=DB::table('sales_orders')->where('customer_po_id',$id)->first();if(!$order){$converted=$sales->convert($id)->getData(true);$order=DB::table('sales_orders')->find($converted['sales_order']['id']);}
+            $order=DB::table('sales_orders')->where('customer_po_id',$id)->first();
+            if(!$order){
+                $review=[];
+                foreach(DB::table('customer_po_lines')->where('customer_po_id',$id)->get() as $poLine){
+                    $items=DB::table('article_set_items')->where('set_template_id',$poLine->set_template_id);
+                    if(($poLine->order_mode??'badge')==='size')$items->where('id',$poLine->set_item_id);
+                    foreach($items->get() as $item)$review[]=['customer_po_line_id'=>$poLine->id,'set_item_id'=>$item->id,'quantity'=>($poLine->order_mode??'badge')==='size'?(float)$poLine->pieces:(float)$poLine->sets*(float)$item->quantity];
+                }
+                $conversion=Request::create('/','POST',['order_date'=>$data['invoice_date'],'lines'=>$review]);
+                $conversion->attributes->set('auth_user',$request->attributes->get('auth_user'));
+                $converted=$sales->convert($conversion,$id)->getData(true);
+                $order=DB::table('sales_orders')->find($converted['sales_order']['id']);
+            }
             $dispatch=[];foreach($data['lines']as$input){$requested=(float)$input['quantity'];$matching=DB::table('sales_order_size_lines')->where('sales_order_id',$order->id)->where('article_id',$input['article_id'])->where('size_label',$input['size_label'])->orderBy('id')->get();abort_if($matching->isEmpty(),422,"Invalid PO item size {$input['size_label']}.");foreach($matching as$line){$available=max(0,(float)$line->quantity-(float)$line->invoiced_quantity);$take=min($available,$requested);if($take>0)$dispatch[]=['sales_order_size_line_id'=>$line->id,'quantity'=>$take];$requested-=$take;if($requested<=0.0001)break;}abort_if($requested>0.0001,422,"Supplied quantity for size {$input['size_label']} exceeds the pending PO quantity.");}
             $forward=Request::create('/','POST',['invoice_date'=>$data['invoice_date'],'lines'=>$dispatch]);$forward->setUserResolver($request->getUserResolver());return $this->invoiceDispatch($forward,$order->id,$sales,$posting);
         });

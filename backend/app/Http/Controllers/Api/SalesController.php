@@ -8,8 +8,9 @@ class SalesController {
   $articles=DB::table('articles')->orderBy('name')->get()->map(function($article)use($sets){$article->sets=$sets->get($article->id,collect())->values();return $article;});
   $poLines=DB::table('customer_po_lines as l')->join('articles as a','a.id','=','l.article_id')->leftJoin('article_set_templates as st','st.id','=','l.set_template_id')->leftJoin('article_set_items as si','si.id','=','l.set_item_id')->select('l.*','a.code as article_code','a.name as article_name','st.name as set_name','si.size_label')->get()->groupBy('customer_po_id');
   $pos=DB::table('customer_pos as p')->join('customers as c','c.id','=','p.customer_id')->join('sales_representatives as r','r.id','=','p.sales_rep_id')->select('p.*','c.name as customer_name','r.name as rep_name')->latest('p.id')->get()->map(function($po)use($poLines){$po->lines=$poLines->get($po->id,collect())->values();return $po;});
+  $reviews=DB::table('audit_logs')->where('event','sales_order.reviewed')->where('entity_type','sales_order')->get()->keyBy('entity_id');
   $orderLines=DB::table('sales_order_size_lines as l')->join('articles as a','a.id','=','l.article_id')->select('l.*','a.code as article_code','a.name as article_name',DB::raw('(l.quantity-l.invoiced_quantity) as remaining_quantity'))->orderBy('a.code')->orderBy('l.size_label')->get()->groupBy('sales_order_id');
-  $orders=DB::table('sales_orders as s')->join('customers as c','c.id','=','s.customer_id')->join('sales_representatives as r','r.id','=','s.sales_rep_id')->select('s.*','c.name as customer_name','r.name as rep_name')->latest('s.id')->get()->map(function($order)use($orderLines){$order->lines=$orderLines->get($order->id,collect())->values();return $order;});
+  $orders=DB::table('sales_orders as s')->join('customers as c','c.id','=','s.customer_id')->join('sales_representatives as r','r.id','=','s.sales_rep_id')->select('s.*','c.name as customer_name','r.name as rep_name')->latest('s.id')->get()->map(function($order)use($orderLines,$reviews){$order->review_changes=json_decode($reviews->get($order->id)->payload??'{}',true)['changes']??[];$order->lines=$orderLines->get($order->id,collect())->values();return $order;});
   $invoiceLines=DB::table('sales_invoice_lines as l')->join('articles as a','a.id','=','l.article_id')->select('l.*','a.code as article_code','a.name as article_name')->get()->groupBy('sales_invoice_id');
   $invoices=DB::table('sales_invoices as i')->join('customers as c','c.id','=','i.customer_id')->join('sales_representatives as r','r.id','=','i.sales_rep_id')->leftJoin('sales_orders as so','so.id','=','i.sales_order_id')->leftJoin('customer_pos as po','po.id','=','so.customer_po_id')->select('i.*','c.name as customer_name','r.name as rep_name','po.customer_po_reference as reference')->latest('i.id')->get()->map(function($invoice)use($invoiceLines){$invoice->lines=$invoiceLines->get($invoice->id,collect())->values();return $invoice;});
   $receipts=DB::table('customer_receipts as p')->join('customers as c','c.id','=','p.customer_id')->join('sales_representatives as owner','owner.id','=','p.sales_rep_id')->leftJoin('sales_representatives as collector','collector.id','=','p.collector_sales_rep_id')->leftJoin('receipt_allocations as allocation','allocation.receipt_id','=','p.id')->select('p.*','c.name as customer_name','owner.name as invoice_rep_name','collector.name as collector_name','allocation.commission_decision','allocation.commission_status',DB::raw('COALESCE(collector.name, owner.name) as rep_name'))->latest('p.id')->get();
@@ -40,24 +41,47 @@ class SalesController {
  }
  public function deletePo(int $id):JsonResponse {$po=DB::table('customer_pos')->find($id);abort_unless($po,404,'Customer PO not found.');abort_if($po->status!=='draft',422,'Only a draft PO can be deleted.');DB::table('customer_pos')->where('id',$id)->delete();return response()->json(['message'=>'Customer PO deleted.']);}
  public function convert(Request $r,int $id):JsonResponse {
-  $d=$r->validate(['order_date'=>'required|date','lines'=>'required|array|min:1','lines.*.customer_po_line_id'=>'required|integer','lines.*.set_item_id'=>'required|integer','lines.*.quantity'=>'required|numeric|min:0']);
-  $order=DB::transaction(function()use($d,$id){
-   $po=DB::table('customer_pos')->lockForUpdate()->find($id);abort_unless($po,404,'Customer PO not found.');abort_if($po->status!=='draft',422,'Only a draft customer PO can be converted.');
-   $prepared=[];$total=0;$seen=[];
-   foreach($d['lines'] as $input){
-    $reviewKey=$input['customer_po_line_id'].'|'.$input['set_item_id'];abort_if(isset($seen[$reviewKey]),422,'A reviewed PO size was submitted more than once.');$seen[$reviewKey]=true;
-    $line=DB::table('customer_po_lines')->where('id',$input['customer_po_line_id'])->where('customer_po_id',$id)->first();abort_unless($line,422,'Invalid customer PO line.');
-    $item=DB::table('article_set_items')->where('id',$input['set_item_id'])->where('set_template_id',$line->set_template_id)->first();abort_unless($item,422,'Invalid article size selected.');
-    $allowed=($line->order_mode??'badge')==='size'?(float)$line->pieces:(float)$line->sets*(float)$item->quantity;$qty=(float)$input['quantity'];
+  $d=$r->validate([
+   'order_date'=>'required|date','lines'=>'required|array|min:1',
+   'lines.*.customer_po_line_id'=>'required|integer','lines.*.set_item_id'=>'required|integer',
+   'lines.*.quantity'=>'required|numeric|min:0','lines.*.reason'=>'nullable|string|max:500',
+  ]);
+  $order=DB::transaction(function()use($d,$id,$r){
+   $po=DB::table('customer_pos')->lockForUpdate()->find($id);
+   abort_unless($po,404,'Customer PO not found.');
+   abort_if($po->status!=='draft',422,'Only a draft customer PO can be converted.');
+   $expected=[];
+   foreach(DB::table('customer_po_lines')->where('customer_po_id',$id)->get() as $line){
+    $items=DB::table('article_set_items')->where('set_template_id',$line->set_template_id);
+    if(($line->order_mode??'badge')==='size')$items->where('id',$line->set_item_id);
+    foreach($items->get() as $item)$expected[$line->id.'|'.$item->id]=[$line,$item];
+   }
+   $prepared=[];$changes=[];$total=0;$seen=[];
+   foreach($d['lines'] as $index=>$input){
+    $key=$input['customer_po_line_id'].'|'.$input['set_item_id'];
+    abort_if(isset($seen[$key]),422,'A reviewed PO size was submitted more than once.');
+    abort_unless(isset($expected[$key]),422,'Invalid customer PO size.');
+    $seen[$key]=true;[$line,$item]=$expected[$key];
+    $allowed=($line->order_mode??'badge')==='size'?(float)$line->pieces:(float)$line->sets*(float)$item->quantity;
+    $qty=(float)$input['quantity'];
     abort_if($qty>$allowed+0.0001,422,"Sales order quantity for size {$item->size_label} exceeds the customer PO quantity.");
+    if(abs($qty-$allowed)>0.0001){
+     $reason=trim($input['reason']??'');
+     if($reason==='')throw \Illuminate\Validation\ValidationException::withMessages(["lines.$index.reason"=>"Enter a reason for removing or changing size {$item->size_label}."]);
+     $changes[]=['customer_po_line_id'=>$line->id,'set_item_id'=>$item->id,'article_id'=>$line->article_id,'size_label'=>$item->size_label,'colour'=>$line->colour,'original_quantity'=>$allowed,'quantity'=>$qty,'action'=>$qty===0.0?'removed':'edited','reason'=>$reason];
+    }
     if($qty>0){$prepared[]=[$line,$item,$qty];$total+=round($qty*(float)$item->unit_price,2);}
    }
+   abort_if(count($seen)!==count($expected),422,'Review every PO size. To exclude a size, submit zero quantity with a reason.');
    abort_if(empty($prepared),422,'Enter at least one available quantity before creating the sales order.');
    $soNum='SO-'.now()->format('ym').'-'.str_pad((string)(DB::table('sales_orders')->count()+1),4,'0',STR_PAD_LEFT);
    $so=DB::table('sales_orders')->insertGetId(['number'=>$soNum,'customer_po_id'=>$id,'customer_id'=>$po->customer_id,'sales_rep_id'=>$po->sales_rep_id,'order_date'=>$d['order_date'],'status'=>'confirmed','total'=>$total,'created_at'=>now(),'updated_at'=>now()]);
    foreach($prepared as [$line,$item,$qty])DB::table('sales_order_size_lines')->insert(['sales_order_id'=>$so,'article_id'=>$line->article_id,'size_label'=>$item->size_label,'colour'=>$line->colour,'quantity'=>$qty,'invoiced_quantity'=>0,'rate'=>$item->unit_price,'created_at'=>now(),'updated_at'=>now()]);
-   DB::table('customer_pos')->where('id',$id)->update(['status'=>'ordered','updated_at'=>now()]);return DB::table('sales_orders')->find($so);
-  });return response()->json(['sales_order'=>$order],201);
+   if($changes)DB::table('audit_logs')->insert(['event'=>'sales_order.reviewed','entity_type'=>'sales_order','entity_id'=>$so,'payload'=>json_encode(['customer_po_id'=>$id,'user_id'=>$r->attributes->get('auth_user')?->id,'changes'=>$changes]),'created_at'=>now()]);
+   DB::table('customer_pos')->where('id',$id)->update(['status'=>'ordered','updated_at'=>now()]);
+   return DB::table('sales_orders')->find($so);
+  });
+  return response()->json(['sales_order'=>$order],201);
  }
  public function invoiceDispatch(Request $r,int $id):JsonResponse {$d=$r->validate(['invoice_date'=>'required|date','lines'=>'required|array|min:1','lines.*.sales_order_size_line_id'=>'required|exists:sales_order_size_lines,id','lines.*.quantity'=>'required|numeric|min:0']);$invoice=DB::transaction(function()use($d,$id){$order=DB::table('sales_orders')->lockForUpdate()->find($id);abort_unless($order,404,'Sales order not found.');$requested=collect($d['lines'])->filter(fn($x)=>(float)$x['quantity']>0);abort_if($requested->isEmpty(),422,'Enter at least one dispatched quantity.');$prepared=[];$total=0;foreach($requested as $input){$line=DB::table('sales_order_size_lines')->lockForUpdate()->where('id',$input['sales_order_size_line_id'])->where('sales_order_id',$id)->first();abort_unless($line,422,'Invalid sales order line.');$remaining=(float)$line->quantity-(float)$line->invoiced_quantity;$qty=(float)$input['quantity'];abort_if($qty>$remaining+0.0001,422,"Dispatched quantity for size {$line->size_label} exceeds the remaining quantity.");$prepared[]=[$line,$qty];$total+=round($qty*(float)$line->rate,2);} $customer=DB::table('customers')->find($order->customer_id);$po=DB::table('customer_pos')->find($order->customer_po_id);$num='INV-'.now()->format('ym').'-'.str_pad((string)(DB::table('sales_invoices')->count()+1),4,'0',STR_PAD_LEFT);$due=date('Y-m-d',strtotime($d['invoice_date'].' +'.($po->sale_type==='cash'?0:$customer->credit_days).' days'));$iid=DB::table('sales_invoices')->insertGetId(['number'=>$num,'sales_order_id'=>$id,'customer_id'=>$order->customer_id,'sales_rep_id'=>$order->sales_rep_id,'invoice_date'=>$d['invoice_date'],'due_date'=>$due,'sale_type'=>$po->sale_type,'status'=>'unpaid','subtotal'=>$total,'discount'=>0,'tax'=>0,'total'=>$total,'received_amount'=>0,'outstanding'=>$total,'created_at'=>now(),'updated_at'=>now()]);foreach($prepared as [$line,$qty]){DB::table('sales_invoice_lines')->insert(['sales_invoice_id'=>$iid,'sales_order_size_line_id'=>$line->id,'article_id'=>$line->article_id,'size_label'=>$line->size_label,'quantity'=>$qty,'rate'=>$line->rate,'line_total'=>$qty*$line->rate,'created_at'=>now(),'updated_at'=>now()]);DB::table('sales_order_size_lines')->where('id',$line->id)->increment('invoiced_quantity',$qty,['updated_at'=>now()]);}$remaining=DB::table('sales_order_size_lines')->where('sales_order_id',$id)->whereRaw('invoiced_quantity < quantity')->exists();DB::table('sales_orders')->where('id',$id)->update(['status'=>$remaining?'part_invoiced':'invoiced','updated_at'=>now()]);if(!$remaining)DB::table('customer_pos')->where('id',$order->customer_po_id)->update(['status'=>'invoiced','updated_at'=>now()]);return DB::table('sales_invoices')->find($iid);});return response()->json($invoice,201);}
  public function receipt(Request $r):JsonResponse {$d=$r->validate(['invoice_id'=>'required|exists:sales_invoices,id','collector_sales_rep_id'=>'required|exists:sales_representatives,id','receipt_date'=>'required|date','collection_type'=>'required|in:regular,partial,final,recovery','payment_method'=>'required|in:cash,bank_transfer,cheque,card','commission_decision'=>'required|in:invoice_salesperson,collector,cancel','reference'=>'nullable|max:80','amount'=>'required|numeric|gt:0']);$invoice=DB::table('sales_invoices')->find($d['invoice_id']);abort_if($d['amount']>$invoice->outstanding+0.001,422,'Receipt exceeds the invoice outstanding balance.');return response()->json(DB::transaction(fn()=>$this->postReceipt($d+['customer_id'=>$invoice->customer_id])),201);}

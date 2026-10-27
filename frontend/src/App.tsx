@@ -18,6 +18,7 @@ import {
   PackagePlus,
   Pencil,
   Plus,
+  Printer,
   RefreshCw,
   Search,
   Settings,
@@ -34,6 +35,7 @@ import "./reports.css";
 import "./tables.css";
 import "./popups.css";
 import { confirmDialog, showNotice } from "./AppDialogs";
+import InvoiceBill from "./InvoiceBill";
 
 const API = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
 type Supplier = {
@@ -599,6 +601,8 @@ function SalesPage({
     [convertingPo, setConvertingPo] = useState<any>(null),
     [dispatchOrder, setDispatchOrder] = useState<any>(null),
     [poInvoiceOpen, setPoInvoiceOpen] = useState(false),
+    [poDownloading, setPoDownloading] = useState<string | null>(null),
+    [billInvoiceId, setBillInvoiceId] = useState<number | null>(null),
     [viewing, setViewing] = useState<any>(null),
     [priceImporting, setPriceImporting] = useState(false),
     [priceImportMessage, setPriceImportMessage] = useState(""),
@@ -663,6 +667,7 @@ function SalesPage({
           "Request failed.",
       );
     await loadSales();
+    if (method === "POST" && (path === "sales-invoices/manual" || /^(sales-orders|customer-pos)\/\d+\/invoice$/.test(path)) && json.id) setBillInvoiceId(Number(json.id));
     return json;
   };
   const updateCommissionPolicy = async () => {
@@ -673,6 +678,24 @@ function SalesPage({
     if (!Number.isInteger(days) || days < 1 || days > 365) return setError("Enter a whole number between 1 and 365 days.");
     try { await post("commission-settings", { max_collection_days: days }, "PUT"); }
     catch (exception) { setError((exception as Error).message); }
+  };
+  const downloadCustomerPo = async (po?: any) => {
+    if (poDownloading !== null) return;
+    setPoDownloading(po ? String(po.id) : "all");
+    setError("");
+    try {
+      const response = await fetch(`${API}/customer-pos/${po ? `${po.id}/` : ""}export`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      });
+      if (!response.ok) throw new Error("Unable to download the PO report. Please try again.");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = po ? `${String(po.number).replace(/[^A-Za-z0-9_-]/g, "_")}.xlsx` : "All_Customer_POs.xlsx";
+      document.body.appendChild(link); link.click(); link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (exception) { setError((exception as Error).message); }
+    finally { setPoDownloading(null); }
   };
   const previewPriceList = async (file?: File) => {
     if (!file) return;
@@ -1019,6 +1042,7 @@ function SalesPage({
             </button>
           </>}
           {page === "Commissions" && <button className="secondary-action" onClick={updateCommissionPolicy}><Settings /> Policy: {data.commission_settings?.max_collection_days || 100} days</button>}
+          {page === "Customer POs" && <button className="secondary-action" title="Download all saved customer POs, across all dates and statuses, with item details" disabled={poDownloading !== null} onClick={() => downloadCustomerPo()}>{poDownloading === "all" ? <Loader2 /> : <FileDown />} {poDownloading === "all" ? "Downloading…" : "Download full PO report"}</button>}
           {page === "Invoices" && <button className="secondary-action" onClick={()=>setPoInvoiceOpen(true)}><FileText /> Invoice customer PO</button>}
           <button className="primary" onClick={() => { if (page === "Collections") setCollectionInvoice(null); setModal(addType[page]); }}>
             <Plus />{" "}
@@ -1112,6 +1136,7 @@ function SalesPage({
                       </button>}
                       {page === "Customer POs" && (
                         <>
+                          <button className="icon-action download" title={`Download ${r.number} (Excel)`} aria-label={`Download ${r.number} (Excel)`} disabled={poDownloading !== null} onClick={() => downloadCustomerPo(r)}>{poDownloading === String(r.id) ? <Loader2 /> : <FileDown />}</button>
                           <button className="icon-action edit" title="Edit and update PO" onClick={() => setEditingPo(r)}><Pencil /></button>
                           <button className="icon-action delete" title="Delete PO and linked records" onClick={async () => { if (!confirm(`Delete ${r.number} and all linked sales orders, invoices, collections and journals? This cannot be undone.`)) return; try { await post(`customer-pos/${r.id}`, undefined, "DELETE"); } catch (e) { setError((e as Error).message); } }}><Trash2 /></button>
                         </>
@@ -1139,6 +1164,7 @@ function SalesPage({
                         }}><Trash2 /></button>
                       </>}
                       {["Sales Orders", "Invoices", "Collections"].includes(page) && !(page === "Collections" && collectionView === "due") && <>
+                        {page === "Invoices" && <button className="icon-action" title="View / print bill" onClick={() => setBillInvoiceId(Number(r.id))}><Printer /></button>}
                         <button className="icon-action edit" title={`Edit ${page}`} onClick={() => page === "Invoices" ? setEditingMaster({ type: "invoice", row: r }) : setEditingTransaction({ page, row: r })}><Pencil /></button>
                         <button className="icon-action delete" title={`Delete ${page}`} onClick={async () => {
                           if (!confirm(`Delete ${r.number}? Related posted records will be checked first.`)) return;
@@ -1274,6 +1300,7 @@ function SalesPage({
         />
       )}
       {poInvoiceOpen && <PoInvoiceModal data={data} close={()=>setPoInvoiceOpen(false)} save={async(poId,body)=>{try{setError("");await post(`customer-pos/${poId}/invoice`,body);setPoInvoiceOpen(false);}catch(e){setError((e as Error).message);}}} />}
+      {billInvoiceId !== null && <InvoiceBill id={billInvoiceId} api={API} token={token} close={() => setBillInvoiceId(null)} />}
       {viewing && (
         <RecordView page={page} row={viewing} close={() => setViewing(null)} />
       )}
@@ -1532,24 +1559,26 @@ function ConvertPoModal({ po, data, close, save }: { po: any; data: any; close: 
   }, [po, data.articles]);
   const [quantities, setQuantities] = useState<Record<string, number>>(Object.fromEntries(lines.map((line: any) => [line.key, line.ordered])));
   const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [reasons, setReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const quantityFor = (line: any) => removed.has(line.key) ? 0 : Number(quantities[line.key] || 0);
   const total = lines.reduce((sum: number, line: any) => sum + Math.round(quantityFor(line) * line.rate * 100) / 100, 0);
   const pieces = lines.reduce((sum: number, line: any) => sum + quantityFor(line), 0);
   const included = lines.filter((line: any) => quantityFor(line) > 0).length;
+  const missingReasons = lines.filter((line: any) => quantityFor(line) !== line.ordered && !reasons[line.key]?.trim()).length;
   const invalid = lines.some((line: any) => !Number.isInteger(quantityFor(line)) || quantityFor(line) < 0 || quantityFor(line) > line.ordered);
   return <div className="backdrop" onMouseDown={() => { if (!busy) close(); }}><form className="modal dispatch-modal order-review" role="dialog" aria-modal="true" aria-labelledby="order-review-title" onMouseDown={e => e.stopPropagation()} onKeyDown={e => { if (e.key === "Escape" && !busy) close(); }} onSubmit={async e => {
     e.preventDefault();
-    if (busy || invalid || included === 0 || total <= 0) return;
+    if (busy || invalid || missingReasons > 0 || included === 0 || total <= 0) return;
     setBusy(true);
     const form = new FormData(e.currentTarget);
-    try { await save({ order_date: form.get("order_date"), lines: lines.map((line: any) => ({ customer_po_line_id: line.po_line_id, set_item_id: line.set_item_id, quantity: quantityFor(line) })) }); }
+    try { await save({ order_date: form.get("order_date"), lines: lines.map((line: any) => ({ customer_po_line_id: line.po_line_id, set_item_id: line.set_item_id, quantity: quantityFor(line), reason: quantityFor(line) !== line.ordered ? reasons[line.key]?.trim() : null })) }); }
     finally { setBusy(false); }
   }}>
     <div className="order-review-header">
     <button type="button" className="close" aria-label="Close review" disabled={busy} onClick={close}><X /></button>
     <span>SALES ORDER REVIEW</span><h2 id="order-review-title">Review your order</h2>
-    <p>Edit quantities or remove sizes before creating the sales order.</p>
+    <p>Edit quantities or remove sizes. A reason is required for every changed item.</p>
     </div>
     <div className="order-review-body">
     <div className="order-review-context"><div><small>CUSTOMER</small><strong>{po.customer_name}</strong><span>{po.number || "Customer purchase order"}</span></div>
@@ -1567,6 +1596,7 @@ function ConvertPoModal({ po, data, close, save }: { po: any; data: any; close: 
         <span className={`order-review-status ${isRemoved || qty === 0 ? "excluded" : qty === line.ordered ? "full" : "partial"}`}>{isRemoved ? "Removed" : qty === 0 ? "Excluded" : qty === line.ordered ? "Full quantity" : `${line.ordered - qty} fewer`}</span>
         <span className="order-review-amount"><b>{money(qty * line.rate)}</b><small>{money(line.rate)} / piece</small></span>
         <button type="button" className={`order-review-remove ${isRemoved ? "restore" : ""}`} disabled={busy} aria-label={`${isRemoved ? "Restore" : "Remove"} ${label}`} title={isRemoved ? "Restore item" : "Remove item"} onClick={() => setRemoved(current => { const next = new Set(current); if (next.has(line.key)) next.delete(line.key); else next.add(line.key); return next; })}>{isRemoved ? <><RefreshCw size={14} /> Undo</> : <Trash2 size={17} />}</button>
+        {qty !== line.ordered && <label className="order-review-reason">{qty === 0 ? "Reason for removal" : "Reason for quantity change"} <span>Required · {line.ordered} → {qty} pieces</span><input aria-label={`Reason for ${qty === 0 ? "removing" : "editing"} ${label}`} type="text" maxLength={500} required pattern=".*\S.*" disabled={busy} value={reasons[line.key] || ""} onChange={event => setReasons(current => ({ ...current, [line.key]: event.target.value }))} placeholder={qty === 0 ? "e.g. Out of stock or customer cancelled this size" : "e.g. Customer requested fewer pieces"} /></label>}
       </div> })}
     </div>
     <p className="order-review-note">Removed items and quantities of 0 are excluded from this sales order. Undo a removal to restore its quantity.</p>
@@ -1574,7 +1604,8 @@ function ConvertPoModal({ po, data, close, save }: { po: any; data: any; close: 
     <div className="order-review-footer">
     <div className="po-grand-total" aria-live="polite"><div><span>Reviewed order total</span><small>{included} sizes included · {pieces.toLocaleString()} pieces{removed.size > 0 ? ` · ${removed.size} removed` : ""}</small></div><strong>{money(total)}</strong></div>
     {included === 0 && <p className="order-review-note" role="status">Restore an item or enter a quantity to create an order.</p>}
-    <div className="modal-actions"><button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy || invalid || total <= 0 || included === 0}>{busy ? <Loader2 /> : <Check />} {busy ? "Creating order…" : "Create sales order"}</button></div>
+    {missingReasons > 0 && <p className="order-review-reason-warning" role="status">Enter a reason for {missingReasons} changed item{missingReasons === 1 ? "" : "s"} to continue.</p>}
+    <div className="modal-actions"><button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy || invalid || missingReasons > 0 || total <= 0 || included === 0}>{busy ? <Loader2 /> : <Check />} {busy ? "Creating order…" : "Create sales order"}</button></div>
     </div>
   </form></div>;
 }
@@ -1719,6 +1750,14 @@ function DispatchInvoiceModal({ order, close, save }: { order: any; close: () =>
   );
 }
 
+function OrderCustomerPicker({ customers, selectedId, select }: { customers: any[]; selectedId: number; select: (id: number) => void }) {
+  const labelFor = (customer: any) => `${customer.code} — ${customer.name}${customer.phone ? ` · ${customer.phone}` : ""}`;
+  const [query, setQuery] = useState(() => { const customer = customers.find(item => Number(item.id) === selectedId); return customer ? labelFor(customer) : ""; });
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => { input.current?.setCustomValidity(selectedId ? "" : "Choose a customer from the suggestions."); }, [selectedId, query]);
+  return <label className="easy-customer-picker">Customer<input ref={input} list="order-customer-options" type="text" value={query} required placeholder="Type customer name, code or phone" autoComplete="off" onChange={event => { setQuery(event.target.value); const customer = customers.find(item => labelFor(item) === event.target.value); select(customer ? Number(customer.id) : 0); }} /><datalist id="order-customer-options">{customers.map(customer => <option key={customer.id} value={labelFor(customer)} />)}</datalist><small>Type to search, then choose a customer.</small></label>;
+}
+
 function SalesCreateModal({
   type,
   data,
@@ -1735,13 +1774,16 @@ function SalesCreateModal({
   save: (path: string, body: any, method?: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const isEasyOrder = type === "po" || type === "sales_order";
+  const [orderStep, setOrderStep] = useState(1);
+  const [orderStepError, setOrderStepError] = useState("");
+  const [orderReview, setOrderReview] = useState<Record<string, string>>({});
+  const orderForm = useRef<HTMLFormElement>(null);
   const [commissionBasis, setCommissionBasis] = useState(Number(initial?.amount ?? initial?.basis_amount ?? 0));
   const [commissionRate, setCommissionRate] = useState(Number(initial?.commission_rate ?? 0));
   const calculatedCommission = Math.round(commissionBasis * commissionRate * 100) / 100;
-  const [newCustomer, setNewCustomer] = useState(false);
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [selectedCustomerId, setSelectedCustomerId] = useState(Number(initial?.customer_id || data.customers?.[0]?.id || 0));
-  const [repSearch, setRepSearch] = useState("");
+  const [newCustomer, setNewCustomer] = useState(isEasyOrder && !data.customers?.length);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(Number(initial?.customer_id || (isEasyOrder ? 0 : data.customers?.[0]?.id) || 0));
   const [selectedRepId, setSelectedRepId] = useState(Number(currentUser?.sales_rep_id || initial?.sales_rep_id || data.reps?.[0]?.id || 0));
   const [poSaleType, setPoSaleType] = useState(initial?.sale_type || "credit");
   const [poCashAmount, setPoCashAmount] = useState(Number(initial?.cash_amount || 0));
@@ -1770,9 +1812,11 @@ function SalesCreateModal({
           },
         ]),
   ]);
-  const firstSetId = Number(data.articles?.[0]?.sets?.[0]?.id || 0);
-  const firstArticleId = Number(data.articles?.[0]?.id || 0);
-  const firstItemId = Number(data.articles?.[0]?.sets?.[0]?.items?.[0]?.id || 0);
+  const firstArticle = data.articles?.find((article: any) => article.status !== "inactive" && article.sets?.some((set: any) => set.status !== "inactive" && Number(set.set_price) > 0)) || data.articles?.[0];
+  const firstSet = firstArticle?.sets?.find((set: any) => set.status !== "inactive" && Number(set.set_price) > 0) || firstArticle?.sets?.[0];
+  const firstSetId = Number(firstSet?.id || 0);
+  const firstArticleId = Number(firstArticle?.id || 0);
+  const firstItemId = Number(firstSet?.items?.[0]?.id || 0);
   const [inventoryArticleId, setInventoryArticleId] = useState(firstArticleId);
   const [expandedPoLine, setExpandedPoLine] = useState<number | null>(null);
   const [poLines, setPoLines] = useState<any[]>([
@@ -1841,14 +1885,7 @@ function SalesCreateModal({
     const set = availableSets.find((value: any) => Number(value.id) === Number(line.set_template_id));
     return total + Number(set?.pieces || 0) * Number(line.quantity || 0) * Math.max(1, Number(line.selected_colours?.length || 0));
   }, 0);
-  const visibleCustomers = data.customers.filter((customer: any) => {
-    const query = customerSearch.trim().toLowerCase();
-    return !query || `${customer.code} ${customer.name} ${customer.phone || ""}`.toLowerCase().includes(query) || Number(customer.id) === selectedCustomerId;
-  }).slice(0, 50);
-  const visibleReps = data.reps.filter((rep: any) => {
-    const query = repSearch.trim().toLowerCase();
-    return rep.status === "active" && (!query || `${rep.code} ${rep.name} ${rep.manager_name || ""} ${rep.channel || ""}`.toLowerCase().includes(query) || Number(rep.id) === selectedRepId);
-  }).slice(0, 50);
+  const visibleReps = data.reps.filter((rep: any) => rep.status === "active" || Number(rep.id) === selectedRepId);
   const expandedInvoiceLines = invoiceLines.flatMap((line: any) => {
     const article = data.articles.find((item: any) => Number(item.id) === Number(line.article_id));
     const set = article?.sets?.find((item: any) => Number(item.id) === Number(line.set_template_id)) || article?.sets?.[0];
@@ -1869,8 +1906,28 @@ function SalesCreateModal({
   const invoiceTaxBase = Math.max(0, invoiceSubtotal - invoiceDiscount - invoiceOtherDeduction);
   const invoiceTaxAmount = invoiceTaxMode === "percentage" ? Math.round(invoiceTaxBase * invoiceTax * 100) / 10000 : invoiceTax;
   const invoiceTotal = Math.max(0, invoiceTaxBase + invoiceTaxAmount + invoiceOtherCharges);
+  const validateOrderStep = (form: HTMLFormElement, step: number) => {
+    const fields = form.querySelectorAll<HTMLInputElement | HTMLSelectElement>(`.order-step[data-step="${step}"] input, .order-step[data-step="${step}"] select`);
+    for (const field of fields) {
+      if (!field.disabled && !field.checkValidity()) { setOrderStep(step); window.requestAnimationFrame(() => field.reportValidity()); return false; }
+    }
+    if (step === 2 && poLines.some((line: any) => poLineTotal(line) <= 0)) { setOrderStep(2); setOrderStepError("Choose a priced article and enter quantities for every item."); return false; }
+    if (step === 2 && poLines.some((line: any) => line.order_mode === "custom" && Object.entries(line.custom_sizes || {}).some(([id, quantity]: any) => Number(quantity) > 0 && data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items)).find((item: any) => Number(item.id) === Number(id))?.colours && !(line.custom_colours?.[id]?.length)))) { setOrderStep(2); setOrderStepError("Choose a colour for each selected size."); return false; }
+    return true;
+  };
+  const advanceOrder = () => {
+    const form = orderForm.current;
+    if (!form || !validateOrderStep(form, orderStep)) return;
+    setOrderStepError("");
+    const values = new FormData(form);
+    setOrderReview(Object.fromEntries(["customer_name", "po_date", "customer_po_reference"].map(key => [key, String(values.get(key) || "")])));
+    setOrderStep(current => Math.min(3, current + 1));
+    form.querySelector(".popup-body")?.scrollTo(0, 0);
+  };
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isEasyOrder && orderStep < 3) { advanceOrder(); return; }
+    if (isEasyOrder && (!validateOrderStep(e.currentTarget, 1) || !validateOrderStep(e.currentTarget, 2))) return;
     setBusy(true);
     const f = new FormData(e.currentTarget);
     let path = "",
@@ -2031,6 +2088,8 @@ function SalesCreateModal({
     <div className="backdrop" onMouseDown={close}>
       <form
         className={`modal ${type === "po" || type === "sales_order" || type === "invoice" ? "po-modal" : type === "article" ? "price-modal" : type === "commission" ? "commission-modal" : ""}`}
+        ref={orderForm}
+        noValidate={isEasyOrder}
         onSubmit={submit}
         onMouseDown={(e) => e.stopPropagation()}
        role="dialog" aria-modal="true" aria-label="Business record dialog">
@@ -2371,25 +2430,15 @@ function SalesCreateModal({
           </>
         ) : type === "po" || type === "sales_order" ? (
           <>
+            <nav className="easy-order-steps" aria-label="Order progress">{["Customer", "Items", "Review"].map((label, index) => <span key={label} className={orderStep === index + 1 ? "active" : orderStep > index + 1 ? "complete" : ""} aria-current={orderStep === index + 1 ? "step" : undefined}><b>{orderStep > index + 1 ? <Check size={14} /> : index + 1}</b>{label}</span>)}</nav>
+            {orderStepError && <div className="error" role="alert">{orderStepError}</div>}
+            <fieldset className="order-step" data-step="1" hidden={orderStep !== 1}><legend>Who is this order for?</legend><p>Choose a customer and check the order details.</p>
             <div className="form-row">
               {!initial && <div className="customer-mode-switch" role="group" aria-label="Customer type">
                 <button type="button" className={!newCustomer ? "active" : ""} onClick={()=>setNewCustomer(false)}>Existing customer</button>
                 <button type="button" className={newCustomer ? "active" : ""} onClick={()=>setNewCustomer(true)}><Plus /> New customer</button>
               </div>}
-              {!newCustomer && <><label>
-                Search customer
-                <input type="search" value={customerSearch} onChange={(event)=>setCustomerSearch(event.target.value)} placeholder="Search by name, code or phone" />
-              </label>
-              <label>
-                Customer
-                <select name="customer_id" value={selectedCustomerId} onChange={(event)=>setSelectedCustomerId(Number(event.target.value))} required>
-                  {visibleCustomers.map((x: any) => (
-                    <option value={x.id} key={x.id}>
-                      {x.code} — {x.name}
-                    </option>
-                  ))}
-                </select>
-              </label></>}
+              {!newCustomer && <OrderCustomerPicker customers={data.customers} selectedId={selectedCustomerId} select={setSelectedCustomerId} />}
               {newCustomer && <>
                 <div className="customer-mode-row"><b>New customer details</b></div>
                 <label>New customer name<input name="customer_name" required placeholder="Customer or company name" /></label>
@@ -2403,7 +2452,7 @@ function SalesCreateModal({
                   <input type="hidden" name="sales_rep_id" value={currentUser.sales_rep_id} />
                   <div className="locked-salesperson"><ShieldCheck /><span><b>{currentUser.sales_rep_code} — {currentUser.sales_rep_name}</b><small>Automatically assigned from your login</small></span></div>
                 </> : <>
-                  <input type="search" value={repSearch} onChange={(event)=>setRepSearch(event.target.value)} placeholder="Search salesperson by name or code" />
+
                   <select name="sales_rep_id" value={selectedRepId} onChange={(event)=>setSelectedRepId(Number(event.target.value))} required>
                   {visibleReps.map((x: any) => (
                     <option value={x.id} key={x.id}>
@@ -2411,16 +2460,16 @@ function SalesCreateModal({
                     </option>
                   ))}
                   </select>
-                  <small className="field-help">New salespeople and their login passwords are created in Salespersons and Access Control.</small>
+
                 </>}
               </label>
               <label>
-                Customer PO reference
+                Customer reference (optional)
                 <input name="customer_po_reference" defaultValue={initial?.customer_po_reference} />
               </label>
               <label>
-                PO date
-                <input name="po_date" type="date" defaultValue={initial?.po_date} required />
+                {type === "sales_order" ? "Order date" : "PO date"}
+                <input name="po_date" type="date" defaultValue={initial?.po_date || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Colombo" })} required />
               </label>
               <label>
                 Sale type
@@ -2431,6 +2480,7 @@ function SalesCreateModal({
                 </select>
               </label>
             </div>
+            </fieldset><fieldset className="order-step" data-step="2" hidden={orderStep !== 2}><legend>Add the items</legend><p>Choose an article, colours and number of sets. Use Customize only when you need specific sizes.</p>
             {poSaleType === "mixed" && <div className="form-row payment-split">
               <label>Cash payment amount<input name="cash_amount" type="number" min="0.01" max={Math.max(0.01,poGrandTotal-0.01)} step="0.01" value={poCashAmount} onChange={(event)=>setPoCashAmount(Number(event.target.value))} required /></label>
               <label>Credit balance<input type="text" value={money(Math.max(0,poGrandTotal-poCashAmount))} readOnly /></label>
@@ -2439,7 +2489,7 @@ function SalesCreateModal({
             {poSaleType === "credit" && <p className="report-note">Full PO amount is credit: <b>{money(poGrandTotal)}</b>.</p>}
             <div className="po-lines">
               <div className="po-lines-head">
-                <div><b>PO articles</b><small>Select an article and colour, then order a complete set or customize the required sizes.</small></div>
+                <div><b>Order items</b><small>Add one or more articles below.</small></div>
                 <button type="button" className="secondary-action" onClick={() => setPoLines((lines) => [...lines, { article_id: firstArticleId, colour: "", selected_colours: [], order_mode: "badge", set_template_id: firstSetId, set_item_id: firstItemId, quantity: 1 }])}><Plus /> Add article</button>
               </div>
               {poLines.map((line, index) => {
@@ -2493,11 +2543,13 @@ function SalesCreateModal({
                 </div>;
               })}
               <div className="po-grand-total">
-                <span>Customer PO total</span>
+                <span>Order total</span>
                 <span className="po-total-pieces"><small>Total pieces</small><b>{poTotalPieces.toLocaleString()} pcs</b></span>
                 <strong>{money(poGrandTotal)}</strong>
               </div>
             </div>
+            </fieldset>
+            {orderStep === 3 && <section className="easy-order-review"><h3>Ready to create your order?</h3><p>Check the customer and items below. Use Back to make changes.</p><div className="easy-review-details"><div><small>Customer</small><b>{newCustomer ? orderReview.customer_name : data.customers.find((customer: any) => Number(customer.id) === selectedCustomerId)?.name}</b></div><div><small>Order date</small><b>{orderReview.po_date}</b></div><div><small>Salesperson</small><b>{currentUser?.sales_rep_name || data.reps.find((rep: any) => Number(rep.id) === selectedRepId)?.name}</b></div><div><small>Payment</small><b>{poSaleType === "mixed" ? `Cash ${money(poCashAmount)} · Credit ${money(poGrandTotal - poCashAmount)}` : poSaleType === "cash" ? "Cash" : "Credit"}</b></div>{orderReview.customer_po_reference && <div><small>Customer reference</small><b>{orderReview.customer_po_reference}</b></div>}</div><div className="easy-review-items">{poLines.map((line: any, index: number) => { const article = data.articles.find((item: any) => Number(item.id) === Number(line.article_id)); return <div key={index}><span><b>{article?.code} · {article?.name}</b><small>{line.order_mode === "custom" ? "Custom sizes and colours" : `${line.quantity} set(s) · ${(line.selected_colours || []).join(", ") || "No colour specified"}`}</small></span><strong>{money(poLineTotal(line))}</strong></div>; })}</div><div className="po-grand-total"><span>{poTotalPieces.toLocaleString()} pieces</span><strong>{money(poGrandTotal)}</strong></div></section>}
           </>
         ) : type === "invoice" ? (
           <>
@@ -2639,12 +2691,14 @@ function SalesCreateModal({
         )}
         </div>
 <div className="popup-footer"><div className="actions">
+          {isEasyOrder && <div className="easy-order-footer-total"><small>Order total · {poTotalPieces.toLocaleString()} pieces</small><strong>{money(poGrandTotal)}</strong></div>}
           <button type="button" onClick={close}>
             Cancel
           </button>
-          <button className="primary" disabled={busy}>
+          {isEasyOrder && orderStep > 1 && <button type="button" className="easy-order-back" disabled={busy} onClick={() => { setOrderStep(current => current - 1); setOrderStepError(""); orderForm.current?.querySelector(".popup-body")?.scrollTo(0, 0); }}><ArrowLeft size={16} /> Back</button>}
+          {isEasyOrder && orderStep < 3 ? <button type="button" className="primary" onClick={advanceOrder}>{orderStep === 1 ? "Next: add items" : "Next: review order"}<ChevronRight /></button> : <button className="primary" disabled={busy}>
             {busy ? <Loader2 /> : <Check />} {type === "invoice" ? initial ? "Save invoice" : "Create invoice" : type === "sales_order" ? "Create sales order" : type === "commission" ? "Post commission" : "Save"}
-          </button>
+          </button>}
         </div></div>
       </form>
     </div>
@@ -2938,7 +2992,7 @@ function RecordView({
   row: any;
   close: () => void;
 }) {
-  const hidden = ["id", "lines", "items", "created_at", "updated_at"];
+  const hidden = ["id", "lines", "items", "review_changes", "created_at", "updated_at"];
   return (
     <div className="backdrop" onMouseDown={close}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Business record dialog">
@@ -2989,6 +3043,7 @@ function RecordView({
             ))}
           </div>
         )}
+        {row.review_changes?.length > 0 && <section className="review-change-history"><h3>Order review changes</h3><p>Reasons recorded when this sales order was created.</p>{row.review_changes.map((change: any, index: number) => <article key={index}><div><b>Size {change.size_label}{change.colour ? ` · ${change.colour}` : ""}</b><span>{change.action === "removed" ? "Removed" : "Quantity edited"} · {Number(change.original_quantity)} → {Number(change.quantity)} pieces</span></div><p>{change.reason}</p></article>)}</section>}
         </div>
 <div className="popup-footer"><div className="actions">
           <button type="button" onClick={close}>

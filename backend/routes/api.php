@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\PriceListController;
 use App\Http\Controllers\Api\ProcurementController;
 use App\Http\Controllers\Api\PayrollReportController;
 use App\Http\Controllers\Api\SalesController;
+use App\Http\Controllers\Api\CustomerPoExportController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function ():void {
@@ -38,6 +39,8 @@ Route::prefix('v1')->group(function ():void {
   Route::post('/price-list/import',[PriceListController::class,'import'])->middleware('permission:accounting.manage');
   Route::post('/price-list/preview',[PriceListController::class,'preview'])->middleware('permission:accounting.manage');
   Route::post('/customer-pos',[SalesController::class,'storePo'])->middleware('permission:accounting.manage');
+  Route::get('/customer-pos/export',[CustomerPoExportController::class,'download'])->middleware('permission:workspace.view');
+  Route::get('/customer-pos/{id}/export',[CustomerPoExportController::class,'download'])->middleware('permission:workspace.view');
   Route::put('/customer-pos/{id}',[AccountingSalesController::class,'updateCustomerPo'])->middleware('permission:accounting.manage');
   Route::delete('/customer-pos/{id}',[AccountingSalesController::class,'deleteCustomerPo'])->middleware('permission:accounting.manage');
   Route::post('/customer-pos/{id}/convert',[SalesController::class,'convert'])->middleware('permission:accounting.manage');
@@ -47,6 +50,7 @@ Route::prefix('v1')->group(function ():void {
   Route::delete('/sales-orders/{id}',[AccountingSalesController::class,'deleteSalesOrder'])->middleware('permission:accounting.manage');
   Route::post('/sales-orders/{id}/invoice',[AccountingSalesController::class,'invoiceDispatch'])->middleware('permission:accounting.manage');
   Route::post('/sales-invoices/manual',[AccountingSalesController::class,'manualInvoice'])->middleware('permission:accounting.manage');
+  Route::get('/sales-invoices/{id}/bill',[AccountingSalesController::class,'invoiceBill'])->middleware('permission:workspace.view');
   Route::put('/sales-invoices/{id}',[AccountingSalesController::class,'updateInvoice'])->middleware('permission:accounting.manage');
   Route::delete('/sales-invoices/{id}',[AccountingSalesController::class,'deleteInvoice'])->middleware('permission:accounting.manage');
   Route::post('/customer-receipts',[AccountingSalesController::class,'receipt'])->middleware('permission:accounting.manage');
