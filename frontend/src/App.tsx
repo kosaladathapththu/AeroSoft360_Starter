@@ -2485,8 +2485,8 @@ function SalesCreateModal({
               <label>Cash payment amount<input name="cash_amount" type="number" min="0.01" max={Math.max(0.01,poGrandTotal-0.01)} step="0.01" value={poCashAmount} onChange={(event)=>setPoCashAmount(Number(event.target.value))} required /></label>
               <label>Credit balance<input type="text" value={money(Math.max(0,poGrandTotal-poCashAmount))} readOnly /></label>
             </div>}
-            {poSaleType === "cash" && <p className="report-note">Full PO amount is cash: <b>{money(poGrandTotal)}</b>.</p>}
-            {poSaleType === "credit" && <p className="report-note">Full PO amount is credit: <b>{money(poGrandTotal)}</b>.</p>}
+            {poSaleType === "cash" && <p className="report-note">Order amount payable in cash: <b>{money(poGrandTotal)}</b>.</p>}
+            {poSaleType === "credit" && <p className="report-note">Order amount payable on credit: <b>{money(poGrandTotal)}</b>.</p>}
             <div className="po-lines">
               <div className="po-lines-head">
                 <div><b>Order items</b><small>Add one or more articles below.</small></div>
@@ -2697,7 +2697,7 @@ function SalesCreateModal({
           </button>
           {isEasyOrder && orderStep > 1 && <button type="button" className="easy-order-back" disabled={busy} onClick={() => { setOrderStep(current => current - 1); setOrderStepError(""); orderForm.current?.querySelector(".popup-body")?.scrollTo(0, 0); }}><ArrowLeft size={16} /> Back</button>}
           {isEasyOrder && orderStep < 3 ? <button type="button" className="primary" onClick={advanceOrder}>{orderStep === 1 ? "Next: add items" : "Next: review order"}<ChevronRight /></button> : <button className="primary" disabled={busy}>
-            {busy ? <Loader2 /> : <Check />} {type === "invoice" ? initial ? "Save invoice" : "Create invoice" : type === "sales_order" ? "Create sales order" : type === "commission" ? "Post commission" : "Save"}
+            {busy ? <Loader2 /> : <Check />} {type === "invoice" ? initial ? "Save invoice" : "Create invoice" : type === "sales_order" ? "Create sales order" : type === "po" ? initial ? "Save PO changes" : "Create customer PO" : type === "commission" ? "Post commission" : "Save"}
           </button>}
         </div></div>
       </form>
