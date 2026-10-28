@@ -38,7 +38,7 @@ final class GlobalSearchController
             $columns = array_values(array_intersect($fields, Schema::getColumnListing($table)));
             if (!$columns) continue;
             $query = DB::table($table);
-            foreach (array_slice($words, 0, 12) as $word) {
+            foreach ($words as $word) {
                 $query->where(function ($query) use ($columns, $word) {
                     foreach ($columns as $column) $query->orWhere($column, 'like', '%' . $word . '%');
                 });

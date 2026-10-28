@@ -9501,6 +9501,7 @@ function ReportsPage({ token, search = "", requestedReport = "" }: { token: stri
           </div>
         </div>
         <div className="report-catalog">
+          {!reportGroups.some(group => group.reports.some(([key, label]) => matchesSearch([group.title, label, reportSearchCatalog.find(report => report[0] === key)], search))) && <p role="status">No reports match this search. Clear the search to see all reports.</p>}
           {reportGroups.filter(group => group.reports.some(([key, label]) => matchesSearch([group.title, label, reportSearchCatalog.find(report => report[0] === key)], search))).map((group) => (
             <section key={group.title}>
               <h2>{group.title}</h2>
