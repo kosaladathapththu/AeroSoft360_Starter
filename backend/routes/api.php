@@ -161,6 +161,7 @@ Route::prefix("v1")->group(function (): void {
         Route::get("/sales/dashboard", [AccountingSalesController::class, "dashboard"])->middleware(
             "permission:workspace.view",
         );
+        Route::get('/customers/{id}/profile', [\App\Http\Controllers\Api\CustomerProfileController::class, 'show'])->middleware('permission:workspace.view');
         Route::post("/customers", [SalesController::class, "storeCustomer"])->middleware(
             "permission:accounting.manage",
         );
