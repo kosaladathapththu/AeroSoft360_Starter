@@ -36,6 +36,7 @@ import "./tables.css";
 import "./popups.css";
 import { confirmDialog, showNotice } from "./AppDialogs";
 import InvoiceBill from "./InvoiceBill";
+import CollectionFields from "./CollectionFields";
 
 const API = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
 type Supplier = {
@@ -1208,6 +1209,7 @@ function SalesPage({
               setCollectionInvoice(null);
             } catch (e) {
               setError((e as Error).message);
+              throw e;
             }
           }}
         />
@@ -1775,6 +1777,7 @@ function SalesCreateModal({
 }) {
   const [busy, setBusy] = useState(false);
   const isEasyOrder = type === "po" || type === "sales_order";
+  const [submitError, setSubmitError] = useState("");
   const [orderStep, setOrderStep] = useState(1);
   const [orderStepError, setOrderStepError] = useState("");
   const [orderReview, setOrderReview] = useState<Record<string, string>>({});
@@ -2080,6 +2083,8 @@ function SalesCreateModal({
     }
     try {
       await save(path, body, initial && ["article", "po", "customer", "rep", "commission", "invoice"].includes(type) ? "PUT" : "POST");
+    } catch (error) {
+      setSubmitError((error as Error).message);
     } finally {
       setBusy(false);
     }
@@ -2087,7 +2092,7 @@ function SalesCreateModal({
   return (
     <div className="backdrop" onMouseDown={close}>
       <form
-        className={`modal ${type === "po" || type === "sales_order" || type === "invoice" ? "po-modal" : type === "article" ? "price-modal" : type === "commission" ? "commission-modal" : ""}`}
+        className={`modal ${type === "po" || type === "sales_order" || type === "invoice" ? "po-modal" : type === "article" ? "price-modal" : type === "commission" ? "commission-modal" : type === "receipt" ? "collection-modal" : ""}`}
         ref={orderForm}
         noValidate={isEasyOrder}
         onSubmit={submit}
@@ -2619,75 +2624,7 @@ function SalesCreateModal({
             </section><p className="report-note">{initial?.source_type === "automatic" ? "Changes update the commission portion of the linked receipt journal without changing the customer payment." : "Saving posts the commission expense and commission payable journal automatically."}</p>
           </div>
         ) : (
-          <>
-            <label>
-              Outstanding invoice
-              <select name="invoice_id" defaultValue={initial?.id || ""}>
-                {data.invoices
-                  .filter((x: any) => Number(x.outstanding) > 0)
-                  .map((x: any) => (
-                    <option value={x.id} key={x.id}>
-                      {x.number} — {x.customer_name} — {x.rep_name} — {money(x.outstanding)}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <div className="form-row">
-              <label>
-                Cash collector
-                <select name="collector_sales_rep_id" required>
-                  {data.reps.filter((rep: any) => rep.status === "active").map((rep: any) => <option value={rep.id} key={rep.id}>{rep.code} â€” {rep.name}</option>)}
-                </select>
-              </label>
-              <label>
-                Receipt date
-                <input name="receipt_date" type="date" required />
-              </label>
-              <label>
-                Collection type
-                <select name="collection_type" defaultValue="regular">
-                  <option value="regular">Regular collection</option>
-                  <option value="partial">Partial collection</option>
-                  <option value="final">Final settlement</option>
-                  <option value="recovery">Overdue debt recovery</option>
-                </select>
-              </label>
-              <label>
-                Payment method
-                <select name="payment_method">
-                  <option value="cash">Cash</option>
-                  <option value="bank_transfer">Bank transfer</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="card">Card</option>
-                </select>
-              </label>
-              <label>
-                Amount
-                <input
-                  name="amount"
-                  type="number"
-                  step=".01"
-                  min=".01"
-                  max={initial?.outstanding || undefined}
-                  defaultValue={initial?.outstanding || undefined}
-                  required
-                />
-              </label>
-              <label>
-                Reference
-                <input name="reference" />
-              </label>
-              <label>
-                Commission decision
-                <select name="commission_decision" defaultValue="invoice_salesperson">
-                  <option value="invoice_salesperson">Pay original invoice salesperson</option>
-                  <option value="collector">Pay the selected cash collector</option>
-                  <option value="cancel">No commission / cancel commission</option>
-                </select>
-              </label>
-            </div>
-            <p className="report-note">The invoice salesperson remains unchanged. Management can pay commission to that salesperson, transfer it to the actual collector, or cancel it. The {data.commission_settings?.max_collection_days || 100}-day eligibility policy still applies.</p>
-          </>
+          <><CollectionFields data={data} initial={initial} user={currentUser} busy={busy} />{submitError && <div className="error" role="alert">{submitError}</div>}</>
         )}
         </div>
 <div className="popup-footer"><div className="actions">
@@ -2696,8 +2633,8 @@ function SalesCreateModal({
             Cancel
           </button>
           {isEasyOrder && orderStep > 1 && <button type="button" className="easy-order-back" disabled={busy} onClick={() => { setOrderStep(current => current - 1); setOrderStepError(""); orderForm.current?.querySelector(".popup-body")?.scrollTo(0, 0); }}><ArrowLeft size={16} /> Back</button>}
-          {isEasyOrder && orderStep < 3 ? <button type="button" className="primary" onClick={advanceOrder}>{orderStep === 1 ? "Next: add items" : "Next: review order"}<ChevronRight /></button> : <button className="primary" disabled={busy}>
-            {busy ? <Loader2 /> : <Check />} {type === "invoice" ? initial ? "Save invoice" : "Create invoice" : type === "sales_order" ? "Create sales order" : type === "po" ? initial ? "Save PO changes" : "Create customer PO" : type === "commission" ? "Post commission" : "Save"}
+          {isEasyOrder && orderStep < 3 ? <button type="button" className="primary" onClick={advanceOrder}>{orderStep === 1 ? "Next: add items" : "Next: review order"}<ChevronRight /></button> : <button className="primary" disabled={busy || (type === "receipt" && !data.invoices.some((invoice: any) => Number(invoice.outstanding) > 0))}>
+            {busy ? <Loader2 /> : <Check />} {type === "invoice" ? initial ? "Save invoice" : "Create invoice" : type === "sales_order" ? "Create sales order" : type === "po" ? initial ? "Save PO changes" : "Create customer PO" : type === "commission" ? "Post commission" : type === "receipt" ? "Record payment" : "Save"}
           </button>}
         </div></div>
       </form>

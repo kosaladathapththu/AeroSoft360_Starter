@@ -151,6 +151,27 @@
 .order-review .modal-actions { margin-top:14px; }
 .order-review .order-review-body { padding:20px var(--popup-space); }
 .attendance-modal-heading { padding-right:30px; }
+.modal.collection-modal { width:min(780px,100%); }
+.collection-fields { border:0; padding:0; margin:0; min-width:0; }
+.collection-section { padding:18px 20px; margin-bottom:16px; border:1px solid #dfe8ed; border-radius:11px; background:white; }
+.collection-section h3 { margin:0 0 14px; color:#315465; font-size:14px; }
+.collection-section > label:first-of-type { margin-top:0; }
+.collection-section .form-row > label { margin-top:10px; }
+.collection-invoice-summary { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-top:14px; padding:14px 16px; background:#f0f8f5; border-radius:8px; }
+.collection-invoice-summary > div { display:grid; gap:5px; }
+.collection-invoice-summary > div:last-child { text-align:right; }
+.collection-invoice-summary small { color:#6c8a84; font-size:10px; }
+.collection-invoice-summary b { color:#315d56; font-size:13px; }
+.collection-invoice-summary span { color:#7d938e; font-size:11px; }
+.collection-invoice-summary strong { color:#126c60; font-size:20px; }
+.collection-amount-help { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin:10px 0 8px; font-size:11px; color:#698574; }
+.collection-amount-help button { padding:6px 10px; border:1px solid #bddbd1; border-radius:6px; background:#f2faf7; color:#1a7866; font-size:11px; font-weight:700; }
+.collection-options { border:1px solid #dce6ec; border-radius:9px; background:white; padding:13px 18px; }
+.collection-options summary { cursor:pointer; color:#527080; font-size:12px; font-weight:700; }
+.collection-options p { margin:14px 0 0; color:#7c8f9c; font-size:11px; line-height:1.6; }
+.collection-no-invoices { padding:30px 10px; text-align:center; color:#526f7f; }
+.collection-no-invoices p { font-size:13px; }
+@media(max-width:600px) { .collection-section { padding:16px; } .collection-invoice-summary { align-items:flex-start; flex-direction:column; } .collection-invoice-summary > div:last-child { text-align:left; } }
 .easy-order-steps { display:flex; align-items:center; justify-content:center; gap:36px; padding:0 0 22px; margin:0 0 24px; border-bottom:1px solid #dfe8ec; overflow:visible; }
 .easy-order-steps > span { display:flex; align-items:center; gap:9px; color:#8a9ca7; font-size:13px; font-weight:700; }
 .easy-order-steps > span > b { display:grid; place-items:center; width:28px; height:28px; border:1px solid #d4dfe5; border-radius:50%; background:white; color:#8a9ca7; font-size:12px; }
