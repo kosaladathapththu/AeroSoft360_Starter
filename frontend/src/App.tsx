@@ -164,6 +164,7 @@ export default function App() {
     [search, setSearch] = useState(""),
     [searchOpen, setSearchOpen] = useState(false);
   const [requestedReport, setRequestedReport] = useState("");
+  const [reportSearchVersion, setReportSearchVersion] = useState(0);
   const token = () => localStorage.getItem("aerosoft_token");
   const load = useCallback(async () => {
     const saved = localStorage.getItem("aerosoft_token");
@@ -321,7 +322,7 @@ export default function App() {
       .flatMap(group => group.items.map(([name]) => ({ name, group: group.name, keywords: pageSearchKeywords[name] || "" }))),
   ].filter(item => matchesSearch(item, search));
   const searchReports = reportSearchCatalog.filter(report => matchesSearch(["Reports", ...report], search));
-  const openSearchReport = (key: string) => { goToPage("Reports"); setRequestedReport(key); };
+  const openSearchReport = (key: string) => { goToPage("Reports"); setRequestedReport(key); setReportSearchVersion(value => value + 1); };
   const openSearchRecord = (name: string, query: string) => { goToPage(name); setSearch(query); };
   const rows = useMemo(() => {
     if (page === "Suppliers")
@@ -586,7 +587,7 @@ export default function App() {
           ) : page === "Cash Flow" ? (
             <CashFlowPage api={API} token={token() || ""} search={search} go={setPage} />
           ) : page === "Reports" ? (
-            <ReportsPage token={token() || ""} search={search} requestedReport={requestedReport} />
+            <ReportsPage key={reportSearchVersion} token={token() || ""} search={search} requestedReport={requestedReport} />
           ) : page === "Access Control" ? (
             <AccessPage token={token() || ""} currentUserId={profile.user.id} search={search} />
           ) : (

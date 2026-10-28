@@ -29,3 +29,22 @@ assert.ok(match({ name: "Café" }, "cafe"));
 assert.ok(match({ name: "Chart of Accounts", group: "Finance & Reports" }, "chart accounts"));
 assert.ok(!match({ name: "Customers" }, "chart accounts"));
 console.log("11 search checks passed.");
+const catalog = {};
+vm.runInNewContext(
+  ts.transpileModule(fs.readFileSync(path.resolve(__dirname, "../src/search-catalog.ts"), "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText,
+  { exports: catalog },
+);
+const findReport = (query) =>
+  catalog.reportSearchCatalog
+    .filter((row) => match(["Reports", ...row], query))
+    .map((row) => row[0]);
+assert.ok(findReport("p&l").includes("profit_loss"));
+assert.ok(findReport("ageing payable").includes("aging"));
+assert.ok(findReport("stock valuation").includes("inventory_balance"));
+assert.ok(findReport("cashflow").includes("cash_flow"));
+assert.equal(findReport("reports").length, 16);
+assert.ok(match(catalog.pageSearchKeywords["Head Office Salaries"], "salary payment"));
+assert.ok(match(catalog.pageSearchKeywords["Serials & Warranty"], "warranties repair"));
+console.log("7 report and feature discovery checks passed.");
