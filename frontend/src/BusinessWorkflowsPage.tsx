@@ -110,8 +110,19 @@ export default function BusinessWorkflowsPage({
       setError("Allow pop-ups to print this report.");
   };
   const links: Record<string, string[]> = {
-    "Head Office Salaries": ["Payroll", "Employees", "Chart of Accounts", "Cash Flow", "General Ledger"],
-    "Head Office Expenses": ["Payment Vouchers", "Chart of Accounts", "Cash Flow", "General Ledger"],
+    "Head Office Salaries": [
+      "Payroll",
+      "Employees",
+      "Chart of Accounts",
+      "Cash Flow",
+      "General Ledger",
+    ],
+    "Head Office Expenses": [
+      "Payment Vouchers",
+      "Chart of Accounts",
+      "Cash Flow",
+      "General Ledger",
+    ],
     Quotations: ["Customers", "Pricing List", "Customer POs", "Sales Orders", "Invoices"],
     "Supplier Invoices": [
       "Purchase Orders",
@@ -422,12 +433,96 @@ export default function BusinessWorkflowsPage({
                 />
               </>
             )}
-            {page === "Head Office Salaries" && <>
-              <p className="report-note">Salaries come from the existing payroll runs. Select the Head Office department below to isolate office staff. Only posted, unpaid payroll can be paid; payments debit salaries payable (2250) and credit the selected cash/bank account. Historical paid flags are preserved without charging cash again.</p>
-              <label>Department<select value={department} onChange={e => setDepartment(e.target.value)}><option value="">All departments</option>{[...new Set<string>(data.salary_items.map((r: any) => r.department))].map(name => <option key={name} value={name}>{name}</option>)}</select></label>
-              <WorkflowTable values={rows(data.salary_items.filter((r: any) => !department || r.department === department))} columns={[["name", "Employee"], ["department", "Department"], ["payroll_number", "Payroll"], ["period_end", "Period end"], ["payroll_status", "Payroll status"], ["net_salary", "Net salary", "money"], ["payment_status", "Payment status"]]} actions={r => <>{r.linked_payment && <small>Journal #{r.linked_payment.journal_id} ? {r.linked_payment.payment_date}</small>}{can("accounting.manage") && (r.linked_payment ? <button onClick={() => setModal({kind:"salary-reverse",row:r})}>Reverse payment</button> : r.payment_status !== "paid" && r.payroll_status === "posted" ? <button onClick={() => setModal({kind:"salary-pay",row:r})}>Pay salary</button> : <span>{r.payment_status === "paid" ? "Historical paid status" : "Post payroll first"}</span>)}</>} />
-            </>}
-            {page === "Head Office Expenses" && <><p className="report-note">Administrative expenses are linked to account 5400 and the existing payment vouchers. Record a voucher using Administrative Expenses (5400) to show its posted expense, cash movement and payment document here.</p><button className="primary" onClick={() => go("Payment Vouchers")}>Record / manage expense voucher ?</button><WorkflowTable values={rows(data.expenses)} columns={[["number", "Voucher"], ["payment_date", "Date"], ["payee", "Payee"], ["description", "Expense"], ["amount", "Amount", "money"], ["status", "Status"]]} actions={() => <button onClick={() => go("Payment Vouchers")}>Open voucher module ?</button>} /></>}
+            {page === "Head Office Salaries" && (
+              <>
+                <p className="report-note">
+                  Salaries come from the existing payroll runs. Select the Head Office department
+                  below to isolate office staff. Only posted, unpaid payroll can be paid; payments
+                  debit salaries payable (2250) and credit the selected cash/bank account.
+                  Historical paid flags are preserved without charging cash again.
+                </p>
+                <label>
+                  Department
+                  <select value={department} onChange={(e) => setDepartment(e.target.value)}>
+                    <option value="">All departments</option>
+                    {[...new Set<string>(data.salary_items.map((r: any) => r.department))].map(
+                      (name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+                <WorkflowTable
+                  values={rows(
+                    data.salary_items.filter(
+                      (r: any) => !department || r.department === department,
+                    ),
+                  )}
+                  columns={[
+                    ["name", "Employee"],
+                    ["department", "Department"],
+                    ["payroll_number", "Payroll"],
+                    ["period_end", "Period end"],
+                    ["payroll_status", "Payroll status"],
+                    ["net_salary", "Net salary", "money"],
+                    ["payment_status", "Payment status"],
+                  ]}
+                  actions={(r) => (
+                    <>
+                      {r.linked_payment && (
+                        <small>
+                          Journal #{r.linked_payment.journal_id} ? {r.linked_payment.payment_date}
+                        </small>
+                      )}
+                      {can("accounting.manage") &&
+                        (r.linked_payment ? (
+                          <button onClick={() => setModal({ kind: "salary-reverse", row: r })}>
+                            Reverse payment
+                          </button>
+                        ) : r.payment_status !== "paid" && r.payroll_status === "posted" ? (
+                          <button onClick={() => setModal({ kind: "salary-pay", row: r })}>
+                            Pay salary
+                          </button>
+                        ) : (
+                          <span>
+                            {r.payment_status === "paid"
+                              ? "Historical paid status"
+                              : "Post payroll first"}
+                          </span>
+                        ))}
+                    </>
+                  )}
+                />
+              </>
+            )}
+            {page === "Head Office Expenses" && (
+              <>
+                <p className="report-note">
+                  Administrative expenses are linked to account 5400 and the existing payment
+                  vouchers. Record a voucher using Administrative Expenses (5400) to show its posted
+                  expense, cash movement and payment document here.
+                </p>
+                <button className="primary" onClick={() => go("Payment Vouchers")}>
+                  Record / manage expense voucher ?
+                </button>
+                <WorkflowTable
+                  values={rows(data.expenses)}
+                  columns={[
+                    ["number", "Voucher"],
+                    ["payment_date", "Date"],
+                    ["payee", "Payee"],
+                    ["description", "Expense"],
+                    ["amount", "Amount", "money"],
+                    ["status", "Status"],
+                  ]}
+                  actions={() => (
+                    <button onClick={() => go("Payment Vouchers")}>Open voucher module ?</button>
+                  )}
+                />
+              </>
+            )}
             {page === "Bulk Inventory Import" && (
               <BulkImport
                 canManage={can("stock.manage")}
@@ -483,8 +578,76 @@ export default function BusinessWorkflowsPage({
           busy={busy}
           close={() => setModal(null)}
         >
-          {modal.kind === "salary-pay" && <SimpleForm busy={busy} label="Post salary payment" submit={f => mutate("salary-payments",{payroll_item_id:modal.row.id,payment_account_id:Number(f.get("payment_account_id")),payment_date:f.get("payment_date")})}><p>{modal.row.name} ? {modal.row.payroll_number} ? {money(modal.row.net_salary)}</p><label>Pay from<select name="payment_account_id" required><option value="">Choose cash/bank account</option>{data.accounts.filter((a:any)=>a.is_cash_account).map((a:any)=><option key={a.id} value={a.id}>{a.code} ? {a.name}</option>)}</select></label><label>Payment date<input name="payment_date" type="date" min={modal.row.period_end} defaultValue={today()} required /></label></SimpleForm>}
-          {modal.kind === "salary-reverse" && <SimpleForm busy={busy} label="Reverse salary payment" submit={f => mutate(`salary-payments/${modal.row.linked_payment.id}/reverse`,{void_date:f.get("void_date"),reason:f.get("reason")})}><p>{modal.row.name} ? {money(modal.row.linked_payment.amount)}</p><label>Reversal date<input name="void_date" type="date" min={modal.row.linked_payment.payment_date} defaultValue={today()} required /></label><label>Reason<textarea name="reason" required maxLength={500} /></label></SimpleForm>}
+          {modal.kind === "salary-pay" && (
+            <SimpleForm
+              busy={busy}
+              label="Post salary payment"
+              submit={(f) =>
+                mutate("salary-payments", {
+                  payroll_item_id: modal.row.id,
+                  payment_account_id: Number(f.get("payment_account_id")),
+                  payment_date: f.get("payment_date"),
+                })
+              }
+            >
+              <p>
+                {modal.row.name} ? {modal.row.payroll_number} ? {money(modal.row.net_salary)}
+              </p>
+              <label>
+                Pay from
+                <select name="payment_account_id" required>
+                  <option value="">Choose cash/bank account</option>
+                  {data.accounts
+                    .filter((a: any) => a.is_cash_account)
+                    .map((a: any) => (
+                      <option key={a.id} value={a.id}>
+                        {a.code} ? {a.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                Payment date
+                <input
+                  name="payment_date"
+                  type="date"
+                  min={modal.row.period_end}
+                  defaultValue={today()}
+                  required
+                />
+              </label>
+            </SimpleForm>
+          )}
+          {modal.kind === "salary-reverse" && (
+            <SimpleForm
+              busy={busy}
+              label="Reverse salary payment"
+              submit={(f) =>
+                mutate(`salary-payments/${modal.row.linked_payment.id}/reverse`, {
+                  void_date: f.get("void_date"),
+                  reason: f.get("reason"),
+                })
+              }
+            >
+              <p>
+                {modal.row.name} ? {money(modal.row.linked_payment.amount)}
+              </p>
+              <label>
+                Reversal date
+                <input
+                  name="void_date"
+                  type="date"
+                  min={modal.row.linked_payment.payment_date}
+                  defaultValue={today()}
+                  required
+                />
+              </label>
+              <label>
+                Reason
+                <textarea name="reason" required maxLength={500} />
+              </label>
+            </SimpleForm>
+          )}
           {modal.kind === "quote" && (
             <QuoteForm
               data={data}
@@ -690,7 +853,7 @@ export default function BusinessWorkflowsPage({
   );
 }
 
-function WorkflowTable({
+export function WorkflowTable({
   values,
   columns,
   actions,
@@ -738,7 +901,7 @@ function WorkflowTable({
   );
 }
 
-function WorkflowModal({
+export function WorkflowModal({
   title,
   children,
   busy,
@@ -776,7 +939,7 @@ function WorkflowModal({
   );
 }
 
-function SimpleForm({
+export function SimpleForm({
   children,
   busy,
   submit,
@@ -1400,6 +1563,7 @@ function MasterData({ page, data, canManage, busy, save }: any) {
               submit={(f) =>
                 save("product-classification", {
                   article_id: selected.id,
+                  track_serials: f.get("track_serials") === "on",
                   category: f.get("category"),
                   brand: f.get("brand"),
                   unit: f.get("unit"),
@@ -1426,6 +1590,14 @@ function MasterData({ page, data, canManage, busy, save }: any) {
                   </select>
                 </label>
               ))}
+              <label className="workflow-inline-check">
+                <input
+                  name="track_serials"
+                  type="checkbox"
+                  defaultChecked={!!selected.track_serials}
+                />{" "}
+                Require serials when invoicing this article
+              </label>
               <label>
                 Reason for change
                 <textarea name="reason" required maxLength={500} />
@@ -1437,7 +1609,6 @@ function MasterData({ page, data, canManage, busy, save }: any) {
     </>
   );
 }
-
 
 function BulkImport({ canManage, busy, save }: any) {
   const [rows, setRows] = useState<any[]>([]),

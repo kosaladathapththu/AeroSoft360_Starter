@@ -169,6 +169,34 @@ export function BillDocument({ invoice }: { invoice: any }) {
           </div>
         </dl>
       </div>
+      {!!invoice.serials?.length && (
+        <section className="bill-warranty">
+          <h2>Serial numbers &amp; warranty</h2>
+          <table className="bill-items">
+            <thead>
+              <tr>
+                <th>Article / size</th>
+                <th>Serial number</th>
+                <th>Warranty start</th>
+                <th>Warranty until</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.serials.map((serial: any) => (
+                <tr key={serial.id}>
+                  <td>
+                    {serial.article_code} / {serial.size_label}
+                  </td>
+                  <td>{serial.serial_number}</td>
+                  <td>{date(serial.warranty_starts_on)}</td>
+                  <td>{serial.warranty_ends_on ? date(serial.warranty_ends_on) : "No warranty"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p>Keep this invoice as proof of purchase when making a warranty claim.</p>
+        </section>
+      )}
       <div className="bill-signatures">
         <span>Prepared by</span>
         <span>Authorized signature</span>

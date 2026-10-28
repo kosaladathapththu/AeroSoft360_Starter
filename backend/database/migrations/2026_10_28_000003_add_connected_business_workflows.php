@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        if (!Schema::hasTable("quotations")) {
         Schema::create("quotations", function (Blueprint $t) {
             $t->id();
             $t->string("number")->nullable()->unique();
@@ -23,6 +24,8 @@ return new class extends Migration {
             $t->unsignedBigInteger("created_by")->nullable();
             $t->timestamps();
         });
+        }
+        if (!Schema::hasTable("supplier_invoices")) {
         Schema::create("supplier_invoices", function (Blueprint $t) {
             $t->id();
             $t->foreignId("goods_receipt_id")->unique()->constrained();
@@ -36,6 +39,8 @@ return new class extends Migration {
             $t->timestamps();
             $t->unique(["supplier_id", "invoice_number"]);
         });
+        }
+        if (!Schema::hasTable("purchase_returns")) {
         Schema::create("purchase_returns", function (Blueprint $t) {
             $t->id();
             $t->string("number")->nullable()->unique();
@@ -51,6 +56,8 @@ return new class extends Migration {
             $t->unsignedBigInteger("created_by")->nullable();
             $t->timestamps();
         });
+        }
+        if (!Schema::hasTable("purchase_return_lines")) {
         Schema::create("purchase_return_lines", function (Blueprint $t) {
             $t->id();
             $t->foreignId("purchase_return_id")->constrained();
@@ -58,8 +65,10 @@ return new class extends Migration {
             $t->decimal("quantity", 18, 4);
             $t->decimal("unit_cost", 18, 4);
             $t->decimal("total", 18, 2);
-            $t->unique(["purchase_return_id", "goods_receipt_line_id"]);
+            $t->unique(["purchase_return_id", "goods_receipt_line_id"], "return_line_unique");
         });
+        }
+        if (!Schema::hasTable("cash_closings")) {
         Schema::create("cash_closings", function (Blueprint $t) {
             $t->id();
             $t->foreignId("account_id")->constrained();
@@ -76,6 +85,8 @@ return new class extends Migration {
             $t->timestamps();
             $t->unique(["account_id", "closing_date"]);
         });
+        }
+        if (!Schema::hasTable("recurring_journals")) {
         Schema::create("recurring_journals", function (Blueprint $t) {
             $t->id();
             $t->string("description", 255);
@@ -86,6 +97,8 @@ return new class extends Migration {
             $t->string("status", 20)->default("active");
             $t->timestamps();
         });
+        }
+        if (!Schema::hasTable("recurring_journal_runs")) {
         Schema::create("recurring_journal_runs", function (Blueprint $t) {
             $t->id();
             $t->foreignId("recurring_journal_id")->constrained();
@@ -94,6 +107,8 @@ return new class extends Migration {
             $t->unsignedBigInteger("posted_by")->nullable();
             $t->unique(["recurring_journal_id", "posting_date"]);
         });
+        }
+        if (!Schema::hasTable("catalog_terms")) {
         Schema::create("catalog_terms", function (Blueprint $t) {
             $t->id();
             $t->string("kind", 20);
@@ -102,6 +117,8 @@ return new class extends Migration {
             $t->timestamps();
             $t->unique(["kind", "name"]);
         });
+        }
+        if (!Schema::hasTable("stock_import_batches")) {
         Schema::create("stock_import_batches", function (Blueprint $t) {
             $t->id();
             $t->uuid("import_key")->unique();
@@ -109,6 +126,7 @@ return new class extends Migration {
             $t->unsignedInteger("rows");
             $t->timestamp("created_at");
         });
+        }
         Schema::create('salary_payments', function (Blueprint $t) {
             $t->id();
             $t->foreignId('payroll_item_id')->constrained();
@@ -123,10 +141,16 @@ return new class extends Migration {
             $t->unsignedBigInteger('created_by')->nullable();
             $t->timestamps();
         });
+        // MySQL DDL is not transactional. Resume safely if the table exists without its index.
+        if (\Illuminate\Support\Facades\DB::getDriverName() === 'mysql' && !collect(\Illuminate\Support\Facades\DB::select('SHOW INDEX FROM purchase_return_lines'))->contains(fn($index) => $index->Key_name === 'return_line_unique')) {
+            Schema::table('purchase_return_lines', fn(Blueprint $t) => $t->unique(['purchase_return_id','goods_receipt_line_id'],'return_line_unique'));
+        }
+        if (!Schema::hasColumn('articles', 'brand')) {
         Schema::table("articles", function (Blueprint $t) {
             $t->string("brand", 80)->nullable();
             $t->string("unit", 20)->default("piece");
         });
+        }
         foreach (["articles", "materials"] as $table) {
             foreach (
                 \Illuminate\Support\Facades\DB::table($table)->distinct()->pluck("category")

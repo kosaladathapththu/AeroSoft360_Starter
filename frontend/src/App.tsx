@@ -32,6 +32,8 @@ import {
 import "./styles.css";
 import "./actions.css";
 import "./reports.css";
+import PointOfSalePage from "./PointOfSalePage";
+import SerialWarrantyPage from "./SerialWarrantyPage";
 import BusinessWorkflowsPage, { workflowPages } from "./BusinessWorkflowsPage";
 import { printReport, reportTotals } from "./report-print";
 import "./tables.css";
@@ -230,6 +232,7 @@ export default function App() {
       name: "Sales",
       icon: ClipboardCheck,
       items: [
+        ["Point of Sale", Check],
         ["Quotations", FileText],
         ["Customer POs", ClipboardCheck],
         ["Sales Orders", FileText],
@@ -268,6 +271,7 @@ export default function App() {
         ["Bulk Inventory Import", FileUp],
         ["Inventory Operations", Warehouse],
         ["Stock Ledgers", FileText],
+        ["Serials & Warranty", ShieldCheck],
       ],
     },
     {
@@ -465,7 +469,24 @@ export default function App() {
           </button>
         </header>
         <section className="content">
-          {workflowPages.includes(page) ? (
+          {page === "Point of Sale" ? (
+            <PointOfSalePage
+              api={API}
+              token={token() || ""}
+              user={profile.user}
+              canManage={profile.permissions.includes("accounting.manage")}
+              search={search}
+              go={goToPage}
+            />
+          ) : page === "Serials & Warranty" ? (
+            <SerialWarrantyPage
+              api={API}
+              token={token() || ""}
+              permissions={profile.permissions}
+              search={search}
+              go={goToPage}
+            />
+          ) : workflowPages.includes(page) ? (
             <BusinessWorkflowsPage
               key={page}
               api={API}

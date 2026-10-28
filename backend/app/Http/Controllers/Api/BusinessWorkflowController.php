@@ -494,6 +494,7 @@ final class BusinessWorkflowController
     {
         $d = $r->validate([
             "article_id" => "required|exists:articles,id",
+            "track_serials" => "nullable|boolean",
             "category" => "required|string|max:80",
             "brand" => "nullable|string|max:80",
             "unit" => "required|string|max:20",
@@ -520,6 +521,7 @@ final class BusinessWorkflowController
             ->update([
                 "category" => $d["category"],
                 "brand" => $d["brand"] ?? null,
+                "track_serials" => $d["track_serials"] ?? $old->track_serials,
                 "unit" => $d["unit"],
                 "updated_at" => now(),
             ]);

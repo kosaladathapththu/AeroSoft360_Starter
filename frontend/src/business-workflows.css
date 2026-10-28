@@ -96,6 +96,14 @@
   min-height: 80px;
   resize: vertical;
 }
+.workflow-form .workflow-inline-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.workflow-form .workflow-inline-check input {
+  width: auto;
+}
 .workflow-form-footer {
   display: flex;
   justify-content: flex-end;
@@ -157,6 +165,9 @@
   color: #69808c;
   line-height: 1.6;
 }
+.workflow-pos-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; align-items: start; }
+.workflow-pos-checkout { background: white; border: 1px solid #d7e3e8; border-radius: 12px; padding: 22px; }
+@media(max-width: 950px) { .workflow-pos-grid { grid-template-columns: 1fr; } }
 @media (max-width: 800px) {
   .workflow-quote-line,
   .workflow-journal-line {

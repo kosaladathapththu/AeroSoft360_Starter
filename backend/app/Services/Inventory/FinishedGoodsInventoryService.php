@@ -9,6 +9,7 @@ final class FinishedGoodsInventoryService
 {
     public function issueInvoice(int $invoiceId, string $date): void
     {
+        (new SerialWarrantyService)->issueForInvoice($invoiceId);
         $lines = DB::table("sales_invoice_lines")
             ->where("sales_invoice_id", $invoiceId)
             ->select("article_id", "size_label", DB::raw("SUM(quantity) quantity"))
@@ -31,6 +32,7 @@ final class FinishedGoodsInventoryService
 
     public function restoreInvoice(int $invoiceId, string $date): void
     {
+        (new SerialWarrantyService)->guardInvoice($invoiceId);
         $issues = DB::table("finished_goods_movements")
             ->where([
                 "source_type" => "sales_invoice",
