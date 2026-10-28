@@ -42,6 +42,8 @@ import { confirmDialog, showNotice } from "./AppDialogs";
 import InvoiceBill from "./InvoiceBill";
 import CustomerProfile from "./CustomerProfile";
 import { matchesSearch } from "./search";
+import { reportSearchCatalog, pageSearchKeywords } from "./search-catalog";
+import GlobalSearchRecords from "./GlobalSearchRecords";
 import "./search.css";
 import CollectionFields from "./CollectionFields";
 import PaymentVouchersPage from "./PaymentVouchersPage";
@@ -161,6 +163,7 @@ export default function App() {
     [openNavGroup, setOpenNavGroup] = useState(""),
     [search, setSearch] = useState(""),
     [searchOpen, setSearchOpen] = useState(false);
+  const [requestedReport, setRequestedReport] = useState("");
   const token = () => localStorage.getItem("aerosoft_token");
   const load = useCallback(async () => {
     const saved = localStorage.getItem("aerosoft_token");
@@ -303,6 +306,7 @@ export default function App() {
     },
   ] as const;
   const goToPage = (name: string) => {
+    setRequestedReport("");
     setPage(name);
     setMenu(false);
     setSearch("");
@@ -314,8 +318,11 @@ export default function App() {
     { name: "Dashboard", group: "Workspace" },
     ...navGroups
       .filter(group => group.name !== "Administration" || profile?.permissions.includes("admin.manage"))
-      .flatMap(group => group.items.map(([name]) => ({ name, group: group.name }))),
+      .flatMap(group => group.items.map(([name]) => ({ name, group: group.name, keywords: pageSearchKeywords[name] || "" }))),
   ].filter(item => matchesSearch(item, search));
+  const searchReports = reportSearchCatalog.filter(report => matchesSearch(["Reports", ...report], search));
+  const openSearchReport = (key: string) => { goToPage("Reports"); setRequestedReport(key); };
+  const openSearchRecord = (name: string, query: string) => { goToPage(name); setSearch(query); };
   const rows = useMemo(() => {
     if (page === "Suppliers")
       return data.suppliers.filter((x) => matchesSearch(x, search));
@@ -473,13 +480,16 @@ export default function App() {
               aria-label="Search current records or find a page"
               aria-expanded={searchOpen && Boolean(search.trim())}
               aria-controls="workspace-search-results"
+              maxLength={120}
               value={search}
               onFocus={() => setSearchOpen(true)}
               onChange={(e) => { setSearch(e.target.value); setSearchOpen(true); }}
               onKeyDown={e => {
                 if (e.key === "Escape") { setSearch(""); setSearchOpen(false); }
-                if (e.key === "Enter" && search.trim() && searchPages.length === 1) {
-                  e.preventDefault(); goToPage(searchPages[0].name);
+                if (e.key === "Enter" && search.trim() && searchPages.length + searchReports.length === 1) {
+                  e.preventDefault();
+                  if (searchReports.length) openSearchReport(searchReports[0][0]);
+                  else goToPage(searchPages[0].name);
                 }
                 if (e.key === "ArrowDown" && search.trim()) {
                   e.preventDefault();
@@ -491,7 +501,10 @@ export default function App() {
             {searchOpen && search.trim() && <div id="workspace-search-results" className="workspace-search-results">
               <p>Search current lists or open a matching page:</p>
               {searchPages.map(item => <button key={item.name} onClick={() => goToPage(item.name)}><b>{item.name}</b><small>{item.group}</small></button>)}
-              {!searchPages.length && <p>No matching pages. Try a customer name, document number, or another page name.</p>}
+              <p>Reports</p>
+              {searchReports.map(([key, name]) => <button key={key} onClick={() => openSearchReport(key)}><b>{name}</b><small>Open report</small></button>)}
+              {!searchPages.length && !searchReports.length && <p>No matching pages or reports.</p>}
+              <GlobalSearchRecords api={API} token={token() || ""} query={search} open={openSearchRecord} />
             </div>}
           </div>
           <button className="refresh" onClick={load}>
@@ -573,7 +586,7 @@ export default function App() {
           ) : page === "Cash Flow" ? (
             <CashFlowPage api={API} token={token() || ""} search={search} go={setPage} />
           ) : page === "Reports" ? (
-            <ReportsPage token={token() || ""} />
+            <ReportsPage token={token() || ""} search={search} requestedReport={requestedReport} />
           ) : page === "Access Control" ? (
             <AccessPage token={token() || ""} currentUserId={profile.user.id} search={search} />
           ) : (
@@ -9320,7 +9333,7 @@ function PayrollItemEditModal({
     </div>
   );
 }
-function ReportsPage({ token }: { token: string }) {
+function ReportsPage({ token, search = "", requestedReport = "" }: { token: string; search?: string; requestedReport?: string }) {
   const now = new Date(),
     [from, setFrom] = useState(`${now.getFullYear()}-01-01`),
     [to, setTo] = useState(now.toISOString().slice(0, 10));
@@ -9329,7 +9342,8 @@ function ReportsPage({ token }: { token: string }) {
     [aging, setAging] = useState<any>(null),
     [retail, setRetail] = useState<any>(null),
     [error, setError] = useState(""),
-    [selected, setSelected] = useState("");
+    [selected, setSelected] = useState(requestedReport);
+  useEffect(() => { if (requestedReport) setSelected(requestedReport); }, [requestedReport]);
   const load = useCallback(() => {
     setError("");
     Promise.all([
@@ -9487,11 +9501,11 @@ function ReportsPage({ token }: { token: string }) {
           </div>
         </div>
         <div className="report-catalog">
-          {reportGroups.map((group) => (
+          {reportGroups.filter(group => group.reports.some(([key, label]) => matchesSearch([group.title, label, reportSearchCatalog.find(report => report[0] === key)], search))).map((group) => (
             <section key={group.title}>
               <h2>{group.title}</h2>
               <div className="report-menu">
-                {group.reports.map(([key, label]) => (
+                {group.reports.filter(([key, label]) => matchesSearch([group.title, label, reportSearchCatalog.find(report => report[0] === key)], search)).map(([key, label]) => (
                   <button onClick={() => setSelected(key)} key={key}>
                     <FileText />
                     <span>{label}</span>
@@ -9512,7 +9526,7 @@ function ReportsPage({ token }: { token: string }) {
             </p>
           </div>
           <div className="pending-report-list">
-            {pendingReports.map((name) => (
+            {pendingReports.filter(name => matchesSearch(name, search)).map((name) => (
               <span key={name}>
                 {name}
                 <small>Requires module</small>
