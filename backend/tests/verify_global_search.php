@@ -41,7 +41,7 @@ DB::table("sales_invoices")->insert(["number" => "INV-2610-0001", "status" => "u
 DB::table("users")->insert(["name" => "Secret user", "password" => "sensitive-password"]);
 function searchResult($query)
 {
-    return new GlobalSearchController()
+    return (new GlobalSearchController())
         ->index(Request::create("/", "GET", ["q" => $query]))
         ->getData(true)["results"];
 }
