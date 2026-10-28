@@ -737,6 +737,11 @@ function SalesPage({
     ),
     [expandedPriceArticles, setExpandedPriceArticles] = useState<Set<number>>(new Set());
   const priceFileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (page === "Collections" && search.trim() && data?.receipts?.some((row: any) => matchesSearch(row, search)) && !data?.invoices?.some((row: any) => Number(row.outstanding) > 0 && matchesSearch(row, search))) {
+      setCollectionView("history");
+    }
+  }, [page, search, data]);
   const salesTableRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (salesTableRef.current) salesTableRef.current.scrollLeft = 0;
