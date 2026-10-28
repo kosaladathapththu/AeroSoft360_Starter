@@ -1,0 +1,60 @@
+.workspace-search {
+  position: relative;
+}
+.workspace-search input {
+  min-width: 0;
+}
+.workspace-search .workspace-search-clear {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px;
+  background: transparent;
+  border: 0;
+  color: #597381;
+  cursor: pointer;
+}
+.workspace-search .workspace-search-clear svg {
+  margin: 0;
+  width: 16px;
+  height: 16px;
+}
+.workspace-search-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(420px, 85vw);
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 40;
+  padding: 8px;
+  background: white;
+  border: 1px solid #d0dfe7;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px #102c3b26;
+}
+.workspace-search-results p {
+  margin: 8px;
+  color: #607887;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.workspace-search-results button {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  text-align: left;
+  padding: 12px;
+  gap: 4px;
+  border: 0;
+  border-radius: 7px;
+  background: white;
+  color: #183a48;
+  cursor: pointer;
+}
+.workspace-search-results button:hover,
+.workspace-search-results button:focus-visible {
+  background: #e6f5f2;
+}
+.workspace-search-results small {
+  color: #607887;
+}

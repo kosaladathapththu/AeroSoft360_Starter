@@ -41,6 +41,8 @@ import "./popups.css";
 import { confirmDialog, showNotice } from "./AppDialogs";
 import InvoiceBill from "./InvoiceBill";
 import CustomerProfile from "./CustomerProfile";
+import { matchesSearch } from "./search";
+import "./search.css";
 import CollectionFields from "./CollectionFields";
 import PaymentVouchersPage from "./PaymentVouchersPage";
 import ChartOfAccountsPage from "./ChartOfAccountsPage";
@@ -157,7 +159,8 @@ export default function App() {
     [viewing, setViewing] = useState<RecordRow | null>(null),
     [menu, setMenu] = useState(false),
     [openNavGroup, setOpenNavGroup] = useState(""),
-    [search, setSearch] = useState("");
+    [search, setSearch] = useState(""),
+    [searchOpen, setSearchOpen] = useState(false);
   const token = () => localStorage.getItem("aerosoft_token");
   const load = useCallback(async () => {
     const saved = localStorage.getItem("aerosoft_token");
@@ -303,20 +306,24 @@ export default function App() {
     setPage(name);
     setMenu(false);
     setSearch("");
+    setSearchOpen(false);
+    const group = navGroups.find(group => group.items.some(([page]) => page === name));
+    if (group) setOpenNavGroup(group.name);
   };
+  const searchPages = [
+    { name: "Dashboard", group: "Workspace" },
+    ...navGroups
+      .filter(group => group.name !== "Administration" || profile?.permissions.includes("admin.manage"))
+      .flatMap(group => group.items.map(([name]) => ({ name, group: group.name }))),
+  ].filter(item => matchesSearch(item, search));
   const rows = useMemo(() => {
-    const q = search.toLowerCase();
     if (page === "Suppliers")
-      return data.suppliers.filter((x) => `${x.code} ${x.name}`.toLowerCase().includes(q));
+      return data.suppliers.filter((x) => matchesSearch(x, search));
     if (page === "Purchase Orders" || page === "Receive Goods")
-      return data.purchase_orders.filter((x) =>
-        `${x.number} ${x.supplier_name}`.toLowerCase().includes(q),
-      );
+      return data.purchase_orders.filter((x) => matchesSearch(x, search));
     if (page === "Raw Material Stock")
-      return data.stock.filter((x) =>
-        `${x.code} ${x.name} ${x.batch_number}`.toLowerCase().includes(q),
-      );
-    return data.journals.filter((x) => `${x.number} ${x.description}`.toLowerCase().includes(q));
+      return data.stock.filter((x) => matchesSearch(x, search));
+    return data.journals.filter((x) => matchesSearch(x, search));
   }, [data, page, search]);
   const remove = async (row: RecordRow) => {
     const kind =
@@ -457,13 +464,35 @@ export default function App() {
             <span>Workspace</span>
             <b>{page}</b>
           </div>
-          <div className="search">
+          <div className="search workspace-search" onBlur={e => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSearchOpen(false);
+          }}>
             <Search />
             <input
               placeholder="Search records"
+              aria-label="Search current records or find a page"
+              aria-expanded={searchOpen && Boolean(search.trim())}
+              aria-controls="workspace-search-results"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onFocus={() => setSearchOpen(true)}
+              onChange={(e) => { setSearch(e.target.value); setSearchOpen(true); }}
+              onKeyDown={e => {
+                if (e.key === "Escape") { setSearch(""); setSearchOpen(false); }
+                if (e.key === "Enter" && search.trim() && searchPages.length === 1) {
+                  e.preventDefault(); goToPage(searchPages[0].name);
+                }
+                if (e.key === "ArrowDown" && search.trim()) {
+                  e.preventDefault();
+                  e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(".workspace-search-results button")?.focus();
+                }
+              }}
             />
+            {search && <button className="workspace-search-clear" aria-label="Clear search" onClick={() => { setSearch(""); setSearchOpen(false); }}><X size={16} /></button>}
+            {searchOpen && search.trim() && <div id="workspace-search-results" className="workspace-search-results">
+              <p>Search current lists or open a matching page:</p>
+              {searchPages.map(item => <button key={item.name} onClick={() => goToPage(item.name)}><b>{item.name}</b><small>{item.group}</small></button>)}
+              {!searchPages.length && <p>No matching pages. Try a customer name, document number, or another page name.</p>}
+            </div>}
           </div>
           <button className="refresh" onClick={load}>
             <RefreshCw />
@@ -519,11 +548,12 @@ export default function App() {
               go={setPage}
               currentUser={profile.user}
               rawStock={data.stock}
+              search={search}
             />
           ) : page === "Employees" ? (
-            <EmployeesPage token={token() || ""} />
+            <EmployeesPage token={token() || ""} search={search} />
           ) : page === "Payroll" ? (
-            <PayrollPage token={token() || ""} go={goToPage} />
+            <PayrollPage token={token() || ""} go={goToPage} search={search} />
           ) : page === "Payment Vouchers" ? (
             <PaymentVouchersPage
               api={API}
@@ -545,7 +575,7 @@ export default function App() {
           ) : page === "Reports" ? (
             <ReportsPage token={token() || ""} />
           ) : page === "Access Control" ? (
-            <AccessPage token={token() || ""} currentUserId={profile.user.id} />
+            <AccessPage token={token() || ""} currentUserId={profile.user.id} search={search} />
           ) : (
             <>
               <div className="heading">
@@ -655,12 +685,14 @@ function SalesPage({
   go,
   currentUser,
   rawStock = [],
+  search = "",
 }: {
   token: string;
   page: string;
   go: (page: string) => void;
   currentUser: Profile["user"];
   rawStock?: Stock[];
+  search?: string;
 }) {
   const [data, setData] = useState<any>(null),
     [aging, setAging] = useState<any>(null),
@@ -1032,12 +1064,13 @@ function SalesPage({
     "Finished Goods Stock": data.finished_stock || [],
     "Inventory Overview": data.finished_stock || [],
   };
-  const rows =
+  const sourceRows =
     page === "Collections"
       ? collectionView === "due"
         ? data.invoices.filter((invoice: any) => Number(invoice.outstanding) > 0)
         : data.receipts
       : map[page] || [];
+  const rows = sourceRows.filter((row: any) => matchesSearch(row, search));
   const addType: any = {
     Customers: "customer",
     Salespersons: "rep",
@@ -1190,6 +1223,7 @@ function SalesPage({
     return (
       (inventoryType === "all" || item.type === inventoryType) &&
       (inventoryCategory === "all" || item.category === inventoryCategory) &&
+      matchesSearch(item, search) &&
       (!query ||
         `${item.item} ${item.category} ${item.variant} ${item.size_labels || ""} ${item.type}`
           .toLowerCase()
@@ -7214,7 +7248,7 @@ function EditModal({
   );
 }
 
-function AccessPage({ token, currentUserId }: { token: string; currentUserId: number }) {
+function AccessPage({ token, currentUserId, search = "" }: { token: string; currentUserId: number; search?: string }) {
   const [data, setData] = useState<any>({ users: [], roles: [], permissions: [] });
   const [tab, setTab] = useState<"users" | "roles">("users");
   const [editing, setEditing] = useState<any>(null);
@@ -7333,7 +7367,7 @@ function AccessPage({ token, currentUserId }: { token: string; currentUserId: nu
             </tr>
           </thead>
           <tbody>
-            {(tab === "users" ? data.users : data.roles).map((row: any) => (
+            {(tab === "users" ? data.users : data.roles).filter((row: any) => matchesSearch(row, search)).map((row: any) => (
               <tr key={row.id}>
                 {tab === "users" ? (
                   <>
@@ -7718,7 +7752,7 @@ function ModuleHeader({ title, back }: { title: string; back: () => void }) {
     </header>
   );
 }
-function EmployeesPage({ token }: { token: string }) {
+function EmployeesPage({ token, search = "" }: { token: string; search?: string }) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
     [editing, setEditing] = useState<any>(null),
@@ -7831,7 +7865,7 @@ function EmployeesPage({ token }: { token: string }) {
                 </tr>
               </thead>
               <tbody>
-                {data.employees.map((employee: any) => (
+                {data.employees.filter((employee: any) => matchesSearch(employee, search)).map((employee: any) => (
                   <tr key={employee.id}>
                     <td>
                       <b>{employee.employee_no}</b>
@@ -8054,7 +8088,7 @@ function EmployeeProfileModal({
     </div>
   );
 }
-function PayrollPage({ token, go }: { token: string; go: (page: string) => void }) {
+function PayrollPage({ token, go, search = "" }: { token: string; go: (page: string) => void; search?: string }) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
     [viewing, setViewing] = useState<any>(null),
@@ -8287,7 +8321,7 @@ function PayrollPage({ token, go }: { token: string; go: (page: string) => void 
                   </tr>
                 </thead>
                 <tbody>
-                  {data.runs.map((r: any) => (
+                  {data.runs.filter((run: any) => matchesSearch(run, search)).map((r: any) => (
                     <Fragment key={r.id}>
                       <tr>
                         <td>
