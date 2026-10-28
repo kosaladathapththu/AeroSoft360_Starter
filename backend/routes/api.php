@@ -152,6 +152,7 @@ Route::prefix("v1")->group(function (): void {
             \App\Http\Controllers\Api\PointOfSaleController::class,
             "checkout",
         ])->middleware("permission:accounting.manage");
+        Route::get('/search', [\App\Http\Controllers\Api\GlobalSearchController::class, 'index'])->middleware('permission:workspace.view');
         Route::get("/workspace", [ProcurementController::class, "workspace"])->middleware(
             "permission:workspace.view",
         );
