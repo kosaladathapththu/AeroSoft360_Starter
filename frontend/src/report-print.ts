@@ -108,7 +108,7 @@ export function buildReportDocument(report: PrintReport, generated = new Date())
   });
   const period = snapshotReports.has(report.key)
     ? `Current snapshot · Generated ${generatedAt} (Sri Lanka)`
-    : ["aging", "all_payables"].includes(report.key)
+    : ["aging", "all_payables", "customer_profile"].includes(report.key)
       ? `As at ${formatDate(report.to)}`
       : `${formatDate(report.from)} – ${formatDate(report.to)}`;
   const recordCount = tables.reduce(

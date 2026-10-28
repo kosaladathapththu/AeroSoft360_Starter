@@ -40,6 +40,7 @@ import "./tables.css";
 import "./popups.css";
 import { confirmDialog, showNotice } from "./AppDialogs";
 import InvoiceBill from "./InvoiceBill";
+import CustomerProfile from "./CustomerProfile";
 import CollectionFields from "./CollectionFields";
 import PaymentVouchersPage from "./PaymentVouchersPage";
 import ChartOfAccountsPage from "./ChartOfAccountsPage";
@@ -1964,7 +1965,9 @@ function SalesPage({
           close={() => setBillInvoiceId(null)}
         />
       )}
-      {viewing && <RecordView page={page} row={viewing} close={() => setViewing(null)} />}
+      {viewing && (page === "Customers" ? (
+        <CustomerProfile id={Number(viewing.id)} api={API} token={token} close={() => setViewing(null)} />
+      ) : <RecordView page={page} row={viewing} close={() => setViewing(null)} />)}
       {inventoryRecord && (
         <InventoryRecordModal
           record={inventoryRecord}

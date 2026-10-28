@@ -9,7 +9,9 @@ final class CustomerProfileController
 {
     public function show(Request $r, int $id, CustomerProfileService $service)
     {
-        $d = $r->validate(['as_of'=>'nullable|date']);
-        return response()->json($service->profile($id, $d['as_of'] ?? now()->timezone('Asia/Colombo')->toDateString()));
+        $d = $r->validate(["as_of" => "nullable|date_format:Y-m-d"]);
+        return response()->json(
+            $service->profile($id, $d["as_of"] ?? now()->timezone("Asia/Colombo")->toDateString()),
+        );
     }
 }
