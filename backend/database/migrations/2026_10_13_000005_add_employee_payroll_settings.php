@@ -1,3 +1,33 @@
 <?php
-use Illuminate\Database\Migrations\Migration;use Illuminate\Database\Schema\Blueprint;use Illuminate\Support\Facades\Schema;
-return new class extends Migration {public function up():void {Schema::table('employees',function(Blueprint $t){$t->decimal('fixed_allowance',18,2)->default(0)->after('basic_salary');$t->decimal('fixed_incentive',18,2)->default(0)->after('fixed_allowance');$t->decimal('fixed_deduction',18,2)->default(0)->after('fixed_incentive');$t->decimal('epf_rate',5,2)->default(8)->after('fixed_deduction');$t->decimal('monthly_working_days',5,2)->default(26)->after('epf_rate');$t->decimal('standard_month_hours',7,2)->default(240)->after('monthly_working_days');$t->decimal('overtime_multiplier',5,2)->default(1.5)->after('standard_month_hours');});}public function down():void {Schema::table('employees',fn(Blueprint $t)=>$t->dropColumn(['fixed_allowance','fixed_incentive','fixed_deduction','epf_rate','monthly_working_days','standard_month_hours','overtime_multiplier']));}};
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::table("employees", function (Blueprint $t) {
+            $t->decimal("fixed_allowance", 18, 2)->default(0)->after("basic_salary");
+            $t->decimal("fixed_incentive", 18, 2)->default(0)->after("fixed_allowance");
+            $t->decimal("fixed_deduction", 18, 2)->default(0)->after("fixed_incentive");
+            $t->decimal("epf_rate", 5, 2)->default(8)->after("fixed_deduction");
+            $t->decimal("monthly_working_days", 5, 2)->default(26)->after("epf_rate");
+            $t->decimal("standard_month_hours", 7, 2)->default(240)->after("monthly_working_days");
+            $t->decimal("overtime_multiplier", 5, 2)->default(1.5)->after("standard_month_hours");
+        });
+    }
+    public function down(): void
+    {
+        Schema::table(
+            "employees",
+            fn(Blueprint $t) => $t->dropColumn([
+                "fixed_allowance",
+                "fixed_incentive",
+                "fixed_deduction",
+                "epf_rate",
+                "monthly_working_days",
+                "standard_month_hours",
+                "overtime_multiplier",
+            ]),
+        );
+    }
+};

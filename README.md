@@ -56,3 +56,19 @@ php artisan test --filter=ProcureToStockTest
 ```
 
 The test verifies partial receipt, batch stock, balanced accounting, and rollback when received quantity exceeds the PO balance.
+
+## Chart of Accounts and Cash Flow
+
+Open **Finance & Reports > Chart of Accounts** to create accounts, mark cash/bank accounts, assign cash-flow activities, view dated balances and account ledgers, or download CSV reports. Account changes require a reason and retain an audit record. Used account structures are protected; system accounts stay active. Deactivate other accounts instead of deleting their history.
+
+**Finance & Reports > Cash Flow** shows posted cash movements, opening and closing balances, operating/investing/financing activities, and a ledger reconciliation. Unclassified movements remain visible. Internal transfers are excluded from external receipts/payments. Mixed journal counterpart amounts are allocated proportionally, with cent rounding preserved. The financial statements and spreadsheet export use this same calculation.
+
+Payment vouchers use active cash/bank and expense accounts from this chart. Customer collections include a **Deposit to** account; posting credits receivables and debits that selected cash/bank account. Drafts and unpaid invoices do not affect cash flow; voucher cancellation affects cash on its reversal date. Apply migrations with `php artisan migrate` when updating another installation.
+
+Additional isolated checks (in-memory SQLite):
+
+```powershell
+php tests/verify_chart_and_cash_flow.php
+php tests/verify_payment_vouchers.php
+php tests/verify_collection_payment.php
+```

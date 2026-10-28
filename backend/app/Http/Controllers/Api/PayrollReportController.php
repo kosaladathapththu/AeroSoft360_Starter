@@ -10,35 +10,369 @@ use App\Services\Payroll\AttendancePayrollService;
 use App\Services\Payroll\PayrollExcelExporter;
 use App\Services\Reporting\AgingReportService;
 use App\Services\Reporting\RetailReportService;
-class PayrollReportController extends Controller {
- public function payroll():JsonResponse {return response()->json(['employees'=>DB::table('employees')->orderBy('employee_no')->get(),'imports'=>DB::table('attendance_imports')->latest('id')->get()->map(function($import){$summary=DB::table('attendance_records')->where('attendance_import_id',$import->id)->selectRaw('COUNT(DISTINCT employee_id) employees, COALESCE(SUM(paid_days),0) paid_days, COALESCE(SUM(no_pay_days),0) no_pay_days, COALESCE(SUM(overtime_hours),0) overtime_hours')->first();$import->employees=(int)$summary->employees;$import->paid_days=(float)$summary->paid_days;$import->no_pay_days=(float)$summary->no_pay_days;$import->overtime_hours=(float)$summary->overtime_hours;$import->warnings=json_decode($import->warnings?:'[]',true);return $import;}),'runs'=>DB::table('payroll_runs')->latest('period_end')->get()->map(function($run){$run->items=DB::table('payroll_items as i')->join('employees as e','e.id','=','i.employee_id')->where('i.payroll_run_id',$run->id)->select('i.*','e.employee_no','e.name','e.department')->get();return $run;})]);}
- public function importAttendance(Request $request,AttendancePayrollService $service):JsonResponse {$data=$request->validate(['file'=>['required','file','mimes:xlsx,xls,csv','max:10240'],'period_start'=>['required','date'],'period_end'=>['required','date','after_or_equal:period_start']]);return response()->json($service->import($data['file'],$data['period_start'],$data['period_end']),201);}
- public function calculatePayroll(Request $request,AttendancePayrollService $service):JsonResponse {$data=$request->validate(['attendance_import_id'=>['required','integer','exists:attendance_imports,id']]);return response()->json($service->calculate($data['attendance_import_id']),201);}
- public function exportAttendance(int $attendanceImport,PayrollExcelExporter $exporter) {$import=DB::table('attendance_imports')->find($attendanceImport);abort_unless($import,404,'Attendance import not found.');$rows=DB::table('attendance_records as a')->join('employees as e','e.id','=','a.employee_id')->where('a.attendance_import_id',$attendanceImport)->select('e.employee_no','e.name','e.department',DB::raw('SUM(a.paid_days) paid_days'),DB::raw('SUM(a.no_pay_days) no_pay_days'),DB::raw('SUM(a.overtime_hours) overtime_hours'))->groupBy('e.id','e.employee_no','e.name','e.department')->orderBy('e.employee_no')->get();return $this->excelResponse($exporter->attendance($import,$rows),'Attendance_'.$import->period_end.'.xls');}
- public function exportPayroll(int $payrollRun,PayrollExcelExporter $exporter) {$run=DB::table('payroll_runs')->find($payrollRun);abort_unless($run,404,'Payroll run not found.');$rows=DB::table('payroll_items as i')->join('employees as e','e.id','=','i.employee_id')->where('i.payroll_run_id',$payrollRun)->select('i.*','e.employee_no','e.name','e.department')->orderBy('e.employee_no')->get();return $this->excelResponse($exporter->payroll($run,$rows),'Payroll_'.$run->number.'.xls');}
- public function storeEmployee(Request $request):JsonResponse {$data=$this->employeeData($request);$id=DB::table('employees')->insertGetId($data+['created_at'=>now(),'updated_at'=>now()]);return response()->json(DB::table('employees')->find($id),201);}
- public function updateEmployee(Request $request,int $employee):JsonResponse {abort_unless(DB::table('employees')->where('id',$employee)->exists(),404,'Employee not found.');$data=$this->employeeData($request,$employee);DB::table('employees')->where('id',$employee)->update($data+['updated_at'=>now()]);return response()->json(DB::table('employees')->find($employee));}
- public function updatePayrollSettings(Request $request,int $employee):JsonResponse {abort_unless(DB::table('employees')->where('id',$employee)->exists(),404,'Employee not found.');$data=$request->validate(['basic_salary'=>['required','numeric','gte:0'],'fixed_allowance'=>['required','numeric','gte:0'],'fixed_incentive'=>['required','numeric','gte:0'],'fixed_deduction'=>['required','numeric','gte:0'],'epf_rate'=>['required','numeric','between:0,100'],'monthly_working_days'=>['required','numeric','gt:0','lte:31'],'standard_month_hours'=>['required','numeric','gt:0'],'overtime_multiplier'=>['required','numeric','gte:0']]);DB::table('employees')->where('id',$employee)->update($data+['updated_at'=>now()]);return response()->json(DB::table('employees')->find($employee));}
- public function deleteEmployee(int $employee):JsonResponse {abort_if(DB::table('payroll_items')->where('employee_id',$employee)->exists(),422,'Employee has payroll history and cannot be deleted. Set the employee to inactive instead.');abort_unless(DB::table('employees')->where('id',$employee)->delete()===1,404,'Employee not found.');return response()->json(['message'=>'Employee deleted.']);}
- public function updatePayrollRun(Request $request,int $payrollRun):JsonResponse {$data=$request->validate(['period_start'=>['required','date'],'period_end'=>['required','date','after_or_equal:period_start'],'status'=>['required','in:draft,approved,posted,void']]);abort_unless(DB::table('payroll_runs')->where('id',$payrollRun)->update($data+['updated_at'=>now()])===1,404,'Payroll run not found.');return response()->json(DB::table('payroll_runs')->find($payrollRun));}
- public function deletePayrollRun(int $payrollRun):JsonResponse {DB::transaction(function()use($payrollRun){DB::table('payroll_items')->where('payroll_run_id',$payrollRun)->delete();abort_unless(DB::table('payroll_runs')->where('id',$payrollRun)->delete()===1,404,'Payroll run not found.');});return response()->json(['message'=>'Payroll run deleted.']);}
- public function updatePayrollItem(Request $request,int $payrollItem):JsonResponse {$item=DB::table('payroll_items')->find($payrollItem);abort_unless($item,404,'Employee payroll line not found.');$data=$request->validate(['basic_salary'=>['required','numeric','gte:0'],'allowances'=>['required','numeric','gte:0'],'incentive'=>['required','numeric','gte:0'],'commission'=>['required','numeric','gte:0'],'overtime_hours'=>['required','numeric','gte:0'],'overtime'=>['required','numeric','gte:0'],'epf_employee'=>['required','numeric','gte:0'],'other_deductions'=>['required','numeric','gte:0'],'no_pay_amount'=>['required','numeric','gte:0']]);$data['net_salary']=round($data['basic_salary']+$data['allowances']+$data['incentive']+$data['commission']+$data['overtime']-$data['epf_employee']-$data['other_deductions']-$data['no_pay_amount'],2);DB::table('payroll_items')->where('id',$payrollItem)->update($data+['updated_at'=>now()]);$this->recalculatePayrollRun((int)$item->payroll_run_id);return response()->json(DB::table('payroll_items')->find($payrollItem));}
- public function updatePayrollItemPayment(Request $request,int $payrollItem):JsonResponse {$item=DB::table('payroll_items')->find($payrollItem);abort_unless($item,404,'Employee payroll line not found.');$data=$request->validate(['payment_status'=>['required','in:paid,unpaid']]);DB::table('payroll_items')->where('id',$payrollItem)->update(['payment_status'=>$data['payment_status'],'paid_at'=>$data['payment_status']==='paid'?now():null,'updated_at'=>now()]);return response()->json(DB::table('payroll_items')->find($payrollItem));}
- public function deletePayrollItem(int $payrollItem):JsonResponse {$item=DB::table('payroll_items')->find($payrollItem);abort_unless($item,404,'Employee payroll line not found.');DB::transaction(function()use($item,$payrollItem){DB::table('payroll_items')->where('id',$payrollItem)->delete();$this->recalculatePayrollRun((int)$item->payroll_run_id);});return response()->json(['message'=>'Employee payroll line deleted.']);}
- private function recalculatePayrollRun(int $runId):void {$totals=DB::table('payroll_items')->where('payroll_run_id',$runId)->selectRaw('COALESCE(SUM(basic_salary+allowances+incentive+commission+overtime),0) gross, COALESCE(SUM(epf_employee+other_deductions+no_pay_amount),0) deductions, COALESCE(SUM(net_salary),0) net')->first();DB::table('payroll_runs')->where('id',$runId)->update(['gross_total'=>$totals->gross,'deduction_total'=>$totals->deductions,'net_total'=>$totals->net,'updated_at'=>now()]);}
- private function employeeData(Request $request,?int $id=null):array {return $request->validate(['employee_no'=>['required','string','max:30',\Illuminate\Validation\Rule::unique('employees','employee_no')->ignore($id)],'name'=>['required','string','max:255'],'department'=>['required','string','max:80'],'designation'=>['required','string','max:80'],'basic_salary'=>['required','numeric','gte:0'],'status'=>['required','in:active,inactive']]);}
- private function excelResponse(string $content,string $file) {return response($content,200,['Content-Type'=>'application/vnd.ms-excel; charset=UTF-8','Content-Disposition'=>'attachment; filename="'.$file.'"','Cache-Control'=>'no-store']);}
- public function reports():JsonResponse {
-  $stock=DB::table('stock_balances')->selectRaw('COALESCE(SUM(quantity*unit_cost),0) value')->value('value');
-  return response()->json([
-   'summary'=>['suppliers'=>DB::table('suppliers')->count(),'purchase_orders'=>DB::table('purchase_orders')->count(),'purchase_value'=>(float)DB::table('purchase_orders')->sum('total'),'stock_value'=>(float)$stock,'employees'=>DB::table('employees')->where('status','active')->count(),'latest_payroll'=>(float)(DB::table('payroll_runs')->latest('period_end')->value('net_total')??0),'journals'=>DB::table('journal_entries')->count()],
-   'payroll_by_department'=>DB::table('payroll_items as i')->join('employees as e','e.id','=','i.employee_id')->select('e.department',DB::raw('SUM(i.net_salary) total'))->groupBy('e.department')->get(),
-   'purchase_by_status'=>DB::table('purchase_orders')->select('status',DB::raw('COUNT(*) records'),DB::raw('SUM(total) total'))->groupBy('status')->get(),
-  ]);
- }
- public function financialStatements(Request $request,FinancialReportService $service):JsonResponse {$data=$request->validate(['from'=>['nullable','date'],'to'=>['nullable','date']]);$from=$data['from']??now()->startOfYear()->toDateString();$to=$data['to']??now()->toDateString();return response()->json($service->statements($from,$to));}
- public function aging(Request $request,AgingReportService $service):JsonResponse {$data=$request->validate(['as_of'=>['nullable','date']]);return response()->json($service->report($data['as_of']??now()->toDateString()));}
- public function retailReports(Request $request,RetailReportService $service):JsonResponse {$data=$request->validate(['from'=>['nullable','date'],'to'=>['nullable','date','after_or_equal:from']]);$from=$data['from']??now()->startOfMonth()->toDateString();$to=$data['to']??now()->toDateString();return response()->json($service->reports($from,$to));}
- public function exportAging(Request $request,AgingReportService $service) {$data=$request->validate(['as_of'=>['nullable','date']]);$asOf=$data['as_of']??now()->toDateString();return $this->excelResponse($service->excel($service->report($asOf)),'Accounts_Payable_Aging_'.$asOf.'.xls');}
- public function exportFinancialStatements(Request $request,FinancialReportService $service,ExcelStatementExporter $exporter) {$data=$request->validate(['from'=>['nullable','date'],'to'=>['nullable','date'],'report'=>['nullable','in:all,summary,profit_loss,balance_sheet,cash_flow,trial_balance']]);$from=$data['from']??now()->startOfYear()->toDateString();$to=$data['to']??now()->toDateString();$report=$data['report']??'all';$xml=$exporter->make($service->statements($from,$to),$report);$label=str_replace('_','-',ucwords($report,'_'));return response($xml,200,['Content-Type'=>'application/vnd.ms-excel; charset=UTF-8','Content-Disposition'=>'attachment; filename="AeroSoft360_'.$label.'_'.$to.'.xls"','Cache-Control'=>'no-store']);}
+class PayrollReportController extends Controller
+{
+    public function payroll(): JsonResponse
+    {
+        return response()->json([
+            "employees" => DB::table("employees")->orderBy("employee_no")->get(),
+            "imports" => DB::table("attendance_imports")
+                ->latest("id")
+                ->get()
+                ->map(function ($import) {
+                    $summary = DB::table("attendance_records")
+                        ->where("attendance_import_id", $import->id)
+                        ->selectRaw(
+                            "COUNT(DISTINCT employee_id) employees, COALESCE(SUM(paid_days),0) paid_days, COALESCE(SUM(no_pay_days),0) no_pay_days, COALESCE(SUM(overtime_hours),0) overtime_hours",
+                        )
+                        ->first();
+                    $import->employees = (int) $summary->employees;
+                    $import->paid_days = (float) $summary->paid_days;
+                    $import->no_pay_days = (float) $summary->no_pay_days;
+                    $import->overtime_hours = (float) $summary->overtime_hours;
+                    $import->warnings = json_decode($import->warnings ?: "[]", true);
+                    return $import;
+                }),
+            "runs" => DB::table("payroll_runs")
+                ->latest("period_end")
+                ->get()
+                ->map(function ($run) {
+                    $run->items = DB::table("payroll_items as i")
+                        ->join("employees as e", "e.id", "=", "i.employee_id")
+                        ->where("i.payroll_run_id", $run->id)
+                        ->select("i.*", "e.employee_no", "e.name", "e.department")
+                        ->get();
+                    return $run;
+                }),
+        ]);
+    }
+    public function importAttendance(
+        Request $request,
+        AttendancePayrollService $service,
+    ): JsonResponse {
+        $data = $request->validate([
+            "file" => ["required", "file", "mimes:xlsx,xls,csv", "max:10240"],
+            "period_start" => ["required", "date"],
+            "period_end" => ["required", "date", "after_or_equal:period_start"],
+        ]);
+        return response()->json(
+            $service->import($data["file"], $data["period_start"], $data["period_end"]),
+            201,
+        );
+    }
+    public function calculatePayroll(
+        Request $request,
+        AttendancePayrollService $service,
+    ): JsonResponse {
+        $data = $request->validate([
+            "attendance_import_id" => ["required", "integer", "exists:attendance_imports,id"],
+        ]);
+        return response()->json($service->calculate($data["attendance_import_id"]), 201);
+    }
+    public function exportAttendance(int $attendanceImport, PayrollExcelExporter $exporter)
+    {
+        $import = DB::table("attendance_imports")->find($attendanceImport);
+        abort_unless($import, 404, "Attendance import not found.");
+        $rows = DB::table("attendance_records as a")
+            ->join("employees as e", "e.id", "=", "a.employee_id")
+            ->where("a.attendance_import_id", $attendanceImport)
+            ->select(
+                "e.employee_no",
+                "e.name",
+                "e.department",
+                DB::raw("SUM(a.paid_days) paid_days"),
+                DB::raw("SUM(a.no_pay_days) no_pay_days"),
+                DB::raw("SUM(a.overtime_hours) overtime_hours"),
+            )
+            ->groupBy("e.id", "e.employee_no", "e.name", "e.department")
+            ->orderBy("e.employee_no")
+            ->get();
+        return $this->excelResponse(
+            $exporter->attendance($import, $rows),
+            "Attendance_" . $import->period_end . ".xls",
+        );
+    }
+    public function exportPayroll(int $payrollRun, PayrollExcelExporter $exporter)
+    {
+        $run = DB::table("payroll_runs")->find($payrollRun);
+        abort_unless($run, 404, "Payroll run not found.");
+        $rows = DB::table("payroll_items as i")
+            ->join("employees as e", "e.id", "=", "i.employee_id")
+            ->where("i.payroll_run_id", $payrollRun)
+            ->select("i.*", "e.employee_no", "e.name", "e.department")
+            ->orderBy("e.employee_no")
+            ->get();
+        return $this->excelResponse(
+            $exporter->payroll($run, $rows),
+            "Payroll_" . $run->number . ".xls",
+        );
+    }
+    public function storeEmployee(Request $request): JsonResponse
+    {
+        $data = $this->employeeData($request);
+        $id = DB::table("employees")->insertGetId(
+            $data + ["created_at" => now(), "updated_at" => now()],
+        );
+        return response()->json(DB::table("employees")->find($id), 201);
+    }
+    public function updateEmployee(Request $request, int $employee): JsonResponse
+    {
+        abort_unless(
+            DB::table("employees")->where("id", $employee)->exists(),
+            404,
+            "Employee not found.",
+        );
+        $data = $this->employeeData($request, $employee);
+        DB::table("employees")
+            ->where("id", $employee)
+            ->update($data + ["updated_at" => now()]);
+        return response()->json(DB::table("employees")->find($employee));
+    }
+    public function updatePayrollSettings(Request $request, int $employee): JsonResponse
+    {
+        abort_unless(
+            DB::table("employees")->where("id", $employee)->exists(),
+            404,
+            "Employee not found.",
+        );
+        $data = $request->validate([
+            "basic_salary" => ["required", "numeric", "gte:0"],
+            "fixed_allowance" => ["required", "numeric", "gte:0"],
+            "fixed_incentive" => ["required", "numeric", "gte:0"],
+            "fixed_deduction" => ["required", "numeric", "gte:0"],
+            "epf_rate" => ["required", "numeric", "between:0,100"],
+            "monthly_working_days" => ["required", "numeric", "gt:0", "lte:31"],
+            "standard_month_hours" => ["required", "numeric", "gt:0"],
+            "overtime_multiplier" => ["required", "numeric", "gte:0"],
+        ]);
+        DB::table("employees")
+            ->where("id", $employee)
+            ->update($data + ["updated_at" => now()]);
+        return response()->json(DB::table("employees")->find($employee));
+    }
+    public function deleteEmployee(int $employee): JsonResponse
+    {
+        abort_if(
+            DB::table("payroll_items")->where("employee_id", $employee)->exists(),
+            422,
+            "Employee has payroll history and cannot be deleted. Set the employee to inactive instead.",
+        );
+        abort_unless(
+            DB::table("employees")->where("id", $employee)->delete() === 1,
+            404,
+            "Employee not found.",
+        );
+        return response()->json(["message" => "Employee deleted."]);
+    }
+    public function updatePayrollRun(Request $request, int $payrollRun): JsonResponse
+    {
+        $data = $request->validate([
+            "period_start" => ["required", "date"],
+            "period_end" => ["required", "date", "after_or_equal:period_start"],
+            "status" => ["required", "in:draft,approved,posted,void"],
+        ]);
+        abort_unless(
+            DB::table("payroll_runs")
+                ->where("id", $payrollRun)
+                ->update($data + ["updated_at" => now()]) === 1,
+            404,
+            "Payroll run not found.",
+        );
+        return response()->json(DB::table("payroll_runs")->find($payrollRun));
+    }
+    public function deletePayrollRun(int $payrollRun): JsonResponse
+    {
+        DB::transaction(function () use ($payrollRun) {
+            DB::table("payroll_items")->where("payroll_run_id", $payrollRun)->delete();
+            abort_unless(
+                DB::table("payroll_runs")->where("id", $payrollRun)->delete() === 1,
+                404,
+                "Payroll run not found.",
+            );
+        });
+        return response()->json(["message" => "Payroll run deleted."]);
+    }
+    public function updatePayrollItem(Request $request, int $payrollItem): JsonResponse
+    {
+        $item = DB::table("payroll_items")->find($payrollItem);
+        abort_unless($item, 404, "Employee payroll line not found.");
+        $data = $request->validate([
+            "basic_salary" => ["required", "numeric", "gte:0"],
+            "allowances" => ["required", "numeric", "gte:0"],
+            "incentive" => ["required", "numeric", "gte:0"],
+            "commission" => ["required", "numeric", "gte:0"],
+            "overtime_hours" => ["required", "numeric", "gte:0"],
+            "overtime" => ["required", "numeric", "gte:0"],
+            "epf_employee" => ["required", "numeric", "gte:0"],
+            "other_deductions" => ["required", "numeric", "gte:0"],
+            "no_pay_amount" => ["required", "numeric", "gte:0"],
+        ]);
+        $data["net_salary"] = round(
+            $data["basic_salary"] +
+                $data["allowances"] +
+                $data["incentive"] +
+                $data["commission"] +
+                $data["overtime"] -
+                $data["epf_employee"] -
+                $data["other_deductions"] -
+                $data["no_pay_amount"],
+            2,
+        );
+        DB::table("payroll_items")
+            ->where("id", $payrollItem)
+            ->update($data + ["updated_at" => now()]);
+        $this->recalculatePayrollRun((int) $item->payroll_run_id);
+        return response()->json(DB::table("payroll_items")->find($payrollItem));
+    }
+    public function updatePayrollItemPayment(Request $request, int $payrollItem): JsonResponse
+    {
+        $item = DB::table("payroll_items")->find($payrollItem);
+        abort_unless($item, 404, "Employee payroll line not found.");
+        $data = $request->validate(["payment_status" => ["required", "in:paid,unpaid"]]);
+        DB::table("payroll_items")
+            ->where("id", $payrollItem)
+            ->update([
+                "payment_status" => $data["payment_status"],
+                "paid_at" => $data["payment_status"] === "paid" ? now() : null,
+                "updated_at" => now(),
+            ]);
+        return response()->json(DB::table("payroll_items")->find($payrollItem));
+    }
+    public function deletePayrollItem(int $payrollItem): JsonResponse
+    {
+        $item = DB::table("payroll_items")->find($payrollItem);
+        abort_unless($item, 404, "Employee payroll line not found.");
+        DB::transaction(function () use ($item, $payrollItem) {
+            DB::table("payroll_items")->where("id", $payrollItem)->delete();
+            $this->recalculatePayrollRun((int) $item->payroll_run_id);
+        });
+        return response()->json(["message" => "Employee payroll line deleted."]);
+    }
+    private function recalculatePayrollRun(int $runId): void
+    {
+        $totals = DB::table("payroll_items")
+            ->where("payroll_run_id", $runId)
+            ->selectRaw(
+                "COALESCE(SUM(basic_salary+allowances+incentive+commission+overtime),0) gross, COALESCE(SUM(epf_employee+other_deductions+no_pay_amount),0) deductions, COALESCE(SUM(net_salary),0) net",
+            )
+            ->first();
+        DB::table("payroll_runs")
+            ->where("id", $runId)
+            ->update([
+                "gross_total" => $totals->gross,
+                "deduction_total" => $totals->deductions,
+                "net_total" => $totals->net,
+                "updated_at" => now(),
+            ]);
+    }
+    private function employeeData(Request $request, ?int $id = null): array
+    {
+        return $request->validate([
+            "employee_no" => [
+                "required",
+                "string",
+                "max:30",
+                \Illuminate\Validation\Rule::unique("employees", "employee_no")->ignore($id),
+            ],
+            "name" => ["required", "string", "max:255"],
+            "department" => ["required", "string", "max:80"],
+            "designation" => ["required", "string", "max:80"],
+            "basic_salary" => ["required", "numeric", "gte:0"],
+            "status" => ["required", "in:active,inactive"],
+        ]);
+    }
+    private function excelResponse(string $content, string $file)
+    {
+        return response($content, 200, [
+            "Content-Type" => "application/vnd.ms-excel; charset=UTF-8",
+            "Content-Disposition" => 'attachment; filename="' . $file . '"',
+            "Cache-Control" => "no-store",
+        ]);
+    }
+    public function reports(): JsonResponse
+    {
+        $stock = DB::table("stock_balances")
+            ->selectRaw("COALESCE(SUM(quantity*unit_cost),0) value")
+            ->value("value");
+        return response()->json([
+            "summary" => [
+                "suppliers" => DB::table("suppliers")->count(),
+                "purchase_orders" => DB::table("purchase_orders")->count(),
+                "purchase_value" => (float) DB::table("purchase_orders")->sum("total"),
+                "stock_value" => (float) $stock,
+                "employees" => DB::table("employees")->where("status", "active")->count(),
+                "latest_payroll" =>
+                    (float) (DB::table("payroll_runs")->latest("period_end")->value("net_total") ??
+                        0),
+                "journals" => DB::table("journal_entries")->count(),
+            ],
+            "payroll_by_department" => DB::table("payroll_items as i")
+                ->join("employees as e", "e.id", "=", "i.employee_id")
+                ->select("e.department", DB::raw("SUM(i.net_salary) total"))
+                ->groupBy("e.department")
+                ->get(),
+            "purchase_by_status" => DB::table("purchase_orders")
+                ->select("status", DB::raw("COUNT(*) records"), DB::raw("SUM(total) total"))
+                ->groupBy("status")
+                ->get(),
+        ]);
+    }
+    public function financialStatements(
+        Request $request,
+        FinancialReportService $service,
+    ): JsonResponse {
+        $data = $request->validate(["from" => ["nullable", "date"], "to" => ["nullable", "date"]]);
+        $from = $data["from"] ?? now()->startOfYear()->toDateString();
+        $to = $data["to"] ?? now()->toDateString();
+        return response()->json($service->statements($from, $to));
+    }
+    public function aging(Request $request, AgingReportService $service): JsonResponse
+    {
+        $data = $request->validate(["as_of" => ["nullable", "date"]]);
+        return response()->json($service->report($data["as_of"] ?? now()->toDateString()));
+    }
+    public function retailReports(Request $request, RetailReportService $service): JsonResponse
+    {
+        $data = $request->validate([
+            "from" => ["nullable", "date"],
+            "to" => ["nullable", "date", "after_or_equal:from"],
+        ]);
+        $from = $data["from"] ?? now()->startOfMonth()->toDateString();
+        $to = $data["to"] ?? now()->toDateString();
+        return response()->json($service->reports($from, $to));
+    }
+    public function exportAging(Request $request, AgingReportService $service)
+    {
+        $data = $request->validate(["as_of" => ["nullable", "date"]]);
+        $asOf = $data["as_of"] ?? now()->toDateString();
+        return $this->excelResponse(
+            $service->excel($service->report($asOf)),
+            "Accounts_Payable_Aging_" . $asOf . ".xls",
+        );
+    }
+    public function exportFinancialStatements(
+        Request $request,
+        FinancialReportService $service,
+        ExcelStatementExporter $exporter,
+    ) {
+        $data = $request->validate([
+            "from" => ["nullable", "date"],
+            "to" => ["nullable", "date"],
+            "report" => [
+                "nullable",
+                "in:all,summary,profit_loss,balance_sheet,cash_flow,trial_balance",
+            ],
+        ]);
+        $from = $data["from"] ?? now()->startOfYear()->toDateString();
+        $to = $data["to"] ?? now()->toDateString();
+        $report = $data["report"] ?? "all";
+        $xml = $exporter->make($service->statements($from, $to), $report);
+        $label = str_replace("_", "-", ucwords($report, "_"));
+        return response($xml, 200, [
+            "Content-Type" => "application/vnd.ms-excel; charset=UTF-8",
+            "Content-Disposition" =>
+                'attachment; filename="AeroSoft360_' . $label . "_" . $to . '.xls"',
+            "Cache-Control" => "no-store",
+        ]);
+    }
 }

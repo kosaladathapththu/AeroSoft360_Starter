@@ -1,3 +1,72 @@
 <?php
-use Illuminate\Database\Migrations\Migration;use Illuminate\Database\Schema\Blueprint;use Illuminate\Support\Facades\Schema;
-return new class extends Migration {public function up():void {Schema::create('attendance_imports',fn(Blueprint $t)=>tap($t,function($t){$t->id();$t->string('file_name');$t->date('period_start');$t->date('period_end');$t->unsignedInteger('record_count')->default(0);$t->string('status',20)->default('validated');$t->json('warnings')->nullable();$t->timestamps();}));Schema::create('attendance_records',fn(Blueprint $t)=>tap($t,function($t){$t->id();$t->foreignId('attendance_import_id')->constrained()->cascadeOnDelete();$t->foreignId('employee_id')->constrained();$t->date('attendance_date');$t->string('attendance_status',30);$t->decimal('paid_days',5,2)->default(0);$t->decimal('no_pay_days',5,2)->default(0);$t->decimal('overtime_hours',8,2)->default(0);$t->timestamps();$t->unique(['attendance_import_id','employee_id','attendance_date']);}));Schema::table('payroll_runs',fn(Blueprint $t)=>$t->foreignId('attendance_import_id')->nullable()->after('id')->constrained());Schema::table('payroll_items',fn(Blueprint $t)=>tap($t,function($t){$t->decimal('paid_days',6,2)->default(0)->after('employee_id');$t->decimal('no_pay_days',6,2)->default(0)->after('paid_days');$t->decimal('no_pay_amount',18,2)->default(0)->after('no_pay_days');$t->decimal('overtime_hours',8,2)->default(0)->after('no_pay_amount');}));}public function down():void {Schema::table('payroll_items',fn(Blueprint $t)=>$t->dropColumn(['paid_days','no_pay_days','no_pay_amount','overtime_hours']));Schema::table('payroll_runs',fn(Blueprint $t)=>$t->dropConstrainedForeignId('attendance_import_id'));Schema::dropIfExists('attendance_records');Schema::dropIfExists('attendance_imports');}};
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::create(
+            "attendance_imports",
+            fn(Blueprint $t) => tap($t, function ($t) {
+                $t->id();
+                $t->string("file_name");
+                $t->date("period_start");
+                $t->date("period_end");
+                $t->unsignedInteger("record_count")->default(0);
+                $t->string("status", 20)->default("validated");
+                $t->json("warnings")->nullable();
+                $t->timestamps();
+            }),
+        );
+        Schema::create(
+            "attendance_records",
+            fn(Blueprint $t) => tap($t, function ($t) {
+                $t->id();
+                $t->foreignId("attendance_import_id")->constrained()->cascadeOnDelete();
+                $t->foreignId("employee_id")->constrained();
+                $t->date("attendance_date");
+                $t->string("attendance_status", 30);
+                $t->decimal("paid_days", 5, 2)->default(0);
+                $t->decimal("no_pay_days", 5, 2)->default(0);
+                $t->decimal("overtime_hours", 8, 2)->default(0);
+                $t->timestamps();
+                $t->unique(["attendance_import_id", "employee_id", "attendance_date"]);
+            }),
+        );
+        Schema::table(
+            "payroll_runs",
+            fn(Blueprint $t) => $t
+                ->foreignId("attendance_import_id")
+                ->nullable()
+                ->after("id")
+                ->constrained(),
+        );
+        Schema::table(
+            "payroll_items",
+            fn(Blueprint $t) => tap($t, function ($t) {
+                $t->decimal("paid_days", 6, 2)->default(0)->after("employee_id");
+                $t->decimal("no_pay_days", 6, 2)->default(0)->after("paid_days");
+                $t->decimal("no_pay_amount", 18, 2)->default(0)->after("no_pay_days");
+                $t->decimal("overtime_hours", 8, 2)->default(0)->after("no_pay_amount");
+            }),
+        );
+    }
+    public function down(): void
+    {
+        Schema::table(
+            "payroll_items",
+            fn(Blueprint $t) => $t->dropColumn([
+                "paid_days",
+                "no_pay_days",
+                "no_pay_amount",
+                "overtime_hours",
+            ]),
+        );
+        Schema::table(
+            "payroll_runs",
+            fn(Blueprint $t) => $t->dropConstrainedForeignId("attendance_import_id"),
+        );
+        Schema::dropIfExists("attendance_records");
+        Schema::dropIfExists("attendance_imports");
+    }
+};

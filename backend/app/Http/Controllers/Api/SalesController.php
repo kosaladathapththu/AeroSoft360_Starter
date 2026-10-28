@@ -1,102 +1,1110 @@
 <?php
 namespace App\Http\Controllers\Api;
-use App\Http\Controllers\Controller;use Illuminate\Http\JsonResponse;use Illuminate\Http\Request;use Illuminate\Support\Facades\DB;use Illuminate\Validation\Rule;
-class SalesController {
- public function workspace():JsonResponse {
-  $items=DB::table('article_set_items')->orderBy('sort_order')->get()->groupBy('set_template_id');
-  $sets=DB::table('article_set_templates')->orderBy('name')->get()->map(function($set)use($items){$set->items=$items->get($set->id,collect())->values();$set->pieces=(float)$set->items->sum('quantity');$set->set_price=(float)$set->items->sum(fn($item)=>$item->quantity*$item->unit_price);return $set;})->groupBy('article_id');
-  $articles=DB::table('articles')->orderBy('name')->get()->map(function($article)use($sets){$article->sets=$sets->get($article->id,collect())->values();return $article;});
-  $poLines=DB::table('customer_po_lines as l')->join('articles as a','a.id','=','l.article_id')->leftJoin('article_set_templates as st','st.id','=','l.set_template_id')->leftJoin('article_set_items as si','si.id','=','l.set_item_id')->select('l.*','a.code as article_code','a.name as article_name','st.name as set_name','si.size_label')->get()->groupBy('customer_po_id');
-  $pos=DB::table('customer_pos as p')->join('customers as c','c.id','=','p.customer_id')->join('sales_representatives as r','r.id','=','p.sales_rep_id')->select('p.*','c.name as customer_name','r.name as rep_name')->latest('p.id')->get()->map(function($po)use($poLines){$po->lines=$poLines->get($po->id,collect())->values();return $po;});
-  $reviews=DB::table('audit_logs')->where('event','sales_order.reviewed')->where('entity_type','sales_order')->get()->keyBy('entity_id');
-  $orderLines=DB::table('sales_order_size_lines as l')->join('articles as a','a.id','=','l.article_id')->select('l.*','a.code as article_code','a.name as article_name',DB::raw('(l.quantity-l.invoiced_quantity) as remaining_quantity'))->orderBy('a.code')->orderBy('l.size_label')->get()->groupBy('sales_order_id');
-  $orders=DB::table('sales_orders as s')->join('customers as c','c.id','=','s.customer_id')->join('sales_representatives as r','r.id','=','s.sales_rep_id')->select('s.*','c.name as customer_name','r.name as rep_name')->latest('s.id')->get()->map(function($order)use($orderLines,$reviews){$order->review_changes=json_decode($reviews->get($order->id)->payload??'{}',true)['changes']??[];$order->lines=$orderLines->get($order->id,collect())->values();return $order;});
-  $invoiceLines=DB::table('sales_invoice_lines as l')->join('articles as a','a.id','=','l.article_id')->select('l.*','a.code as article_code','a.name as article_name')->get()->groupBy('sales_invoice_id');
-  $invoices=DB::table('sales_invoices as i')->join('customers as c','c.id','=','i.customer_id')->join('sales_representatives as r','r.id','=','i.sales_rep_id')->leftJoin('sales_orders as so','so.id','=','i.sales_order_id')->leftJoin('customer_pos as po','po.id','=','so.customer_po_id')->select('i.*','c.name as customer_name','r.name as rep_name','po.customer_po_reference as reference')->latest('i.id')->get()->map(function($invoice)use($invoiceLines){$invoice->lines=$invoiceLines->get($invoice->id,collect())->values();return $invoice;});
-  $receipts=DB::table('customer_receipts as p')->join('customers as c','c.id','=','p.customer_id')->join('sales_representatives as owner','owner.id','=','p.sales_rep_id')->leftJoin('sales_representatives as collector','collector.id','=','p.collector_sales_rep_id')->leftJoin('receipt_allocations as allocation','allocation.receipt_id','=','p.id')->select('p.*','c.name as customer_name','owner.name as invoice_rep_name','collector.name as collector_name','allocation.commission_decision','allocation.commission_status',DB::raw('COALESCE(collector.name, owner.name) as rep_name'))->latest('p.id')->get();
-  $commissions=DB::table('receipt_allocations as a')->join('customer_receipts as r','r.id','=','a.receipt_id')->join('sales_invoices as i','i.id','=','a.invoice_id')->leftJoin('sales_representatives as payee','payee.id','=','a.commission_payee_sales_rep_id')->join('customers as c','c.id','=','r.customer_id')->select('a.*','r.sales_rep_id','r.collector_sales_rep_id','r.customer_id','r.number as receipt_number','r.receipt_date','r.collection_type','i.number as invoice_number','i.total as invoice_total','payee.name as rep_name','c.name as customer_name',DB::raw("'automatic' as source_type"))->latest('a.id')->get();
-  return response()->json(['payment_accounts'=>DB::table('accounts')->where('is_postable',true)->orderBy('code')->get()->filter(fn($a)=>\App\Services\Accounting\AccountPolicy::active($a)&&\App\Services\Accounting\AccountPolicy::cash($a))->values(),'customers'=>DB::table('customers')->orderBy('name')->get(),'reps'=>DB::table('sales_representatives')->orderBy('name')->get(),'articles'=>$articles,'pos'=>$pos,'orders'=>$orders,'invoices'=>$invoices,'receipts'=>$receipts,'commissions'=>$commissions]);
- }
- public function storeCustomer(Request $r):JsonResponse {$d=$r->validate(['code'=>'required|max:30|unique:customers,code','name'=>'required|max:160','tin'=>'nullable|max:40','phone'=>'nullable|max:30','address'=>'nullable|max:255','credit_days'=>'required|integer|min:0|max:365','credit_limit'=>'required|numeric|min:0']);$id=DB::table('customers')->insertGetId($d+['status'=>'active','created_at'=>now(),'updated_at'=>now()]);return response()->json(DB::table('customers')->find($id),201);}
- public function updateCustomer(Request $r,int $id):JsonResponse {$d=$r->validate(['code'=>['required','max:30',Rule::unique('customers','code')->ignore($id)],'name'=>'required|max:160','tin'=>'nullable|max:40','phone'=>'nullable|max:30','address'=>'nullable|max:255','credit_days'=>'required|integer|min:0|max:365','credit_limit'=>'required|numeric|min:0','status'=>'required|in:active,inactive']);DB::table('customers')->where('id',$id)->update($d+['updated_at'=>now()]);return response()->json(DB::table('customers')->find($id));}
- public function storeRep(Request $r):JsonResponse {$d=$r->validate(['code'=>'required|max:30|unique:sales_representatives,code','name'=>'required|max:160','manager_name'=>'nullable|max:160','channel'=>'required|in:head_office,direct_sales,future_channel','default_commission_rate'=>'required|numeric|min:0']);$id=DB::table('sales_representatives')->insertGetId($d+['status'=>'active','created_at'=>now(),'updated_at'=>now()]);return response()->json(DB::table('sales_representatives')->find($id),201);}
- public function updateRep(Request $r,int $id):JsonResponse {$d=$r->validate(['code'=>['required','max:30',Rule::unique('sales_representatives','code')->ignore($id)],'name'=>'required|max:160','manager_name'=>'nullable|max:160','channel'=>'required|in:head_office,direct_sales,future_channel','default_commission_rate'=>'required|numeric|min:0','status'=>'required|in:active,inactive']);DB::table('sales_representatives')->where('id',$id)->update($d+['updated_at'=>now()]);return response()->json(DB::table('sales_representatives')->find($id));}
- public function storeArticle(Request $r):JsonResponse {$d=$r->validate(['code'=>'required|max:30|unique:articles,code','name'=>'required|max:160','category'=>'required|max:80','sets'=>'required|array|min:1','sets.*.name'=>'required|max:100','sets.*.items'=>'required|array|min:1','sets.*.items.*.size_label'=>'required|max:30','sets.*.items.*.item_code'=>'nullable|max:60','sets.*.items.*.colours'=>'nullable|max:255','sets.*.items.*.production_cost'=>'nullable|numeric|min:0','sets.*.items.*.quantity'=>'required|numeric|gt:0','sets.*.items.*.unit_price'=>'required|numeric|min:0']);$id=DB::transaction(function()use($d){$first=$d['sets'][0];$id=DB::table('articles')->insertGetId(['code'=>$d['code'],'name'=>$d['name'],'category'=>$d['category'],'set_name'=>$first['name'],'pieces_per_set'=>collect($first['items'])->sum('quantity'),'selling_price'=>$first['items'][0]['unit_price'],'commission_rate'=>0,'status'=>'active','created_at'=>now(),'updated_at'=>now()]);foreach($d['sets'] as $set){$sid=DB::table('article_set_templates')->insertGetId(['article_id'=>$id,'name'=>$set['name'],'status'=>'active','created_at'=>now(),'updated_at'=>now()]);foreach($set['items'] as $i=>$item)DB::table('article_set_items')->insert(['set_template_id'=>$sid,'size_label'=>$item['size_label'],'item_code'=>$item['item_code']??null,'colours'=>$item['colours']??null,'production_cost'=>$item['production_cost']??null,'quantity'=>$item['quantity'],'unit_price'=>$item['unit_price'],'price_source'=>'Manual','price_updated_at'=>now(),'sort_order'=>$i+1,'created_at'=>now(),'updated_at'=>now()]);}return $id;});return response()->json(DB::table('articles')->find($id),201);}
- public function updateArticle(Request $r,int $id):JsonResponse {$d=$r->validate(['code'=>['required','max:30',Rule::unique('articles','code')->ignore($id)],'name'=>'required|max:160','category'=>'required|max:80','status'=>'nullable|in:active,inactive','sets'=>'required|array|min:1','sets.*.id'=>'nullable|integer','sets.*.name'=>'required|max:100','sets.*.items'=>'required|array|min:1','sets.*.items.*.id'=>'nullable|integer','sets.*.items.*.size_label'=>'required|max:30','sets.*.items.*.item_code'=>'nullable|max:60','sets.*.items.*.colours'=>'nullable|max:255','sets.*.items.*.production_cost'=>'nullable|numeric|min:0','sets.*.items.*.quantity'=>'required|numeric|gt:0','sets.*.items.*.unit_price'=>'required|numeric|min:0']);DB::transaction(function()use($d,$id){abort_unless(DB::table('articles')->where('id',$id)->exists(),404,'Article not found.');$first=$d['sets'][0];DB::table('articles')->where('id',$id)->update(['code'=>$d['code'],'name'=>$d['name'],'category'=>$d['category'],'set_name'=>$first['name'],'pieces_per_set'=>collect($first['items'])->sum('quantity'),'selling_price'=>$first['items'][0]['unit_price'],'status'=>$d['status']??'active','updated_at'=>now()]);$kept=[];foreach($d['sets'] as $set){$sid=$set['id']??null;if($sid&&DB::table('article_set_templates')->where('id',$sid)->where('article_id',$id)->exists())DB::table('article_set_templates')->where('id',$sid)->update(['name'=>$set['name'],'status'=>'active','updated_at'=>now()]);else $sid=DB::table('article_set_templates')->insertGetId(['article_id'=>$id,'name'=>$set['name'],'status'=>'active','created_at'=>now(),'updated_at'=>now()]);$kept[]=$sid;$itemIds=[];foreach($set['items'] as $i=>$item){$iid=$item['id']??null;$values=['size_label'=>$item['size_label'],'item_code'=>$item['item_code']??null,'colours'=>$item['colours']??null,'production_cost'=>$item['production_cost']??null,'quantity'=>$item['quantity'],'unit_price'=>$item['unit_price'],'price_source'=>'Manual','price_updated_at'=>now(),'sort_order'=>$i+1,'updated_at'=>now()];if($iid&&DB::table('article_set_items')->where('id',$iid)->where('set_template_id',$sid)->exists()){DB::table('article_set_items')->where('id',$iid)->update($values);$itemIds[]=$iid;}else $itemIds[]=DB::table('article_set_items')->insertGetId($values+['set_template_id'=>$sid,'created_at'=>now()]);}DB::table('article_set_items')->where('set_template_id',$sid)->whereNotIn('id',$itemIds)->delete();}DB::table('article_set_templates')->where('article_id',$id)->whereNotIn('id',$kept)->get()->each(function($set){$used=DB::table('customer_po_lines')->where('set_template_id',$set->id)->exists();if($used)DB::table('article_set_templates')->where('id',$set->id)->update(['status'=>'inactive','updated_at'=>now()]);else DB::table('article_set_templates')->where('id',$set->id)->delete();});});return response()->json(DB::table('articles')->find($id));}
- public function storePo(Request $r):JsonResponse {
-  if($r->attributes->get('auth_user')?->sales_rep_id)$r->merge(['sales_rep_id'=>$r->attributes->get('auth_user')->sales_rep_id]);
-  $d=$r->validate(['customer_id'=>'nullable|exists:customers,id','customer_name'=>'required_without:customer_id|nullable|string|max:160','customer_phone'=>'nullable|string|max:30','customer_address'=>'nullable|string|max:255','customer_credit_days'=>'nullable|integer|min:0|max:365','sales_rep_id'=>'required|exists:sales_representatives,id','customer_po_reference'=>'nullable|max:80','po_date'=>'required|date','sale_type'=>'required|in:cash,credit,mixed','cash_amount'=>'nullable|required_if:sale_type,mixed|numeric|min:0','lines'=>'required|array|min:1','lines.*.colour'=>'nullable|string|max:80','lines.*.order_mode'=>'required|in:badge,size','lines.*.set_template_id'=>'nullable|exists:article_set_templates,id','lines.*.set_item_id'=>'nullable|exists:article_set_items,id','lines.*.quantity'=>'required|numeric|gt:0']);
-  $po=DB::transaction(function()use($d){$customerId=$d['customer_id']??null;if(!$customerId){$sequence=DB::table('customers')->count()+1;$customerId=DB::table('customers')->insertGetId(['code'=>'CUS-'.str_pad((string)$sequence,4,'0',STR_PAD_LEFT),'name'=>$d['customer_name'],'phone'=>$d['customer_phone']??null,'address'=>$d['customer_address']??null,'credit_days'=>$d['customer_credit_days']??30,'credit_limit'=>0,'status'=>'active','created_at'=>now(),'updated_at'=>now()]);}$num='CPO-'.now()->format('ym').'-'.str_pad((string)(DB::table('customer_pos')->count()+1),4,'0',STR_PAD_LEFT);$id=DB::table('customer_pos')->insertGetId(['number'=>$num,'customer_id'=>$customerId,'sales_rep_id'=>$d['sales_rep_id'],'customer_po_reference'=>$d['customer_po_reference']??null,'po_date'=>$d['po_date'],'sale_type'=>$d['sale_type'],'status'=>'draft','total'=>0,'created_at'=>now(),'updated_at'=>now()]);$total=0;
-   foreach($d['lines'] as $line){
-    if($line['order_mode']==='badge'){$set=DB::table('article_set_templates')->find($line['set_template_id']);abort_unless($set,422,'Choose a badge.');$items=DB::table('article_set_items')->where('set_template_id',$set->id)->get();$units=(float)$line['quantity'];$pieces=$items->sum('quantity')*$units;$value=$items->sum(fn($i)=>$i->quantity*$i->unit_price)*$units;$articleId=$set->article_id;$itemId=null;$setId=$set->id;}
-    else {$item=DB::table('article_set_items as i')->join('article_set_templates as s','s.id','=','i.set_template_id')->where('i.id',$line['set_item_id'])->select('i.*','s.article_id')->first();abort_unless($item,422,'Choose an article size.');$units=(float)$line['quantity'];$pieces=$units;$value=$units*$item->unit_price;$articleId=$item->article_id;$itemId=$item->id;$setId=$item->set_template_id;}
-    $total+=$value;DB::table('customer_po_lines')->insert(['customer_po_id'=>$id,'article_id'=>$articleId,'colour'=>$line['colour']??null,'order_mode'=>$line['order_mode'],'set_template_id'=>$setId,'set_item_id'=>$itemId,'sets'=>$line['order_mode']==='badge'?$units:0,'pieces'=>$pieces,'rate'=>$value/max(1,$pieces),'line_total'=>$value,'created_at'=>now(),'updated_at'=>now()]);
-   }$cash=$d['sale_type']==='cash'?$total:($d['sale_type']==='mixed'?(float)($d['cash_amount']??0):0);abort_if($d['sale_type']==='mixed'&&($cash<=0||$cash>=$total),422,'For part cash / credit, cash amount must be greater than zero and less than the PO total.');DB::table('customer_pos')->where('id',$id)->update(['total'=>$total,'cash_amount'=>$cash,'credit_amount'=>$total-$cash]);return DB::table('customer_pos')->find($id);
-  });return response()->json($po,201);
- }
- public function updatePo(Request $r,int $id):JsonResponse {
-  if($r->attributes->get('auth_user')?->sales_rep_id)$r->merge(['sales_rep_id'=>$r->attributes->get('auth_user')->sales_rep_id]);
-  $d=$r->validate(['customer_id'=>'required|exists:customers,id','sales_rep_id'=>'required|exists:sales_representatives,id','customer_po_reference'=>'nullable|max:80','po_date'=>'required|date','sale_type'=>'required|in:cash,credit,mixed','cash_amount'=>'nullable|required_if:sale_type,mixed|numeric|min:0','lines'=>'required|array|min:1','lines.*.colour'=>'nullable|string|max:80','lines.*.order_mode'=>'required|in:badge,size','lines.*.set_template_id'=>'nullable|exists:article_set_templates,id','lines.*.set_item_id'=>'nullable|exists:article_set_items,id','lines.*.quantity'=>'required|numeric|gt:0']);
-  $po=DB::transaction(function()use($d,$id){$po=DB::table('customer_pos')->lockForUpdate()->find($id);abort_unless($po,404,'Customer PO not found.');abort_if($po->status!=='draft',422,'Only a draft PO can be edited. Converted POs are locked to protect accounting history.');DB::table('customer_pos')->where('id',$id)->update(['customer_id'=>$d['customer_id'],'sales_rep_id'=>$d['sales_rep_id'],'customer_po_reference'=>$d['customer_po_reference']??null,'po_date'=>$d['po_date'],'sale_type'=>$d['sale_type'],'updated_at'=>now()]);DB::table('customer_po_lines')->where('customer_po_id',$id)->delete();$total=0;foreach($d['lines'] as $line){if($line['order_mode']==='badge'){$set=DB::table('article_set_templates')->find($line['set_template_id']);abort_unless($set,422,'Choose a badge.');$items=DB::table('article_set_items')->where('set_template_id',$set->id)->get();$units=(float)$line['quantity'];$pieces=$items->sum('quantity')*$units;$value=$items->sum(fn($i)=>$i->quantity*$i->unit_price)*$units;$articleId=$set->article_id;$itemId=null;$setId=$set->id;}else{$item=DB::table('article_set_items as i')->join('article_set_templates as s','s.id','=','i.set_template_id')->where('i.id',$line['set_item_id'])->select('i.*','s.article_id')->first();abort_unless($item,422,'Choose an article size.');$units=(float)$line['quantity'];$pieces=$units;$value=$units*$item->unit_price;$articleId=$item->article_id;$itemId=$item->id;$setId=$item->set_template_id;}$total+=$value;DB::table('customer_po_lines')->insert(['customer_po_id'=>$id,'article_id'=>$articleId,'order_mode'=>$line['order_mode'],'set_template_id'=>$setId,'set_item_id'=>$itemId,'sets'=>$line['order_mode']==='badge'?$units:0,'pieces'=>$pieces,'rate'=>$value/max(1,$pieces),'line_total'=>$value,'created_at'=>now(),'updated_at'=>now()]);}$cash=$d['sale_type']==='cash'?$total:($d['sale_type']==='mixed'?(float)($d['cash_amount']??0):0);abort_if($d['sale_type']==='mixed'&&($cash<=0||$cash>=$total),422,'For part cash / credit, cash amount must be greater than zero and less than the PO total.');DB::table('customer_pos')->where('id',$id)->update(['total'=>$total,'cash_amount'=>$cash,'credit_amount'=>$total-$cash,'updated_at'=>now()]);return DB::table('customer_pos')->find($id);});return response()->json($po);
- }
- public function deletePo(int $id):JsonResponse {$po=DB::table('customer_pos')->find($id);abort_unless($po,404,'Customer PO not found.');abort_if($po->status!=='draft',422,'Only a draft PO can be deleted.');DB::table('customer_pos')->where('id',$id)->delete();return response()->json(['message'=>'Customer PO deleted.']);}
- public function convertFullPo(Request $request,int $id,string $orderDate):JsonResponse {
-  $review=[];
-  foreach(DB::table('customer_po_lines')->where('customer_po_id',$id)->get() as $line){
-   $items=DB::table('article_set_items')->where('set_template_id',$line->set_template_id);
-   if(($line->order_mode??'badge')==='size')$items->where('id',$line->set_item_id);
-   foreach($items->get() as $item)$review[]=['customer_po_line_id'=>$line->id,'set_item_id'=>$item->id,'quantity'=>($line->order_mode??'badge')==='size'?(float)$line->pieces:(float)$line->sets*(float)$item->quantity];
-  }
-  $conversion=Request::create('/','POST',['order_date'=>$orderDate,'lines'=>$review]);
-  $conversion->attributes->set('auth_user',$request->attributes->get('auth_user'));
-  $conversion->setUserResolver($request->getUserResolver());
-  return $this->convert($conversion,$id);
- }
- public function convert(Request $r,int $id):JsonResponse {
-  $d=$r->validate([
-   'order_date'=>'required|date','lines'=>'required|array|min:1',
-   'lines.*.customer_po_line_id'=>'required|integer','lines.*.set_item_id'=>'required|integer',
-   'lines.*.quantity'=>'required|numeric|min:0','lines.*.reason'=>'nullable|string|max:500',
-  ]);
-  $order=DB::transaction(function()use($d,$id,$r){
-   $po=DB::table('customer_pos')->lockForUpdate()->find($id);
-   abort_unless($po,404,'Customer PO not found.');
-   abort_if($po->status!=='draft',422,'Only a draft customer PO can be converted.');
-   $expected=[];
-   foreach(DB::table('customer_po_lines')->where('customer_po_id',$id)->get() as $line){
-    $items=DB::table('article_set_items')->where('set_template_id',$line->set_template_id);
-    if(($line->order_mode??'badge')==='size')$items->where('id',$line->set_item_id);
-    foreach($items->get() as $item)$expected[$line->id.'|'.$item->id]=[$line,$item];
-   }
-   $prepared=[];$changes=[];$total=0;$seen=[];
-   foreach($d['lines'] as $index=>$input){
-    $key=$input['customer_po_line_id'].'|'.$input['set_item_id'];
-    abort_if(isset($seen[$key]),422,'A reviewed PO size was submitted more than once.');
-    abort_unless(isset($expected[$key]),422,'Invalid customer PO size.');
-    $seen[$key]=true;[$line,$item]=$expected[$key];
-    $allowed=($line->order_mode??'badge')==='size'?(float)$line->pieces:(float)$line->sets*(float)$item->quantity;
-    $qty=(float)$input['quantity'];
-    abort_if($qty>$allowed+0.0001,422,"Sales order quantity for size {$item->size_label} exceeds the customer PO quantity.");
-    if(abs($qty-$allowed)>0.0001){
-     $reason=trim($input['reason']??'');
-     if($reason==='')throw \Illuminate\Validation\ValidationException::withMessages(["lines.$index.reason"=>"Enter a reason for removing or changing size {$item->size_label}."]);
-     $changes[]=['customer_po_line_id'=>$line->id,'set_item_id'=>$item->id,'article_id'=>$line->article_id,'size_label'=>$item->size_label,'colour'=>$line->colour,'original_quantity'=>$allowed,'quantity'=>$qty,'action'=>$qty===0.0?'removed':'edited','reason'=>$reason];
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+class SalesController
+{
+    public function workspace(): JsonResponse
+    {
+        $items = DB::table("article_set_items")
+            ->orderBy("sort_order")
+            ->get()
+            ->groupBy("set_template_id");
+        $sets = DB::table("article_set_templates")
+            ->orderBy("name")
+            ->get()
+            ->map(function ($set) use ($items) {
+                $set->items = $items->get($set->id, collect())->values();
+                $set->pieces = (float) $set->items->sum("quantity");
+                $set->set_price = (float) $set->items->sum(
+                    fn($item) => $item->quantity * $item->unit_price,
+                );
+                return $set;
+            })
+            ->groupBy("article_id");
+        $articles = DB::table("articles")
+            ->orderBy("name")
+            ->get()
+            ->map(function ($article) use ($sets) {
+                $article->sets = $sets->get($article->id, collect())->values();
+                return $article;
+            });
+        $poLines = DB::table("customer_po_lines as l")
+            ->join("articles as a", "a.id", "=", "l.article_id")
+            ->leftJoin("article_set_templates as st", "st.id", "=", "l.set_template_id")
+            ->leftJoin("article_set_items as si", "si.id", "=", "l.set_item_id")
+            ->select(
+                "l.*",
+                "a.code as article_code",
+                "a.name as article_name",
+                "st.name as set_name",
+                "si.size_label",
+            )
+            ->get()
+            ->groupBy("customer_po_id");
+        $pos = DB::table("customer_pos as p")
+            ->join("customers as c", "c.id", "=", "p.customer_id")
+            ->join("sales_representatives as r", "r.id", "=", "p.sales_rep_id")
+            ->select("p.*", "c.name as customer_name", "r.name as rep_name")
+            ->latest("p.id")
+            ->get()
+            ->map(function ($po) use ($poLines) {
+                $po->lines = $poLines->get($po->id, collect())->values();
+                return $po;
+            });
+        $reviews = DB::table("audit_logs")
+            ->where("event", "sales_order.reviewed")
+            ->where("entity_type", "sales_order")
+            ->get()
+            ->keyBy("entity_id");
+        $orderLines = DB::table("sales_order_size_lines as l")
+            ->join("articles as a", "a.id", "=", "l.article_id")
+            ->select(
+                "l.*",
+                "a.code as article_code",
+                "a.name as article_name",
+                DB::raw("(l.quantity-l.invoiced_quantity) as remaining_quantity"),
+            )
+            ->orderBy("a.code")
+            ->orderBy("l.size_label")
+            ->get()
+            ->groupBy("sales_order_id");
+        $orders = DB::table("sales_orders as s")
+            ->join("customers as c", "c.id", "=", "s.customer_id")
+            ->join("sales_representatives as r", "r.id", "=", "s.sales_rep_id")
+            ->select("s.*", "c.name as customer_name", "r.name as rep_name")
+            ->latest("s.id")
+            ->get()
+            ->map(function ($order) use ($orderLines, $reviews) {
+                $order->review_changes =
+                    json_decode($reviews->get($order->id)->payload ?? "{}", true)["changes"] ?? [];
+                $order->lines = $orderLines->get($order->id, collect())->values();
+                return $order;
+            });
+        $invoiceLines = DB::table("sales_invoice_lines as l")
+            ->join("articles as a", "a.id", "=", "l.article_id")
+            ->select("l.*", "a.code as article_code", "a.name as article_name")
+            ->get()
+            ->groupBy("sales_invoice_id");
+        $invoices = DB::table("sales_invoices as i")
+            ->join("customers as c", "c.id", "=", "i.customer_id")
+            ->join("sales_representatives as r", "r.id", "=", "i.sales_rep_id")
+            ->leftJoin("sales_orders as so", "so.id", "=", "i.sales_order_id")
+            ->leftJoin("customer_pos as po", "po.id", "=", "so.customer_po_id")
+            ->select(
+                "i.*",
+                "c.name as customer_name",
+                "r.name as rep_name",
+                "po.customer_po_reference as reference",
+            )
+            ->latest("i.id")
+            ->get()
+            ->map(function ($invoice) use ($invoiceLines) {
+                $invoice->lines = $invoiceLines->get($invoice->id, collect())->values();
+                return $invoice;
+            });
+        $receipts = DB::table("customer_receipts as p")
+            ->join("customers as c", "c.id", "=", "p.customer_id")
+            ->join("sales_representatives as owner", "owner.id", "=", "p.sales_rep_id")
+            ->leftJoin(
+                "sales_representatives as collector",
+                "collector.id",
+                "=",
+                "p.collector_sales_rep_id",
+            )
+            ->leftJoin("receipt_allocations as allocation", "allocation.receipt_id", "=", "p.id")
+            ->select(
+                "p.*",
+                "c.name as customer_name",
+                "owner.name as invoice_rep_name",
+                "collector.name as collector_name",
+                "allocation.commission_decision",
+                "allocation.commission_status",
+                DB::raw("COALESCE(collector.name, owner.name) as rep_name"),
+            )
+            ->latest("p.id")
+            ->get();
+        $commissions = DB::table("receipt_allocations as a")
+            ->join("customer_receipts as r", "r.id", "=", "a.receipt_id")
+            ->join("sales_invoices as i", "i.id", "=", "a.invoice_id")
+            ->leftJoin(
+                "sales_representatives as payee",
+                "payee.id",
+                "=",
+                "a.commission_payee_sales_rep_id",
+            )
+            ->join("customers as c", "c.id", "=", "r.customer_id")
+            ->select(
+                "a.*",
+                "r.sales_rep_id",
+                "r.collector_sales_rep_id",
+                "r.customer_id",
+                "r.number as receipt_number",
+                "r.receipt_date",
+                "r.collection_type",
+                "i.number as invoice_number",
+                "i.total as invoice_total",
+                "payee.name as rep_name",
+                "c.name as customer_name",
+                DB::raw("'automatic' as source_type"),
+            )
+            ->latest("a.id")
+            ->get();
+        return response()->json([
+            "payment_accounts" => DB::table("accounts")
+                ->where("is_postable", true)
+                ->orderBy("code")
+                ->get()
+                ->filter(
+                    fn($a) => \App\Services\Accounting\AccountPolicy::active($a) &&
+                        \App\Services\Accounting\AccountPolicy::cash($a),
+                )
+                ->values(),
+            "customers" => DB::table("customers")->orderBy("name")->get(),
+            "reps" => DB::table("sales_representatives")->orderBy("name")->get(),
+            "articles" => $articles,
+            "pos" => $pos,
+            "orders" => $orders,
+            "invoices" => $invoices,
+            "receipts" => $receipts,
+            "commissions" => $commissions,
+        ]);
     }
-    if($qty>0){$prepared[]=[$line,$item,$qty];$total+=round($qty*(float)$item->unit_price,2);}
-   }
-   abort_if(count($seen)!==count($expected),422,'Review every PO size. To exclude a size, submit zero quantity with a reason.');
-   abort_if(empty($prepared),422,'Enter at least one available quantity before creating the sales order.');
-   $soNum='SO-'.now()->format('ym').'-'.str_pad((string)(DB::table('sales_orders')->count()+1),4,'0',STR_PAD_LEFT);
-   $so=DB::table('sales_orders')->insertGetId(['number'=>$soNum,'customer_po_id'=>$id,'customer_id'=>$po->customer_id,'sales_rep_id'=>$po->sales_rep_id,'order_date'=>$d['order_date'],'status'=>'confirmed','total'=>$total,'created_at'=>now(),'updated_at'=>now()]);
-   foreach($prepared as [$line,$item,$qty])DB::table('sales_order_size_lines')->insert(['sales_order_id'=>$so,'article_id'=>$line->article_id,'size_label'=>$item->size_label,'colour'=>$line->colour,'quantity'=>$qty,'invoiced_quantity'=>0,'rate'=>$item->unit_price,'created_at'=>now(),'updated_at'=>now()]);
-   if($changes)DB::table('audit_logs')->insert(['event'=>'sales_order.reviewed','entity_type'=>'sales_order','entity_id'=>$so,'payload'=>json_encode(['customer_po_id'=>$id,'user_id'=>$r->attributes->get('auth_user')?->id,'changes'=>$changes]),'created_at'=>now()]);
-   DB::table('customer_pos')->where('id',$id)->update(['status'=>'ordered','updated_at'=>now()]);
-   return DB::table('sales_orders')->find($so);
-  });
-  return response()->json(['sales_order'=>$order],201);
- }
- public function invoiceDispatch(Request $r,int $id):JsonResponse {$d=$r->validate(['invoice_date'=>'required|date','lines'=>'required|array|min:1','lines.*.sales_order_size_line_id'=>'required|exists:sales_order_size_lines,id','lines.*.quantity'=>'required|numeric|min:0']);$invoice=DB::transaction(function()use($d,$id){$order=DB::table('sales_orders')->lockForUpdate()->find($id);abort_unless($order,404,'Sales order not found.');$requested=collect($d['lines'])->filter(fn($x)=>(float)$x['quantity']>0);abort_if($requested->isEmpty(),422,'Enter at least one dispatched quantity.');$prepared=[];$total=0;foreach($requested as $input){$line=DB::table('sales_order_size_lines')->lockForUpdate()->where('id',$input['sales_order_size_line_id'])->where('sales_order_id',$id)->first();abort_unless($line,422,'Invalid sales order line.');$remaining=(float)$line->quantity-(float)$line->invoiced_quantity;$qty=(float)$input['quantity'];abort_if($qty>$remaining+0.0001,422,"Dispatched quantity for size {$line->size_label} exceeds the remaining quantity.");$prepared[]=[$line,$qty];$total+=round($qty*(float)$line->rate,2);} $customer=DB::table('customers')->find($order->customer_id);$po=DB::table('customer_pos')->find($order->customer_po_id);$num='INV-'.now()->format('ym').'-'.str_pad((string)(DB::table('sales_invoices')->count()+1),4,'0',STR_PAD_LEFT);$due=date('Y-m-d',strtotime($d['invoice_date'].' +'.($po->sale_type==='cash'?0:$customer->credit_days).' days'));$iid=DB::table('sales_invoices')->insertGetId(['number'=>$num,'sales_order_id'=>$id,'customer_id'=>$order->customer_id,'sales_rep_id'=>$order->sales_rep_id,'invoice_date'=>$d['invoice_date'],'due_date'=>$due,'sale_type'=>$po->sale_type,'status'=>'unpaid','subtotal'=>$total,'discount'=>0,'tax'=>0,'total'=>$total,'received_amount'=>0,'outstanding'=>$total,'created_at'=>now(),'updated_at'=>now()]);foreach($prepared as [$line,$qty]){DB::table('sales_invoice_lines')->insert(['sales_invoice_id'=>$iid,'sales_order_size_line_id'=>$line->id,'article_id'=>$line->article_id,'size_label'=>$line->size_label,'quantity'=>$qty,'rate'=>$line->rate,'line_total'=>$qty*$line->rate,'created_at'=>now(),'updated_at'=>now()]);DB::table('sales_order_size_lines')->where('id',$line->id)->increment('invoiced_quantity',$qty,['updated_at'=>now()]);}$remaining=DB::table('sales_order_size_lines')->where('sales_order_id',$id)->whereRaw('invoiced_quantity < quantity')->exists();DB::table('sales_orders')->where('id',$id)->update(['status'=>$remaining?'part_invoiced':'invoiced','updated_at'=>now()]);if(!$remaining)DB::table('customer_pos')->where('id',$order->customer_po_id)->update(['status'=>'invoiced','updated_at'=>now()]);return DB::table('sales_invoices')->find($iid);});return response()->json($invoice,201);}
- public function receipt(Request $r):JsonResponse {$d=$r->validate(['invoice_id'=>'required|exists:sales_invoices,id','collector_sales_rep_id'=>'required|exists:sales_representatives,id','payment_account_id'=>'nullable|integer|exists:accounts,id','receipt_date'=>'required|date','collection_type'=>'required|in:regular,partial,final,recovery','payment_method'=>'required|in:cash,bank_transfer,cheque,card','commission_decision'=>'required|in:invoice_salesperson,collector,cancel','reference'=>'nullable|max:80','amount'=>'required|numeric|gt:0']);$invoice=DB::table('sales_invoices')->find($d['invoice_id']);abort_if($d['amount']>$invoice->outstanding+0.001,422,'Receipt exceeds the invoice outstanding balance.');return response()->json(DB::transaction(fn()=>$this->postReceipt($d+['customer_id'=>$invoice->customer_id])),201);}
- private function postReceipt(array $d):array {$invoice=DB::table('sales_invoices')->lockForUpdate()->find($d['invoice_id']);abort_unless($invoice,404,'Invoice not found.');abort_if((float)$d['amount']>(float)$invoice->outstanding+0.001,422,'Receipt exceeds the invoice outstanding balance.');abort_if($d['collection_type']==='final'&&abs((float)$d['amount']-(float)$invoice->outstanding)>0.001,422,'A final settlement must pay the full outstanding balance.');$cash=DB::table('accounts')->where('id',$d['payment_account_id']??DB::table('accounts')->where('code','1000')->value('id'))->first();abort_unless($cash&&\App\Services\Accounting\AccountPolicy::active($cash)&&\App\Services\Accounting\AccountPolicy::cash($cash),422,'Choose an active cash or bank account for the collection.');$payeeId=$d['commission_decision']==='collector'?(int)$d['collector_sales_rep_id']:(int)$invoice->sales_rep_id;$payee=DB::table('sales_representatives')->find($payeeId);abort_unless($payee,422,'The selected commission recipient is missing.');$num='REC-'.now()->format('ym').'-'.str_pad((string)(DB::table('customer_receipts')->count()+1),4,'0',STR_PAD_LEFT);$rid=DB::table('customer_receipts')->insertGetId(['number'=>$num,'customer_id'=>$d['customer_id'],'sales_rep_id'=>$invoice->sales_rep_id,'collector_sales_rep_id'=>$d['collector_sales_rep_id'],'payment_account_id'=>$cash->id,'receipt_date'=>$d['receipt_date'],'collection_type'=>$d['collection_type'],'payment_method'=>$d['payment_method'],'reference'=>$d['reference']??null,'amount'=>$d['amount'],'status'=>'posted','created_at'=>now(),'updated_at'=>now()]);$days=max(0,(int)floor((strtotime($d['receipt_date'])-strtotime($invoice->invoice_date))/86400));$invoicePieces=(float)DB::table('sales_invoice_lines')->where('sales_invoice_id',$invoice->id)->sum('quantity');$collectedRatio=min(1,(float)$d['amount']/max(.01,(float)$invoice->total));$commissionPieces=round($invoicePieces*$collectedRatio,4);$rate=(float)$payee->default_commission_rate;$limit=DB::table('commission_settings')->value('max_collection_days')??100;$eligible=$days<=(int)$limit;$cancelled=$d['commission_decision']==='cancel';$commission=(!$cancelled&&$eligible)?round($commissionPieces*$rate,2):0;$commissionStatus=$cancelled?'cancelled_by_management':($eligible?'eligible':'blocked_late');DB::table('receipt_allocations')->insert(['receipt_id'=>$rid,'invoice_id'=>$invoice->id,'commission_payee_sales_rep_id'=>$cancelled?null:$payeeId,'amount'=>$d['amount'],'days_taken'=>$days,'commission_pieces'=>$commissionPieces,'commission_rate'=>$rate,'commission_amount'=>$commission,'commission_status'=>$commissionStatus,'commission_decision'=>$d['commission_decision'],'created_at'=>now(),'updated_at'=>now()]);$received=$invoice->received_amount+$d['amount'];$outstanding=max(0,$invoice->total-$received);DB::table('sales_invoices')->where('id',$invoice->id)->update(['received_amount'=>$received,'outstanding'=>$outstanding,'status'=>$outstanding<0.01?'paid':'part_paid','updated_at'=>now()]);return ['receipt'=>DB::table('customer_receipts')->find($rid),'commission'=>$commission,'commission_pieces'=>$commissionPieces,'days_taken'=>$days,'max_collection_days'=>(int)$limit,'salesperson'=>$cancelled?null:$payee->name,'commission_decision'=>$d['commission_decision']];}
- public function aging(Request $r):JsonResponse {$asOf=$r->validate(['as_of'=>'nullable|date'])['as_of']??now()->toDateString();$rows=DB::table('sales_invoices as i')->join('customers as c','c.id','=','i.customer_id')->join('sales_representatives as rep','rep.id','=','i.sales_rep_id')->where('i.outstanding','>',0)->whereDate('i.invoice_date','<=',$asOf)->select('i.*','c.code as customer_code','c.name as customer_name','rep.name as rep_name')->get()->map(function($x)use($asOf){$days=max(0,(int)floor((strtotime($asOf)-strtotime($x->due_date))/86400));$x->days_overdue=$days;$x->bucket=$days===0?'current':($days<=30?'1_30':($days<=60?'31_60':($days<=90?'61_90':'90_plus')));$last=DB::table('receipt_allocations as a')->join('customer_receipts as r','r.id','=','a.receipt_id')->leftJoin('sales_representatives as collector','collector.id','=','r.collector_sales_rep_id')->where('a.invoice_id',$x->id)->orderByDesc('r.receipt_date')->select('r.receipt_date','r.collection_type','collector.name as collector_name')->first();$x->last_collection_date=$last->receipt_date??null;$x->last_collection_type=$last->collection_type??null;$x->last_collector=$last->collector_name??null;return $x;});return response()->json(['as_of'=>$asOf,'rows'=>$rows,'total'=>(float)$rows->sum('outstanding')]);}
+    public function storeCustomer(Request $r): JsonResponse
+    {
+        $d = $r->validate([
+            "code" => "required|max:30|unique:customers,code",
+            "name" => "required|max:160",
+            "tin" => "nullable|max:40",
+            "phone" => "nullable|max:30",
+            "address" => "nullable|max:255",
+            "credit_days" => "required|integer|min:0|max:365",
+            "credit_limit" => "required|numeric|min:0",
+        ]);
+        $id = DB::table("customers")->insertGetId(
+            $d + ["status" => "active", "created_at" => now(), "updated_at" => now()],
+        );
+        return response()->json(DB::table("customers")->find($id), 201);
+    }
+    public function updateCustomer(Request $r, int $id): JsonResponse
+    {
+        $d = $r->validate([
+            "code" => ["required", "max:30", Rule::unique("customers", "code")->ignore($id)],
+            "name" => "required|max:160",
+            "tin" => "nullable|max:40",
+            "phone" => "nullable|max:30",
+            "address" => "nullable|max:255",
+            "credit_days" => "required|integer|min:0|max:365",
+            "credit_limit" => "required|numeric|min:0",
+            "status" => "required|in:active,inactive",
+        ]);
+        DB::table("customers")
+            ->where("id", $id)
+            ->update($d + ["updated_at" => now()]);
+        return response()->json(DB::table("customers")->find($id));
+    }
+    public function storeRep(Request $r): JsonResponse
+    {
+        $d = $r->validate([
+            "code" => "required|max:30|unique:sales_representatives,code",
+            "name" => "required|max:160",
+            "manager_name" => "nullable|max:160",
+            "channel" => "required|in:head_office,direct_sales,future_channel",
+            "default_commission_rate" => "required|numeric|min:0",
+        ]);
+        $id = DB::table("sales_representatives")->insertGetId(
+            $d + ["status" => "active", "created_at" => now(), "updated_at" => now()],
+        );
+        return response()->json(DB::table("sales_representatives")->find($id), 201);
+    }
+    public function updateRep(Request $r, int $id): JsonResponse
+    {
+        $d = $r->validate([
+            "code" => [
+                "required",
+                "max:30",
+                Rule::unique("sales_representatives", "code")->ignore($id),
+            ],
+            "name" => "required|max:160",
+            "manager_name" => "nullable|max:160",
+            "channel" => "required|in:head_office,direct_sales,future_channel",
+            "default_commission_rate" => "required|numeric|min:0",
+            "status" => "required|in:active,inactive",
+        ]);
+        DB::table("sales_representatives")
+            ->where("id", $id)
+            ->update($d + ["updated_at" => now()]);
+        return response()->json(DB::table("sales_representatives")->find($id));
+    }
+    public function storeArticle(Request $r): JsonResponse
+    {
+        $d = $r->validate([
+            "code" => "required|max:30|unique:articles,code",
+            "name" => "required|max:160",
+            "category" => "required|max:80",
+            "sets" => "required|array|min:1",
+            "sets.*.name" => "required|max:100",
+            "sets.*.items" => "required|array|min:1",
+            "sets.*.items.*.size_label" => "required|max:30",
+            "sets.*.items.*.item_code" => "nullable|max:60",
+            "sets.*.items.*.colours" => "nullable|max:255",
+            "sets.*.items.*.production_cost" => "nullable|numeric|min:0",
+            "sets.*.items.*.quantity" => "required|numeric|gt:0",
+            "sets.*.items.*.unit_price" => "required|numeric|min:0",
+        ]);
+        $id = DB::transaction(function () use ($d) {
+            $first = $d["sets"][0];
+            $id = DB::table("articles")->insertGetId([
+                "code" => $d["code"],
+                "name" => $d["name"],
+                "category" => $d["category"],
+                "set_name" => $first["name"],
+                "pieces_per_set" => collect($first["items"])->sum("quantity"),
+                "selling_price" => $first["items"][0]["unit_price"],
+                "commission_rate" => 0,
+                "status" => "active",
+                "created_at" => now(),
+                "updated_at" => now(),
+            ]);
+            foreach ($d["sets"] as $set) {
+                $sid = DB::table("article_set_templates")->insertGetId([
+                    "article_id" => $id,
+                    "name" => $set["name"],
+                    "status" => "active",
+                    "created_at" => now(),
+                    "updated_at" => now(),
+                ]);
+                foreach ($set["items"] as $i => $item) {
+                    DB::table("article_set_items")->insert([
+                        "set_template_id" => $sid,
+                        "size_label" => $item["size_label"],
+                        "item_code" => $item["item_code"] ?? null,
+                        "colours" => $item["colours"] ?? null,
+                        "production_cost" => $item["production_cost"] ?? null,
+                        "quantity" => $item["quantity"],
+                        "unit_price" => $item["unit_price"],
+                        "price_source" => "Manual",
+                        "price_updated_at" => now(),
+                        "sort_order" => $i + 1,
+                        "created_at" => now(),
+                        "updated_at" => now(),
+                    ]);
+                }
+            }
+            return $id;
+        });
+        return response()->json(DB::table("articles")->find($id), 201);
+    }
+    public function updateArticle(Request $r, int $id): JsonResponse
+    {
+        $d = $r->validate([
+            "code" => ["required", "max:30", Rule::unique("articles", "code")->ignore($id)],
+            "name" => "required|max:160",
+            "category" => "required|max:80",
+            "status" => "nullable|in:active,inactive",
+            "sets" => "required|array|min:1",
+            "sets.*.id" => "nullable|integer",
+            "sets.*.name" => "required|max:100",
+            "sets.*.items" => "required|array|min:1",
+            "sets.*.items.*.id" => "nullable|integer",
+            "sets.*.items.*.size_label" => "required|max:30",
+            "sets.*.items.*.item_code" => "nullable|max:60",
+            "sets.*.items.*.colours" => "nullable|max:255",
+            "sets.*.items.*.production_cost" => "nullable|numeric|min:0",
+            "sets.*.items.*.quantity" => "required|numeric|gt:0",
+            "sets.*.items.*.unit_price" => "required|numeric|min:0",
+        ]);
+        DB::transaction(function () use ($d, $id) {
+            abort_unless(
+                DB::table("articles")->where("id", $id)->exists(),
+                404,
+                "Article not found.",
+            );
+            $first = $d["sets"][0];
+            DB::table("articles")
+                ->where("id", $id)
+                ->update([
+                    "code" => $d["code"],
+                    "name" => $d["name"],
+                    "category" => $d["category"],
+                    "set_name" => $first["name"],
+                    "pieces_per_set" => collect($first["items"])->sum("quantity"),
+                    "selling_price" => $first["items"][0]["unit_price"],
+                    "status" => $d["status"] ?? "active",
+                    "updated_at" => now(),
+                ]);
+            $kept = [];
+            foreach ($d["sets"] as $set) {
+                $sid = $set["id"] ?? null;
+                if (
+                    $sid &&
+                    DB::table("article_set_templates")
+                        ->where("id", $sid)
+                        ->where("article_id", $id)
+                        ->exists()
+                ) {
+                    DB::table("article_set_templates")
+                        ->where("id", $sid)
+                        ->update([
+                            "name" => $set["name"],
+                            "status" => "active",
+                            "updated_at" => now(),
+                        ]);
+                } else {
+                    $sid = DB::table("article_set_templates")->insertGetId([
+                        "article_id" => $id,
+                        "name" => $set["name"],
+                        "status" => "active",
+                        "created_at" => now(),
+                        "updated_at" => now(),
+                    ]);
+                }
+                $kept[] = $sid;
+                $itemIds = [];
+                foreach ($set["items"] as $i => $item) {
+                    $iid = $item["id"] ?? null;
+                    $values = [
+                        "size_label" => $item["size_label"],
+                        "item_code" => $item["item_code"] ?? null,
+                        "colours" => $item["colours"] ?? null,
+                        "production_cost" => $item["production_cost"] ?? null,
+                        "quantity" => $item["quantity"],
+                        "unit_price" => $item["unit_price"],
+                        "price_source" => "Manual",
+                        "price_updated_at" => now(),
+                        "sort_order" => $i + 1,
+                        "updated_at" => now(),
+                    ];
+                    if (
+                        $iid &&
+                        DB::table("article_set_items")
+                            ->where("id", $iid)
+                            ->where("set_template_id", $sid)
+                            ->exists()
+                    ) {
+                        DB::table("article_set_items")->where("id", $iid)->update($values);
+                        $itemIds[] = $iid;
+                    } else {
+                        $itemIds[] = DB::table("article_set_items")->insertGetId(
+                            $values + ["set_template_id" => $sid, "created_at" => now()],
+                        );
+                    }
+                }
+                DB::table("article_set_items")
+                    ->where("set_template_id", $sid)
+                    ->whereNotIn("id", $itemIds)
+                    ->delete();
+            }
+            DB::table("article_set_templates")
+                ->where("article_id", $id)
+                ->whereNotIn("id", $kept)
+                ->get()
+                ->each(function ($set) {
+                    $used = DB::table("customer_po_lines")
+                        ->where("set_template_id", $set->id)
+                        ->exists();
+                    if ($used) {
+                        DB::table("article_set_templates")
+                            ->where("id", $set->id)
+                            ->update(["status" => "inactive", "updated_at" => now()]);
+                    } else {
+                        DB::table("article_set_templates")->where("id", $set->id)->delete();
+                    }
+                });
+        });
+        return response()->json(DB::table("articles")->find($id));
+    }
+    public function storePo(Request $r): JsonResponse
+    {
+        if ($r->attributes->get("auth_user")?->sales_rep_id) {
+            $r->merge(["sales_rep_id" => $r->attributes->get("auth_user")->sales_rep_id]);
+        }
+        $d = $r->validate([
+            "customer_id" => "nullable|exists:customers,id",
+            "customer_name" => "required_without:customer_id|nullable|string|max:160",
+            "customer_phone" => "nullable|string|max:30",
+            "customer_address" => "nullable|string|max:255",
+            "customer_credit_days" => "nullable|integer|min:0|max:365",
+            "sales_rep_id" => "required|exists:sales_representatives,id",
+            "customer_po_reference" => "nullable|max:80",
+            "po_date" => "required|date",
+            "sale_type" => "required|in:cash,credit,mixed",
+            "cash_amount" => "nullable|required_if:sale_type,mixed|numeric|min:0",
+            "lines" => "required|array|min:1",
+            "lines.*.colour" => "nullable|string|max:80",
+            "lines.*.order_mode" => "required|in:badge,size",
+            "lines.*.set_template_id" => "nullable|exists:article_set_templates,id",
+            "lines.*.set_item_id" => "nullable|exists:article_set_items,id",
+            "lines.*.quantity" => "required|numeric|gt:0",
+        ]);
+        $po = DB::transaction(function () use ($d) {
+            $customerId = $d["customer_id"] ?? null;
+            if (!$customerId) {
+                $sequence = DB::table("customers")->count() + 1;
+                $customerId = DB::table("customers")->insertGetId([
+                    "code" => "CUS-" . str_pad((string) $sequence, 4, "0", STR_PAD_LEFT),
+                    "name" => $d["customer_name"],
+                    "phone" => $d["customer_phone"] ?? null,
+                    "address" => $d["customer_address"] ?? null,
+                    "credit_days" => $d["customer_credit_days"] ?? 30,
+                    "credit_limit" => 0,
+                    "status" => "active",
+                    "created_at" => now(),
+                    "updated_at" => now(),
+                ]);
+            }
+            $num =
+                "CPO-" .
+                now()->format("ym") .
+                "-" .
+                str_pad((string) (DB::table("customer_pos")->count() + 1), 4, "0", STR_PAD_LEFT);
+            $id = DB::table("customer_pos")->insertGetId([
+                "number" => $num,
+                "customer_id" => $customerId,
+                "sales_rep_id" => $d["sales_rep_id"],
+                "customer_po_reference" => $d["customer_po_reference"] ?? null,
+                "po_date" => $d["po_date"],
+                "sale_type" => $d["sale_type"],
+                "status" => "draft",
+                "total" => 0,
+                "created_at" => now(),
+                "updated_at" => now(),
+            ]);
+            $total = 0;
+            foreach ($d["lines"] as $line) {
+                if ($line["order_mode"] === "badge") {
+                    $set = DB::table("article_set_templates")->find($line["set_template_id"]);
+                    abort_unless($set, 422, "Choose a badge.");
+                    $items = DB::table("article_set_items")
+                        ->where("set_template_id", $set->id)
+                        ->get();
+                    $units = (float) $line["quantity"];
+                    $pieces = $items->sum("quantity") * $units;
+                    $value = $items->sum(fn($i) => $i->quantity * $i->unit_price) * $units;
+                    $articleId = $set->article_id;
+                    $itemId = null;
+                    $setId = $set->id;
+                } else {
+                    $item = DB::table("article_set_items as i")
+                        ->join("article_set_templates as s", "s.id", "=", "i.set_template_id")
+                        ->where("i.id", $line["set_item_id"])
+                        ->select("i.*", "s.article_id")
+                        ->first();
+                    abort_unless($item, 422, "Choose an article size.");
+                    $units = (float) $line["quantity"];
+                    $pieces = $units;
+                    $value = $units * $item->unit_price;
+                    $articleId = $item->article_id;
+                    $itemId = $item->id;
+                    $setId = $item->set_template_id;
+                }
+                $total += $value;
+                DB::table("customer_po_lines")->insert([
+                    "customer_po_id" => $id,
+                    "article_id" => $articleId,
+                    "colour" => $line["colour"] ?? null,
+                    "order_mode" => $line["order_mode"],
+                    "set_template_id" => $setId,
+                    "set_item_id" => $itemId,
+                    "sets" => $line["order_mode"] === "badge" ? $units : 0,
+                    "pieces" => $pieces,
+                    "rate" => $value / max(1, $pieces),
+                    "line_total" => $value,
+                    "created_at" => now(),
+                    "updated_at" => now(),
+                ]);
+            }
+            $cash =
+                $d["sale_type"] === "cash"
+                    ? $total
+                    : ($d["sale_type"] === "mixed"
+                        ? (float) ($d["cash_amount"] ?? 0)
+                        : 0);
+            abort_if(
+                $d["sale_type"] === "mixed" && ($cash <= 0 || $cash >= $total),
+                422,
+                "For part cash / credit, cash amount must be greater than zero and less than the PO total.",
+            );
+            DB::table("customer_pos")
+                ->where("id", $id)
+                ->update([
+                    "total" => $total,
+                    "cash_amount" => $cash,
+                    "credit_amount" => $total - $cash,
+                ]);
+            return DB::table("customer_pos")->find($id);
+        });
+        return response()->json($po, 201);
+    }
+    public function updatePo(Request $r, int $id): JsonResponse
+    {
+        if ($r->attributes->get("auth_user")?->sales_rep_id) {
+            $r->merge(["sales_rep_id" => $r->attributes->get("auth_user")->sales_rep_id]);
+        }
+        $d = $r->validate([
+            "customer_id" => "required|exists:customers,id",
+            "sales_rep_id" => "required|exists:sales_representatives,id",
+            "customer_po_reference" => "nullable|max:80",
+            "po_date" => "required|date",
+            "sale_type" => "required|in:cash,credit,mixed",
+            "cash_amount" => "nullable|required_if:sale_type,mixed|numeric|min:0",
+            "lines" => "required|array|min:1",
+            "lines.*.colour" => "nullable|string|max:80",
+            "lines.*.order_mode" => "required|in:badge,size",
+            "lines.*.set_template_id" => "nullable|exists:article_set_templates,id",
+            "lines.*.set_item_id" => "nullable|exists:article_set_items,id",
+            "lines.*.quantity" => "required|numeric|gt:0",
+        ]);
+        $po = DB::transaction(function () use ($d, $id) {
+            $po = DB::table("customer_pos")->lockForUpdate()->find($id);
+            abort_unless($po, 404, "Customer PO not found.");
+            abort_if(
+                $po->status !== "draft",
+                422,
+                "Only a draft PO can be edited. Converted POs are locked to protect accounting history.",
+            );
+            DB::table("customer_pos")
+                ->where("id", $id)
+                ->update([
+                    "customer_id" => $d["customer_id"],
+                    "sales_rep_id" => $d["sales_rep_id"],
+                    "customer_po_reference" => $d["customer_po_reference"] ?? null,
+                    "po_date" => $d["po_date"],
+                    "sale_type" => $d["sale_type"],
+                    "updated_at" => now(),
+                ]);
+            DB::table("customer_po_lines")->where("customer_po_id", $id)->delete();
+            $total = 0;
+            foreach ($d["lines"] as $line) {
+                if ($line["order_mode"] === "badge") {
+                    $set = DB::table("article_set_templates")->find($line["set_template_id"]);
+                    abort_unless($set, 422, "Choose a badge.");
+                    $items = DB::table("article_set_items")
+                        ->where("set_template_id", $set->id)
+                        ->get();
+                    $units = (float) $line["quantity"];
+                    $pieces = $items->sum("quantity") * $units;
+                    $value = $items->sum(fn($i) => $i->quantity * $i->unit_price) * $units;
+                    $articleId = $set->article_id;
+                    $itemId = null;
+                    $setId = $set->id;
+                } else {
+                    $item = DB::table("article_set_items as i")
+                        ->join("article_set_templates as s", "s.id", "=", "i.set_template_id")
+                        ->where("i.id", $line["set_item_id"])
+                        ->select("i.*", "s.article_id")
+                        ->first();
+                    abort_unless($item, 422, "Choose an article size.");
+                    $units = (float) $line["quantity"];
+                    $pieces = $units;
+                    $value = $units * $item->unit_price;
+                    $articleId = $item->article_id;
+                    $itemId = $item->id;
+                    $setId = $item->set_template_id;
+                }
+                $total += $value;
+                DB::table("customer_po_lines")->insert([
+                    "customer_po_id" => $id,
+                    "article_id" => $articleId,
+                    "order_mode" => $line["order_mode"],
+                    "set_template_id" => $setId,
+                    "set_item_id" => $itemId,
+                    "sets" => $line["order_mode"] === "badge" ? $units : 0,
+                    "pieces" => $pieces,
+                    "rate" => $value / max(1, $pieces),
+                    "line_total" => $value,
+                    "created_at" => now(),
+                    "updated_at" => now(),
+                ]);
+            }
+            $cash =
+                $d["sale_type"] === "cash"
+                    ? $total
+                    : ($d["sale_type"] === "mixed"
+                        ? (float) ($d["cash_amount"] ?? 0)
+                        : 0);
+            abort_if(
+                $d["sale_type"] === "mixed" && ($cash <= 0 || $cash >= $total),
+                422,
+                "For part cash / credit, cash amount must be greater than zero and less than the PO total.",
+            );
+            DB::table("customer_pos")
+                ->where("id", $id)
+                ->update([
+                    "total" => $total,
+                    "cash_amount" => $cash,
+                    "credit_amount" => $total - $cash,
+                    "updated_at" => now(),
+                ]);
+            return DB::table("customer_pos")->find($id);
+        });
+        return response()->json($po);
+    }
+    public function deletePo(int $id): JsonResponse
+    {
+        $po = DB::table("customer_pos")->find($id);
+        abort_unless($po, 404, "Customer PO not found.");
+        abort_if($po->status !== "draft", 422, "Only a draft PO can be deleted.");
+        DB::table("customer_pos")->where("id", $id)->delete();
+        return response()->json(["message" => "Customer PO deleted."]);
+    }
+    public function convertFullPo(Request $request, int $id, string $orderDate): JsonResponse
+    {
+        $review = [];
+        foreach (DB::table("customer_po_lines")->where("customer_po_id", $id)->get() as $line) {
+            $items = DB::table("article_set_items")->where(
+                "set_template_id",
+                $line->set_template_id,
+            );
+            if (($line->order_mode ?? "badge") === "size") {
+                $items->where("id", $line->set_item_id);
+            }
+            foreach ($items->get() as $item) {
+                $review[] = [
+                    "customer_po_line_id" => $line->id,
+                    "set_item_id" => $item->id,
+                    "quantity" =>
+                        ($line->order_mode ?? "badge") === "size"
+                            ? (float) $line->pieces
+                            : (float) $line->sets * (float) $item->quantity,
+                ];
+            }
+        }
+        $conversion = Request::create("/", "POST", [
+            "order_date" => $orderDate,
+            "lines" => $review,
+        ]);
+        $conversion->attributes->set("auth_user", $request->attributes->get("auth_user"));
+        $conversion->setUserResolver($request->getUserResolver());
+        return $this->convert($conversion, $id);
+    }
+    public function convert(Request $r, int $id): JsonResponse
+    {
+        $d = $r->validate([
+            "order_date" => "required|date",
+            "lines" => "required|array|min:1",
+            "lines.*.customer_po_line_id" => "required|integer",
+            "lines.*.set_item_id" => "required|integer",
+            "lines.*.quantity" => "required|numeric|min:0",
+            "lines.*.reason" => "nullable|string|max:500",
+        ]);
+        $order = DB::transaction(function () use ($d, $id, $r) {
+            $po = DB::table("customer_pos")->lockForUpdate()->find($id);
+            abort_unless($po, 404, "Customer PO not found.");
+            abort_if($po->status !== "draft", 422, "Only a draft customer PO can be converted.");
+            $expected = [];
+            foreach (DB::table("customer_po_lines")->where("customer_po_id", $id)->get() as $line) {
+                $items = DB::table("article_set_items")->where(
+                    "set_template_id",
+                    $line->set_template_id,
+                );
+                if (($line->order_mode ?? "badge") === "size") {
+                    $items->where("id", $line->set_item_id);
+                }
+                foreach ($items->get() as $item) {
+                    $expected[$line->id . "|" . $item->id] = [$line, $item];
+                }
+            }
+            $prepared = [];
+            $changes = [];
+            $total = 0;
+            $seen = [];
+            foreach ($d["lines"] as $index => $input) {
+                $key = $input["customer_po_line_id"] . "|" . $input["set_item_id"];
+                abort_if(
+                    isset($seen[$key]),
+                    422,
+                    "A reviewed PO size was submitted more than once.",
+                );
+                abort_unless(isset($expected[$key]), 422, "Invalid customer PO size.");
+                $seen[$key] = true;
+                [$line, $item] = $expected[$key];
+                $allowed =
+                    ($line->order_mode ?? "badge") === "size"
+                        ? (float) $line->pieces
+                        : (float) $line->sets * (float) $item->quantity;
+                $qty = (float) $input["quantity"];
+                abort_if(
+                    $qty > $allowed + 0.0001,
+                    422,
+                    "Sales order quantity for size {$item->size_label} exceeds the customer PO quantity.",
+                );
+                if (abs($qty - $allowed) > 0.0001) {
+                    $reason = trim($input["reason"] ?? "");
+                    if ($reason === "") {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            "lines.$index.reason" => "Enter a reason for removing or changing size {$item->size_label}.",
+                        ]);
+                    }
+                    $changes[] = [
+                        "customer_po_line_id" => $line->id,
+                        "set_item_id" => $item->id,
+                        "article_id" => $line->article_id,
+                        "size_label" => $item->size_label,
+                        "colour" => $line->colour,
+                        "original_quantity" => $allowed,
+                        "quantity" => $qty,
+                        "action" => $qty === 0.0 ? "removed" : "edited",
+                        "reason" => $reason,
+                    ];
+                }
+                if ($qty > 0) {
+                    $prepared[] = [$line, $item, $qty];
+                    $total += round($qty * (float) $item->unit_price, 2);
+                }
+            }
+            abort_if(
+                count($seen) !== count($expected),
+                422,
+                "Review every PO size. To exclude a size, submit zero quantity with a reason.",
+            );
+            abort_if(
+                empty($prepared),
+                422,
+                "Enter at least one available quantity before creating the sales order.",
+            );
+            $soNum =
+                "SO-" .
+                now()->format("ym") .
+                "-" .
+                str_pad((string) (DB::table("sales_orders")->count() + 1), 4, "0", STR_PAD_LEFT);
+            $so = DB::table("sales_orders")->insertGetId([
+                "number" => $soNum,
+                "customer_po_id" => $id,
+                "customer_id" => $po->customer_id,
+                "sales_rep_id" => $po->sales_rep_id,
+                "order_date" => $d["order_date"],
+                "status" => "confirmed",
+                "total" => $total,
+                "created_at" => now(),
+                "updated_at" => now(),
+            ]);
+            foreach ($prepared as [$line, $item, $qty]) {
+                DB::table("sales_order_size_lines")->insert([
+                    "sales_order_id" => $so,
+                    "article_id" => $line->article_id,
+                    "size_label" => $item->size_label,
+                    "colour" => $line->colour,
+                    "quantity" => $qty,
+                    "invoiced_quantity" => 0,
+                    "rate" => $item->unit_price,
+                    "created_at" => now(),
+                    "updated_at" => now(),
+                ]);
+            }
+            if ($changes) {
+                DB::table("audit_logs")->insert([
+                    "event" => "sales_order.reviewed",
+                    "entity_type" => "sales_order",
+                    "entity_id" => $so,
+                    "payload" => json_encode([
+                        "customer_po_id" => $id,
+                        "user_id" => $r->attributes->get("auth_user")?->id,
+                        "changes" => $changes,
+                    ]),
+                    "created_at" => now(),
+                ]);
+            }
+            DB::table("customer_pos")
+                ->where("id", $id)
+                ->update(["status" => "ordered", "updated_at" => now()]);
+            return DB::table("sales_orders")->find($so);
+        });
+        return response()->json(["sales_order" => $order], 201);
+    }
+    public function invoiceDispatch(Request $r, int $id): JsonResponse
+    {
+        $d = $r->validate([
+            "invoice_date" => "required|date",
+            "lines" => "required|array|min:1",
+            "lines.*.sales_order_size_line_id" => "required|exists:sales_order_size_lines,id",
+            "lines.*.quantity" => "required|numeric|min:0",
+        ]);
+        $invoice = DB::transaction(function () use ($d, $id) {
+            $order = DB::table("sales_orders")->lockForUpdate()->find($id);
+            abort_unless($order, 404, "Sales order not found.");
+            $requested = collect($d["lines"])->filter(fn($x) => (float) $x["quantity"] > 0);
+            abort_if($requested->isEmpty(), 422, "Enter at least one dispatched quantity.");
+            $prepared = [];
+            $total = 0;
+            foreach ($requested as $input) {
+                $line = DB::table("sales_order_size_lines")
+                    ->lockForUpdate()
+                    ->where("id", $input["sales_order_size_line_id"])
+                    ->where("sales_order_id", $id)
+                    ->first();
+                abort_unless($line, 422, "Invalid sales order line.");
+                $remaining = (float) $line->quantity - (float) $line->invoiced_quantity;
+                $qty = (float) $input["quantity"];
+                abort_if(
+                    $qty > $remaining + 0.0001,
+                    422,
+                    "Dispatched quantity for size {$line->size_label} exceeds the remaining quantity.",
+                );
+                $prepared[] = [$line, $qty];
+                $total += round($qty * (float) $line->rate, 2);
+            }
+            $customer = DB::table("customers")->find($order->customer_id);
+            $po = DB::table("customer_pos")->find($order->customer_po_id);
+            $num =
+                "INV-" .
+                now()->format("ym") .
+                "-" .
+                str_pad((string) (DB::table("sales_invoices")->count() + 1), 4, "0", STR_PAD_LEFT);
+            $due = date(
+                "Y-m-d",
+                strtotime(
+                    $d["invoice_date"] .
+                        " +" .
+                        ($po->sale_type === "cash" ? 0 : $customer->credit_days) .
+                        " days",
+                ),
+            );
+            $iid = DB::table("sales_invoices")->insertGetId([
+                "number" => $num,
+                "sales_order_id" => $id,
+                "customer_id" => $order->customer_id,
+                "sales_rep_id" => $order->sales_rep_id,
+                "invoice_date" => $d["invoice_date"],
+                "due_date" => $due,
+                "sale_type" => $po->sale_type,
+                "status" => "unpaid",
+                "subtotal" => $total,
+                "discount" => 0,
+                "tax" => 0,
+                "total" => $total,
+                "received_amount" => 0,
+                "outstanding" => $total,
+                "created_at" => now(),
+                "updated_at" => now(),
+            ]);
+            foreach ($prepared as [$line, $qty]) {
+                DB::table("sales_invoice_lines")->insert([
+                    "sales_invoice_id" => $iid,
+                    "sales_order_size_line_id" => $line->id,
+                    "article_id" => $line->article_id,
+                    "size_label" => $line->size_label,
+                    "quantity" => $qty,
+                    "rate" => $line->rate,
+                    "line_total" => $qty * $line->rate,
+                    "created_at" => now(),
+                    "updated_at" => now(),
+                ]);
+                DB::table("sales_order_size_lines")
+                    ->where("id", $line->id)
+                    ->increment("invoiced_quantity", $qty, ["updated_at" => now()]);
+            }
+            $remaining = DB::table("sales_order_size_lines")
+                ->where("sales_order_id", $id)
+                ->whereRaw("invoiced_quantity < quantity")
+                ->exists();
+            DB::table("sales_orders")
+                ->where("id", $id)
+                ->update([
+                    "status" => $remaining ? "part_invoiced" : "invoiced",
+                    "updated_at" => now(),
+                ]);
+            if (!$remaining) {
+                DB::table("customer_pos")
+                    ->where("id", $order->customer_po_id)
+                    ->update(["status" => "invoiced", "updated_at" => now()]);
+            }
+            return DB::table("sales_invoices")->find($iid);
+        });
+        return response()->json($invoice, 201);
+    }
+    public function receipt(Request $r): JsonResponse
+    {
+        $d = $r->validate([
+            "invoice_id" => "required|exists:sales_invoices,id",
+            "collector_sales_rep_id" => "required|exists:sales_representatives,id",
+            "payment_account_id" => "nullable|integer|exists:accounts,id",
+            "receipt_date" => "required|date",
+            "collection_type" => "required|in:regular,partial,final,recovery",
+            "payment_method" => "required|in:cash,bank_transfer,cheque,card",
+            "commission_decision" => "required|in:invoice_salesperson,collector,cancel",
+            "reference" => "nullable|max:80",
+            "amount" => "required|numeric|gt:0",
+        ]);
+        $invoice = DB::table("sales_invoices")->find($d["invoice_id"]);
+        abort_if(
+            $d["amount"] > $invoice->outstanding + 0.001,
+            422,
+            "Receipt exceeds the invoice outstanding balance.",
+        );
+        return response()->json(
+            DB::transaction(
+                fn() => $this->postReceipt($d + ["customer_id" => $invoice->customer_id]),
+            ),
+            201,
+        );
+    }
+    private function postReceipt(array $d): array
+    {
+        $invoice = DB::table("sales_invoices")->lockForUpdate()->find($d["invoice_id"]);
+        abort_unless($invoice, 404, "Invoice not found.");
+        abort_if(
+            (float) $d["amount"] > (float) $invoice->outstanding + 0.001,
+            422,
+            "Receipt exceeds the invoice outstanding balance.",
+        );
+        abort_if(
+            $d["collection_type"] === "final" &&
+                abs((float) $d["amount"] - (float) $invoice->outstanding) > 0.001,
+            422,
+            "A final settlement must pay the full outstanding balance.",
+        );
+        $cash = DB::table("accounts")
+            ->where(
+                "id",
+                $d["payment_account_id"] ??
+                    DB::table("accounts")->where("code", "1000")->value("id"),
+            )
+            ->first();
+        abort_unless(
+            $cash &&
+                \App\Services\Accounting\AccountPolicy::active($cash) &&
+                \App\Services\Accounting\AccountPolicy::cash($cash),
+            422,
+            "Choose an active cash or bank account for the collection.",
+        );
+        $payeeId =
+            $d["commission_decision"] === "collector"
+                ? (int) $d["collector_sales_rep_id"]
+                : (int) $invoice->sales_rep_id;
+        $payee = DB::table("sales_representatives")->find($payeeId);
+        abort_unless($payee, 422, "The selected commission recipient is missing.");
+        $num =
+            "REC-" .
+            now()->format("ym") .
+            "-" .
+            str_pad((string) (DB::table("customer_receipts")->count() + 1), 4, "0", STR_PAD_LEFT);
+        $rid = DB::table("customer_receipts")->insertGetId([
+            "number" => $num,
+            "customer_id" => $d["customer_id"],
+            "sales_rep_id" => $invoice->sales_rep_id,
+            "collector_sales_rep_id" => $d["collector_sales_rep_id"],
+            "payment_account_id" => $cash->id,
+            "receipt_date" => $d["receipt_date"],
+            "collection_type" => $d["collection_type"],
+            "payment_method" => $d["payment_method"],
+            "reference" => $d["reference"] ?? null,
+            "amount" => $d["amount"],
+            "status" => "posted",
+            "created_at" => now(),
+            "updated_at" => now(),
+        ]);
+        $days = max(
+            0,
+            (int) floor(
+                (strtotime($d["receipt_date"]) - strtotime($invoice->invoice_date)) / 86400,
+            ),
+        );
+        $invoicePieces = (float) DB::table("sales_invoice_lines")
+            ->where("sales_invoice_id", $invoice->id)
+            ->sum("quantity");
+        $collectedRatio = min(1, (float) $d["amount"] / max(0.01, (float) $invoice->total));
+        $commissionPieces = round($invoicePieces * $collectedRatio, 4);
+        $rate = (float) $payee->default_commission_rate;
+        $limit = DB::table("commission_settings")->value("max_collection_days") ?? 100;
+        $eligible = $days <= (int) $limit;
+        $cancelled = $d["commission_decision"] === "cancel";
+        $commission = !$cancelled && $eligible ? round($commissionPieces * $rate, 2) : 0;
+        $commissionStatus = $cancelled
+            ? "cancelled_by_management"
+            : ($eligible
+                ? "eligible"
+                : "blocked_late");
+        DB::table("receipt_allocations")->insert([
+            "receipt_id" => $rid,
+            "invoice_id" => $invoice->id,
+            "commission_payee_sales_rep_id" => $cancelled ? null : $payeeId,
+            "amount" => $d["amount"],
+            "days_taken" => $days,
+            "commission_pieces" => $commissionPieces,
+            "commission_rate" => $rate,
+            "commission_amount" => $commission,
+            "commission_status" => $commissionStatus,
+            "commission_decision" => $d["commission_decision"],
+            "created_at" => now(),
+            "updated_at" => now(),
+        ]);
+        $received = $invoice->received_amount + $d["amount"];
+        $outstanding = max(0, $invoice->total - $received);
+        DB::table("sales_invoices")
+            ->where("id", $invoice->id)
+            ->update([
+                "received_amount" => $received,
+                "outstanding" => $outstanding,
+                "status" => $outstanding < 0.01 ? "paid" : "part_paid",
+                "updated_at" => now(),
+            ]);
+        return [
+            "receipt" => DB::table("customer_receipts")->find($rid),
+            "commission" => $commission,
+            "commission_pieces" => $commissionPieces,
+            "days_taken" => $days,
+            "max_collection_days" => (int) $limit,
+            "salesperson" => $cancelled ? null : $payee->name,
+            "commission_decision" => $d["commission_decision"],
+        ];
+    }
+    public function aging(Request $r): JsonResponse
+    {
+        $asOf = $r->validate(["as_of" => "nullable|date"])["as_of"] ?? now()->toDateString();
+        $rows = DB::table("sales_invoices as i")
+            ->join("customers as c", "c.id", "=", "i.customer_id")
+            ->join("sales_representatives as rep", "rep.id", "=", "i.sales_rep_id")
+            ->where("i.outstanding", ">", 0)
+            ->whereDate("i.invoice_date", "<=", $asOf)
+            ->select(
+                "i.*",
+                "c.code as customer_code",
+                "c.name as customer_name",
+                "rep.name as rep_name",
+            )
+            ->get()
+            ->map(function ($x) use ($asOf) {
+                $days = max(0, (int) floor((strtotime($asOf) - strtotime($x->due_date)) / 86400));
+                $x->days_overdue = $days;
+                $x->bucket =
+                    $days === 0
+                        ? "current"
+                        : ($days <= 30
+                            ? "1_30"
+                            : ($days <= 60
+                                ? "31_60"
+                                : ($days <= 90
+                                    ? "61_90"
+                                    : "90_plus")));
+                $last = DB::table("receipt_allocations as a")
+                    ->join("customer_receipts as r", "r.id", "=", "a.receipt_id")
+                    ->leftJoin(
+                        "sales_representatives as collector",
+                        "collector.id",
+                        "=",
+                        "r.collector_sales_rep_id",
+                    )
+                    ->where("a.invoice_id", $x->id)
+                    ->orderByDesc("r.receipt_date")
+                    ->select(
+                        "r.receipt_date",
+                        "r.collection_type",
+                        "collector.name as collector_name",
+                    )
+                    ->first();
+                $x->last_collection_date = $last->receipt_date ?? null;
+                $x->last_collection_type = $last->collection_type ?? null;
+                $x->last_collector = $last->collector_name ?? null;
+                return $x;
+            });
+        return response()->json([
+            "as_of" => $asOf,
+            "rows" => $rows,
+            "total" => (float) $rows->sum("outstanding"),
+        ]);
+    }
 }
