@@ -32,6 +32,7 @@ import {
 import "./styles.css";
 import "./actions.css";
 import "./reports.css";
+import BusinessWorkflowsPage, { workflowPages } from "./BusinessWorkflowsPage";
 import { printReport, reportTotals } from "./report-print";
 import "./tables.css";
 import "./popups.css";
@@ -229,6 +230,7 @@ export default function App() {
       name: "Sales",
       icon: ClipboardCheck,
       items: [
+        ["Quotations", FileText],
         ["Customer POs", ClipboardCheck],
         ["Sales Orders", FileText],
         ["Invoices", FileText],
@@ -244,6 +246,9 @@ export default function App() {
         ["Customers", Building2],
         ["Salespersons", Users],
         ["Pricing List", PackagePlus],
+        ["Categories", PackagePlus],
+        ["Brands", PackagePlus],
+        ["Units", PackagePlus],
         ["Employees", Users],
         ["Payroll", Building2],
       ],
@@ -256,8 +261,13 @@ export default function App() {
         ["Suppliers", Building2],
         ["Purchase Orders", FileText],
         ["Receive Goods", ClipboardCheck],
+        ["Supplier Invoices", FileText],
+        ["Purchase Returns", FileText],
         ["Raw Material Stock", Warehouse],
         ["Finished Goods Stock", PackagePlus],
+        ["Bulk Inventory Import", FileUp],
+        ["Inventory Operations", Warehouse],
+        ["Stock Ledgers", FileText],
       ],
     },
     {
@@ -266,6 +276,13 @@ export default function App() {
       items: [
         ["Chart of Accounts", Building2],
         ["Cash Flow", FileText],
+        ["Cashier Closing", Check],
+        ["Customer Ledgers", FileText],
+        ["All Payables", FileText],
+        ["Supplier Ledgers", FileText],
+        ["Recurring Journals", FileText],
+        ["Head Office Salaries", Users],
+        ["Head Office Expenses", FileText],
         ["Payment Vouchers", FileText],
         ["General Ledger", ShieldCheck],
         ["Reports", FileText],
@@ -448,20 +465,32 @@ export default function App() {
           </button>
         </header>
         <section className="content">
-          {[
-            "Dashboard",
-            "Customers",
-            "Salespersons",
-            "Pricing List",
-            "Customer POs",
-            "Sales Orders",
-            "Invoices",
-            "Collections",
-            "Debtors Aging",
-            "Commissions",
-            "Finished Goods Stock",
-            "Inventory Overview",
-          ].includes(page) ? (
+          {workflowPages.includes(page) ? (
+            <BusinessWorkflowsPage
+              key={page}
+              api={API}
+              token={token() || ""}
+              page={page}
+              permissions={profile.permissions}
+              search={search}
+              go={goToPage}
+              onChanged={load}
+              user={profile.user}
+            />
+          ) : [
+              "Dashboard",
+              "Customers",
+              "Salespersons",
+              "Pricing List",
+              "Customer POs",
+              "Sales Orders",
+              "Invoices",
+              "Collections",
+              "Debtors Aging",
+              "Commissions",
+              "Finished Goods Stock",
+              "Inventory Overview",
+            ].includes(page) ? (
             <SalesPage
               token={token() || ""}
               page={page}
@@ -472,7 +501,7 @@ export default function App() {
           ) : page === "Employees" ? (
             <EmployeesPage token={token() || ""} />
           ) : page === "Payroll" ? (
-            <PayrollPage token={token() || ""} />
+            <PayrollPage token={token() || ""} go={goToPage} />
           ) : page === "Payment Vouchers" ? (
             <PaymentVouchersPage
               api={API}
@@ -8001,7 +8030,7 @@ function EmployeeProfileModal({
     </div>
   );
 }
-function PayrollPage({ token }: { token: string }) {
+function PayrollPage({ token, go }: { token: string; go: (page: string) => void }) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
     [viewing, setViewing] = useState<any>(null),
@@ -8086,21 +8115,7 @@ function PayrollPage({ token }: { token: string }) {
       return next;
     });
   };
-  const changePayrollItemPayment = async (item: any) => {
-    const next = item.payment_status === "paid" ? "unpaid" : "paid";
-    const response = await fetch(`${API}/payroll-items/${item.id}/payment`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({ payment_status: next }),
-    });
-    const json = await response.json();
-    if (!response.ok) return setError(json.message || "Payment status update failed.");
-    loadPayroll();
-  };
+  const changePayrollItemPayment = () => go("Head Office Salaries");
   const deletePayrollItem = async (item: any) => {
     if (!confirm(`Delete ${item.name}'s pay line from this payroll month?`)) return;
     const response = await fetch(`${API}/payroll-items/${item.id}`, {
@@ -8366,10 +8381,10 @@ function PayrollPage({ token }: { token: string }) {
                                         className={`icon-action ${item.payment_status === "paid" ? "view" : "approve"}`}
                                         title={
                                           item.payment_status === "paid"
-                                            ? "Mark unpaid"
-                                            : "Mark paid"
+                                            ? "Review linked salary payment"
+                                            : "Record linked salary payment"
                                         }
-                                        onClick={() => changePayrollItemPayment(item)}
+                                        onClick={changePayrollItemPayment}
                                       >
                                         <Check />
                                       </button>

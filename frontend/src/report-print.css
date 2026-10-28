@@ -262,6 +262,21 @@ h2 {
   margin-bottom: 3px;
   color: #20444c;
 }
+.workflow-actions-cell {
+  display: none;
+}
+.workflow-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid #b9cdce;
+  margin: 12px 0;
+  background: #edf5f4;
+}
+.workflow-summary strong {
+  font-size: 13pt;
+}
 @media screen {
   body {
     max-width: 210mm;

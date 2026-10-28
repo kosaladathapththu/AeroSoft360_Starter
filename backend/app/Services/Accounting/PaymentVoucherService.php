@@ -170,7 +170,11 @@ final class PaymentVoucherService
                     ->where("status", "posted")
                     ->sum("total");
                 abort_if(
-                    (float) $v->total > (float) $receipt->total - (float) $paid + 0.001,
+                    (float) $v->total >
+                        (float) $receipt->total -
+                            (float) $paid -
+                            \App\Services\Procurement\SupplierBalance::returned($receipt->id) +
+                            0.001,
                     422,
                     "Payment exceeds the supplier receipt balance. Refresh and reduce the amount.",
                 );

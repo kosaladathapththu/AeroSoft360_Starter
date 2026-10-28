@@ -38,10 +38,15 @@ class AgingReportService
             ->orderBy("g.received_on")
             ->get()
             ->map(function ($x) use ($asOf, $paid) {
-                $due = date(
-                    "Y-m-d",
-                    strtotime($x->received_on . " +" . $x->payment_days . " days"),
-                );
+                $registered = \Illuminate\Support\Facades\Schema::hasTable("supplier_invoices")
+                    ? DB::table("supplier_invoices")
+                        ->where("goods_receipt_id", $x->id)
+                        ->whereDate("invoice_date", "<=", $asOf)
+                        ->first()
+                    : null;
+                $due =
+                    $registered?->due_date ??
+                    date("Y-m-d", strtotime($x->received_on . " +" . $x->payment_days . " days"));
                 $days = (int) floor((strtotime($asOf) - strtotime($due)) / 86400);
                 $bucket =
                     $days <= 0
@@ -64,7 +69,12 @@ class AgingReportService
                     "days_overdue" => max(0, $days),
                     "outstanding" => max(
                         0,
-                        round((float) $x->total - (float) $paid->get($x->id, 0), 2),
+                        round(
+                            (float) $x->total -
+                                (float) $paid->get($x->id, 0) -
+                                \App\Services\Procurement\SupplierBalance::returned($x->id, $asOf),
+                            2,
+                        ),
                     ),
                     "bucket" => $bucket,
                 ];

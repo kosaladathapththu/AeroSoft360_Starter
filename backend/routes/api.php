@@ -40,6 +40,84 @@ Route::prefix("v1")->group(function (): void {
         Route::delete("/roles/{id}", [AccessController::class, "deleteRole"])->middleware(
             "permission:admin.manage",
         );
+        Route::get("/quotations", [
+            \App\Http\Controllers\Api\QuotationController::class,
+            "index",
+        ])->middleware("permission:workspace.view");
+        Route::post("/quotations", [
+            \App\Http\Controllers\Api\QuotationController::class,
+            "store",
+        ])->middleware("permission:accounting.manage");
+        Route::put("/quotations/{id}", [
+            \App\Http\Controllers\Api\QuotationController::class,
+            "update",
+        ])->middleware("permission:accounting.manage");
+        Route::post("/quotations/{id}/convert", [
+            \App\Http\Controllers\Api\QuotationController::class,
+            "convert",
+        ])->middleware("permission:accounting.manage");
+        Route::post("/quotations/{id}/cancel", [
+            \App\Http\Controllers\Api\QuotationController::class,
+            "cancel",
+        ])->middleware("permission:accounting.manage");
+        Route::get("/business-workflows", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "index",
+        ])->middleware("permission:workspace.view");
+        Route::get("/subledger", [
+            \App\Http\Controllers\Api\SubledgerController::class,
+            "ledger",
+        ])->middleware("permission:workspace.view");
+        Route::post("/supplier-invoices", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "supplierInvoice",
+        ])->middleware("permission:purchases.manage");
+        Route::post("/purchase-returns", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "purchaseReturn",
+        ])->middleware("permission:purchases.manage");
+        Route::get("/cash-closing-preview", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "cashPreview",
+        ])->middleware("permission:workspace.view");
+        Route::post("/cash-closings", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "closeCash",
+        ])->middleware("permission:accounting.manage");
+        Route::post("/cash-closings/{id}/reopen", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "reopenCash",
+        ])->middleware("permission:accounting.manage");
+        Route::post("/recurring-journals", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "recurring",
+        ])->middleware("permission:accounting.manage");
+        Route::post("/recurring-journals/{id}/post", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "runRecurring",
+        ])->middleware("permission:accounting.manage");
+        Route::post("/recurring-journals/{id}/stop", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "stopRecurring",
+        ])->middleware("permission:accounting.manage");
+        Route::post("/bulk-stock-import", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "bulkStock",
+        ])->middleware("permission:stock.manage");
+        Route::post("/catalog-terms", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "term",
+        ])->middleware("permission:accounting.manage");
+        Route::post("/product-classification", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "assignProduct",
+        ])->middleware("permission:accounting.manage");
+        Route::post("/purchase-returns/{id}/cancel", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "cancelReturn",
+        ])->middleware("permission:purchases.manage");
+        Route::post('/salary-payments', [\App\Http\Controllers\Api\BusinessWorkflowController::class, 'salaryPayment'])->middleware('permission:accounting.manage');
+        Route::post('/salary-payments/{id}/reverse', [\App\Http\Controllers\Api\BusinessWorkflowController::class, 'reverseSalary'])->middleware('permission:accounting.manage');
         Route::get("/workspace", [ProcurementController::class, "workspace"])->middleware(
             "permission:workspace.view",
         );

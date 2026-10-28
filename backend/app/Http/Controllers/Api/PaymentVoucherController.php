@@ -50,7 +50,15 @@ final class PaymentVoucherController
                 DB::raw("(g.total-COALESCE(p.paid,0)) as outstanding"),
             )
             ->orderByDesc("g.id")
-            ->get();
+            ->get()
+            ->map(function ($g) {
+                $g->outstanding = max(
+                    0,
+                    (float) $g->outstanding -
+                        \App\Services\Procurement\SupplierBalance::returned($g->id),
+                );
+                return $g;
+            });
         $accounts = DB::table("accounts")
             ->where("is_postable", true)
             ->orderBy("code")
