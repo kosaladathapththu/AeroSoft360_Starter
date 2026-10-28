@@ -527,7 +527,7 @@ final class AccountingSalesController extends Controller
             $amount = (float) $receipt['amount'];
             $commission = (float) ($result['commission'] ?? 0);
             $lines = [
-                ['account_code'=>'1000', 'debit'=>$amount, 'credit'=>0, 'description'=>'Customer collection received'],
+                ['account_code'=>DB::table('accounts')->where('id',$receipt['payment_account_id'])->value('code'), 'debit'=>$amount, 'credit'=>0, 'description'=>'Customer collection received'],
                 ['account_code'=>'1100', 'debit'=>0, 'credit'=>$amount, 'description'=>'Accounts receivable settled'],
             ];
             if ($commission > 0) {

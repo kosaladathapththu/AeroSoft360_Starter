@@ -31,6 +31,12 @@ npm run dev
 
 Open the URL shown by Vite, normally `http://127.0.0.1:5173`.
 
+## Payment vouchers
+
+Payment vouchers are available in **Finance & Reports → Payment Vouchers**. Create an expense payment or select a posted supplier receipt, save a draft, then review and post it. Posting debits the expense or supplier payable account and credits the selected cash/bank account. Drafts do not affect the ledger. Supplier payments reduce the payable aging report. Posted vouchers are locked; cancellation requires a reason and date and creates a reversal journal. Every voucher can be printed or saved as PDF from its preview.
+
+For an existing installation, run `php artisan migrate` after updating to create the payment voucher tables. Creating, editing, posting, and cancelling vouchers require `accounting.manage`; viewing and printing use `workspace.view`.
+
 ## Development access profiles
 
 | Profile | Email | Password | Access |

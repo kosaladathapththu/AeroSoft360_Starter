@@ -37,6 +37,9 @@ import "./popups.css";
 import { confirmDialog, showNotice } from "./AppDialogs";
 import InvoiceBill from "./InvoiceBill";
 import CollectionFields from "./CollectionFields";
+import PaymentVouchersPage from "./PaymentVouchersPage";
+import ChartOfAccountsPage from "./ChartOfAccountsPage";
+import CashFlowPage from "./CashFlowPage";
 
 const API = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
 type Supplier = {
@@ -260,6 +263,9 @@ export default function App() {
       name: "Finance & Reports",
       icon: ShieldCheck,
       items: [
+        ["Chart of Accounts", Building2],
+        ["Cash Flow", FileText],
+        ["Payment Vouchers", FileText],
         ["General Ledger", ShieldCheck],
         ["Reports", FileText],
       ],
@@ -461,6 +467,12 @@ export default function App() {
             <EmployeesPage token={token() || ""} />
           ) : page === "Payroll" ? (
             <PayrollPage token={token() || ""} />
+          ) : page === "Payment Vouchers" ? (
+            <PaymentVouchersPage api={API} token={token() || ""} canManage={profile.permissions.includes("accounting.manage")} search={search} onChanged={load} />
+          ) : page === "Chart of Accounts" ? (
+            <ChartOfAccountsPage api={API} token={token() || ""} canManage={profile.permissions.includes("accounting.manage")} search={search} onChanged={load} />
+          ) : page === "Cash Flow" ? (
+            <CashFlowPage api={API} token={token() || ""} search={search} go={setPage} />
           ) : page === "Reports" ? (
             <ReportsPage token={token() || ""} />
           ) : page === "Access Control" ? (
@@ -2073,6 +2085,7 @@ function SalesCreateModal({
       body = {
         invoice_id: Number(f.get("invoice_id")),
         collector_sales_rep_id: Number(f.get("collector_sales_rep_id")),
+        payment_account_id: Number(f.get("payment_account_id")) || null,
         receipt_date: f.get("receipt_date"),
         collection_type: f.get("collection_type"),
         payment_method: f.get("payment_method"),
@@ -5319,8 +5332,7 @@ function AgingReportView({ aging }: { aging: any }) {
       </div>
       <p className="report-note">
         Based on posted goods receipts and each supplier’s payment terms.
-        Recorded supplier payments will require payment-allocation entries when
-        that module is added.
+        Posted supplier payment vouchers reduce the outstanding balance; cancelled payments are restored from their cancellation date.
       </p>
     </div>
   );
@@ -5392,10 +5404,14 @@ function FinancialReportView({
         <Statement
           title="Cash Flow"
           rows={[
+            ["Opening cash balance", financial.cash_flow.opening_balance],
             ["Operating activities", financial.cash_flow.operating],
             ["Investing activities", financial.cash_flow.investing],
             ["Financing activities", financial.cash_flow.financing],
+            ["Needs classification", financial.cash_flow.unclassified],
             ["Net cash change", financial.cash_flow.net_change],
+            ["Closing cash balance", financial.cash_flow.closing_balance],
+            ["Reconciliation difference", financial.cash_flow.reconciliation_difference],
           ]}
         />
       </div>
@@ -5455,10 +5471,14 @@ function FinancialReportView({
       <Statement
         title="Cash Flow"
         rows={[
-          ["Operating activities", financial.cash_flow.operating],
+          ["Opening cash balance", financial.cash_flow.opening_balance],
+            ["Operating activities", financial.cash_flow.operating],
           ["Investing activities", financial.cash_flow.investing],
           ["Financing activities", financial.cash_flow.financing],
-          ["Net cash change", financial.cash_flow.net_change],
+          ["Needs classification", financial.cash_flow.unclassified],
+            ["Net cash change", financial.cash_flow.net_change],
+            ["Closing cash balance", financial.cash_flow.closing_balance],
+            ["Reconciliation difference", financial.cash_flow.reconciliation_difference],
         ]}
       />
     </div>

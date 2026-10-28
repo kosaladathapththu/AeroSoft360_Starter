@@ -13,8 +13,7 @@ class FinancialReportService {
   $equity=array_values(array_map(fn($x)=>$x+['amount'=>$x['credit']-$x['debit']],array_filter($trial,fn($x)=>$x['type']==='equity')));
   $revenue=array_sum(array_column($income,'amount'));$expense=array_sum(array_column($expenses,'amount'));$profit=$revenue-$expense;
   $assetTotal=array_sum(array_column($assets,'amount'));$liabilityTotal=array_sum(array_column($liabilities,'amount'));$equityTotal=array_sum(array_column($equity,'amount'))+$profit;$liabilityEquityTotal=$liabilityTotal+$equityTotal;
-  $cashAccounts=array_filter($trial,fn($x)=>str_starts_with($x['code'],'10')||stripos($x['account'],'cash')!==false||stripos($x['account'],'bank')!==false);
-  $cashNet=array_sum(array_column($cashAccounts,'balance'));
-  return ['period'=>['from'=>$from,'to'=>$to],'profit_loss'=>['income'=>$income,'expenses'=>$expenses,'revenue'=>$revenue,'expenses_total'=>$expense,'net_profit'=>$profit],'balance_sheet'=>['assets'=>$assets,'liabilities'=>$liabilities,'equity'=>$equity,'current_profit'=>$profit,'assets_total'=>$assetTotal,'liabilities_total'=>$liabilityTotal,'equity_total'=>$equityTotal,'liabilities_equity_total'=>$liabilityEquityTotal,'difference'=>$assetTotal-$liabilityEquityTotal],'cash_flow'=>['operating'=>$profit,'investing'=>0.0,'financing'=>0.0,'net_change'=>$cashNet],'trial_balance'=>$trial];
+  $cashFlow=(new CashFlowService)->report($from,$to);
+  return ['period'=>['from'=>$from,'to'=>$to],'profit_loss'=>['income'=>$income,'expenses'=>$expenses,'revenue'=>$revenue,'expenses_total'=>$expense,'net_profit'=>$profit],'balance_sheet'=>['assets'=>$assets,'liabilities'=>$liabilities,'equity'=>$equity,'current_profit'=>$profit,'assets_total'=>$assetTotal,'liabilities_total'=>$liabilityTotal,'equity_total'=>$equityTotal,'liabilities_equity_total'=>$liabilityEquityTotal,'difference'=>$assetTotal-$liabilityEquityTotal],'cash_flow'=>$cashFlow,'trial_balance'=>$trial];
  }
 }

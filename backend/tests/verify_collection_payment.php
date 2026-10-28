@@ -11,14 +11,16 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Api\SalesController;
 
 $tables=[
+ 'accounts'=>['code','type','is_postable','is_active','is_cash_account'],
  'sales_invoices'=>['customer_id','sales_rep_id','invoice_date','total','received_amount','outstanding','status','updated_at'],
  'sales_representatives'=>['name','default_commission_rate'],
  'sales_invoice_lines'=>['sales_invoice_id','quantity'],
  'commission_settings'=>['max_collection_days'],
- 'customer_receipts'=>['number','customer_id','sales_rep_id','collector_sales_rep_id','receipt_date','collection_type','payment_method','reference','amount','status','created_at','updated_at'],
+ 'customer_receipts'=>['payment_account_id','number','customer_id','sales_rep_id','collector_sales_rep_id','receipt_date','collection_type','payment_method','reference','amount','status','created_at','updated_at'],
  'receipt_allocations'=>['receipt_id','invoice_id','commission_payee_sales_rep_id','amount','days_taken','commission_pieces','commission_rate','commission_amount','commission_status','commission_decision','created_at','updated_at'],
 ];
 foreach($tables as $name=>$columns)Schema::create($name,function($schema)use($columns){$schema->id();foreach($columns as $column)$schema->string($column)->nullable();});
+DB::table('accounts')->insert([['code'=>'1000','type'=>'asset','is_postable'=>1,'is_active'=>1,'is_cash_account'=>1],['code'=>'BANK-B','type'=>'asset','is_postable'=>1,'is_active'=>1,'is_cash_account'=>1]]);
 DB::table('sales_representatives')->insert(['id'=>1,'name'=>'Rep','default_commission_rate'=>1]);
 DB::table('sales_invoices')->insert(['id'=>1,'customer_id'=>1,'sales_rep_id'=>1,'invoice_date'=>'2026-10-20','total'=>1000,'received_amount'=>0,'outstanding'=>1000,'status'=>'unpaid']);
 DB::table('sales_invoice_lines')->insert(['sales_invoice_id'=>1,'quantity'=>10]);
@@ -37,7 +39,8 @@ DB::table('sales_invoices')->where('id',1)->update(['outstanding'=>100]);
 try{$method->invoke($controller,$base+['amount'=>200,'customer_id'=>1]);throw new RuntimeException('Stale payment accepted');}
 catch(Symfony\Component\HttpKernel\Exception\HttpException $e){check($e->getStatusCode()===422,'locked balance rechecked before posting');}
 DB::table('sales_invoices')->where('id',1)->update(['outstanding'=>1000]);
-$controller->receipt(Request::create('/','POST',$base+['amount'=>250]));
+$controller->receipt(Request::create('/','POST',$base+['amount'=>250,'payment_account_id'=>2]));
+check((int)DB::table('customer_receipts')->value('payment_account_id')===2,'selected bank account retained');
 check((float)DB::table('sales_invoices')->value('outstanding')===750.0,'partial payment updates remaining balance');
 check(DB::table('customer_receipts')->count()===1&&DB::table('receipt_allocations')->count()===1,'receipt and allocation saved together');
 $controller->receipt(Request::create('/','POST',array_replace($base,['amount'=>750,'collection_type'=>'final'])));
