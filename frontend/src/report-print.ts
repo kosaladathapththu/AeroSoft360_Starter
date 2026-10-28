@@ -21,7 +21,6 @@ export const reportTotalColumns: Record<string, string[]> = {
   product_purchase: ["quantity", "line_total"],
   supplier_report: ["documents", "total"],
   inventory_balance: ["quantity", "value"],
-  inventory_movement: ["quantity_in", "quantity_out"],
 };
 
 export function reportTotals(key: string, rows: Record<string, unknown>[]) {
@@ -46,7 +45,7 @@ const escapeHtml = (value: string) =>
   );
 
 const formatDate = (value: string) =>
-  new Date(`${value}T12:00:00`).toLocaleDateString("en-GB", {
+  new Date(`${value}T00:00:00+05:30`).toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
