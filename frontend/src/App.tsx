@@ -32,6 +32,7 @@ import {
 import "./styles.css";
 import "./actions.css";
 import "./reports.css";
+import { printReport, reportTotals } from "./report-print";
 import "./tables.css";
 import "./popups.css";
 import { confirmDialog, showNotice } from "./AppDialogs";
@@ -9374,23 +9375,33 @@ function ReportsPage({ token }: { token: string }) {
     anchor.click();
     URL.revokeObjectURL(url);
   };
+  const reportReady = Boolean(
+    data &&
+      financial &&
+      aging &&
+      retail &&
+      !error &&
+      financial.period?.from === from &&
+      financial.period?.to === to &&
+      retail.period?.from === from &&
+      retail.period?.to === to &&
+      aging.as_of === to,
+  );
   const downloadPdf = () => {
-    const report = document.querySelector(".report-output");
-    if (!report) return;
-    const popup = window.open("", "_blank", "width=1100,height=800");
-    if (!popup) {
+    const source = document.querySelector<HTMLElement>(".report-output");
+    if (!source || !reportReady) return;
+    if (
+      !printReport({
+        key: selected,
+        title: selectedLabel || "Report",
+        group: selectedGroup?.title || "Finance",
+        from,
+        to,
+        source,
+      })
+    ) {
       setError("Allow pop-ups to download this report as PDF.");
-      return;
     }
-    popup.document.write(`<!doctype html><html><head><title>${selectedLabel}</title><style>
-      body{font-family:Arial,sans-serif;color:#172432;padding:28px}h1{margin:0 0 4px}p.meta{color:#657784;margin:0 0 24px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #ccd7dd;padding:7px;text-align:left}th{background:#edf4f5;text-transform:uppercase}.kpis,.aging-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}.kpis article,.aging-summary article{border:1px solid #ccd7dd;padding:12px}.kpis span,.aging-summary span{display:block;color:#657784;font-size:11px}.kpis b,.aging-summary b{display:block;margin-top:5px}.report-note,.report-title-row span,.panel-head button{display:none}.panels{display:grid;grid-template-columns:1fr 1fr;gap:12px}.report-row{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:7px}.table-card{overflow:visible}@page{size:landscape;margin:12mm}@media print{body{padding:0}}
-    </style></head><body><h1>${selectedLabel}</h1><p class="meta">Period: ${from} to ${to}</p>${report.innerHTML}</body></html>`);
-    popup.document.close();
-    popup.focus();
-    setTimeout(() => {
-      popup.print();
-      popup.close();
-    }, 300);
   };
   if (!selected)
     return (
@@ -9450,10 +9461,10 @@ function ReportsPage({ token }: { token: string }) {
           <p>View the report for the selected accounting period.</p>
         </div>
         <div className="report-downloads">
-          <button onClick={downloadPdf}>
+          <button onClick={downloadPdf} disabled={!reportReady}>
             <FileDown /> Download PDF
           </button>
-          <button className="primary" onClick={downloadExcel}>
+          <button className="primary" onClick={downloadExcel} disabled={!reportReady}>
             <FileText /> Download Excel
           </button>
         </div>
@@ -9503,7 +9514,11 @@ function ReportsPage({ token }: { token: string }) {
           {selected === "aging" ? (
             <AgingReportView aging={aging} />
           ) : !financialKeys.includes(selected) ? (
-            <RetailReportView title={selectedLabel || "Report"} rows={retail[selected] || []} />
+            <RetailReportView
+              reportKey={selected}
+              title={selectedLabel || "Report"}
+              rows={retail[selected] || []}
+            />
           ) : (
             <FinancialReportView selected={selected} financial={financial} />
           )}
@@ -9539,7 +9554,16 @@ function ReportsPage({ token }: { token: string }) {
     </>
   );
 }
-function RetailReportView({ title, rows }: { title: string; rows: any[] }) {
+function RetailReportView({
+  reportKey,
+  title,
+  rows,
+}: {
+  reportKey: string;
+  title: string;
+  rows: any[];
+}) {
+  const totals = reportTotals(reportKey, rows);
   const tableRef = useRef<HTMLDivElement>(null);
   const columns = rows.length ? Object.keys(rows[0]) : [];
   const currencyColumns = [
@@ -9590,7 +9614,14 @@ function RetailReportView({ title, rows }: { title: string; rows: any[] }) {
           <thead>
             <tr>
               {columns.map((key) => (
-                <th key={key}>{key.replace(/_/g, " ")}</th>
+                <th
+                  key={key}
+                  className={
+                    currencyColumns.includes(key) || key in totals ? "report-number" : undefined
+                  }
+                >
+                  {key.replace(/_/g, " ")}
+                </th>
               ))}
             </tr>
           </thead>
@@ -9603,16 +9634,34 @@ function RetailReportView({ title, rows }: { title: string; rows: any[] }) {
               rows.map((row, index) => (
                 <tr key={index}>
                   {columns.map((key) => (
-                    <td key={key}>{display(key, row[key])}</td>
+                    <td
+                      key={key}
+                      className={
+                        currencyColumns.includes(key) || key in totals ? "report-number" : undefined
+                      }
+                    >
+                      {display(key, row[key])}
+                    </td>
                   ))}
                 </tr>
               ))
+            )}
+            {rows.length > 0 && columns.some((key) => key in totals) && (
+              <tr className="report-totals">
+                {columns.map((key, index) => (
+                  <td key={key} className={key in totals ? "report-number" : "report-totals-label"}>
+                    {key in totals ? display(key, totals[key]) : index === 0 ? "Report total" : ""}
+                  </td>
+                ))}
+              </tr>
             )}
           </tbody>
         </table>
       </div>
       <p className="report-note">
-        Figures are read directly from system records for the selected reporting period.
+        {reportKey === "product_report" || reportKey === "inventory_balance"
+          ? "Current snapshot from system records at the time of generation."
+          : "Figures are read directly from system records for the selected reporting period."}
       </p>
     </div>
   );
@@ -9683,6 +9732,12 @@ function AgingReportView({ aging }: { aging: any }) {
                   </td>
                 </tr>
               ))
+            )}
+            {aging.rows.length > 0 && (
+              <tr className="report-totals">
+                <td colSpan={6}>Total outstanding</td>
+                <td className="report-number">{money(totals.total)}</td>
+              </tr>
             )}
           </tbody>
         </table>
@@ -9787,6 +9842,33 @@ function FinancialReportView({ selected, financial }: { selected: string; financ
                 <td>{money(x.balance)}</td>
               </tr>
             ))}
+            <tr className="report-totals">
+              <td colSpan={3}>Trial balance totals</td>
+              <td className="report-number">
+                {money(
+                  financial.trial_balance.reduce(
+                    (sum: number, row: any) => sum + Number(row.debit),
+                    0,
+                  ),
+                )}
+              </td>
+              <td className="report-number">
+                {money(
+                  financial.trial_balance.reduce(
+                    (sum: number, row: any) => sum + Number(row.credit),
+                    0,
+                  ),
+                )}
+              </td>
+              <td className="report-number">
+                {money(
+                  financial.trial_balance.reduce(
+                    (sum: number, row: any) => sum + Number(row.balance),
+                    0,
+                  ),
+                )}
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
