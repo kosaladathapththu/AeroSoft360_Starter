@@ -337,7 +337,17 @@ export default function BusinessWorkflowsPage({
             {page === "All Payables" && (
               <>
                 <h2>All liability accounts as of {asOf}</h2>
-                <WorkflowTable values={data.liability_balances} columns={[["code", "Account"], ["name", "Liability"], ["balance", "Balance", "money"]]} actions={() => <button onClick={() => go("Chart of Accounts")}>Open account ledgers →</button>} />
+                <WorkflowTable
+                  values={data.liability_balances}
+                  columns={[
+                    ["code", "Account"],
+                    ["name", "Liability"],
+                    ["balance", "Balance", "money"],
+                  ]}
+                  actions={() => (
+                    <button onClick={() => go("Chart of Accounts")}>Open account ledgers →</button>
+                  )}
+                />
                 <h2>Supplier balances by document</h2>
                 <div className="workflow-summary">
                   <span>Supplier invoices outstanding as of {asOf}</span>

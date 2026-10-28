@@ -1,7 +1,0 @@
-﻿<?php
-require __DIR__.'/../vendor/autoload.php';
-$app=require __DIR__.'/../bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-$r=Illuminate\Http\Request::create('/','GET',['as_of'=>'2026-10-28']);
-foreach([App\Http\Controllers\Api\QuotationController::class,App\Http\Controllers\Api\BusinessWorkflowController::class,App\Http\Controllers\Api\SerialWarrantyController::class,App\Http\Controllers\Api\PointOfSaleController::class] as $class){$result=(new $class)->index($r);if($result->getStatusCode()!==200)throw new RuntimeException($class);echo 'PASS live read-only '.class_basename($class).PHP_EOL;}
-foreach(['customer'=>'customers','supplier'=>'suppliers','raw'=>'materials','finished'=>'articles'] as $kind=>$table){$id=Illuminate\Support\Facades\DB::table($table)->value('id');if(!$id)continue;$request=Illuminate\Http\Request::create('/','GET',['kind'=>$kind,'id'=>$id,'from'=>'2026-01-01','to'=>'2026-10-28']);$result=(new App\Http\Controllers\Api\SubledgerController)->ledger($request);if($result->getStatusCode()!==200)throw new RuntimeException($kind);echo 'PASS live read-only '.$kind.' subledger'.PHP_EOL;}
-foreach(['quotations','supplier_invoices','purchase_returns','cash_closings','recurring_journals','stock_import_batches','salary_payments','product_serials','warranty_claims','pos_checkouts'] as $table)echo $table.': '.Illuminate\Support\Facades\DB::table($table)->count().' records'.PHP_EOL;

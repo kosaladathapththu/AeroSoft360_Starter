@@ -135,7 +135,12 @@ class PayrollReportController extends Controller
             404,
             "Employee not found.",
         );
-        abort_if(DB::table('payroll_runs')->where('id', $item->payroll_run_id)->value('status') === 'posted', 422, 'Posted payroll lines are locked to their accounting journal.');
+        abort_if(
+            DB::table("payroll_runs")->where("id", $item->payroll_run_id)->value("status") ===
+                "posted",
+            422,
+            "Posted payroll lines are locked to their accounting journal.",
+        );
         $data = $request->validate([
             "basic_salary" => ["required", "numeric", "gte:0"],
             "fixed_allowance" => ["required", "numeric", "gte:0"],
@@ -184,8 +189,12 @@ class PayrollReportController extends Controller
     public function deletePayrollRun(int $payrollRun): JsonResponse
     {
         DB::transaction(function () use ($payrollRun) {
-            $run = DB::table('payroll_runs')->lockForUpdate()->find($payrollRun);
-            abort_if($run && $run->status === 'posted', 422, 'Posted payroll runs cannot be deleted.');
+            $run = DB::table("payroll_runs")->lockForUpdate()->find($payrollRun);
+            abort_if(
+                $run && $run->status === "posted",
+                422,
+                "Posted payroll runs cannot be deleted.",
+            );
             DB::table("payroll_items")->where("payroll_run_id", $payrollRun)->delete();
             abort_unless(
                 DB::table("payroll_runs")->where("id", $payrollRun)->delete() === 1,
@@ -229,14 +238,22 @@ class PayrollReportController extends Controller
     }
     public function updatePayrollItemPayment(Request $request, int $payrollItem): JsonResponse
     {
-        abort(422, 'Use Finance > Head Office Salaries to record or reverse a linked salary payment. Changing a paid flag alone would not update cash or salary payable.');
+        abort(
+            422,
+            "Use Finance > Head Office Salaries to record or reverse a linked salary payment. Changing a paid flag alone would not update cash or salary payable.",
+        );
     }
     public function deletePayrollItem(int $payrollItem): JsonResponse
     {
         $item = DB::table("payroll_items")->find($payrollItem);
         abort_unless($item, 404, "Employee payroll line not found.");
         DB::transaction(function () use ($item, $payrollItem) {
-            abort_if(DB::table('payroll_runs')->where('id',$item->payroll_run_id)->value('status') === 'posted',422,'Posted payroll lines cannot be deleted.');
+            abort_if(
+                DB::table("payroll_runs")->where("id", $item->payroll_run_id)->value("status") ===
+                    "posted",
+                422,
+                "Posted payroll lines cannot be deleted.",
+            );
             DB::table("payroll_items")->where("id", $payrollItem)->delete();
             $this->recalculatePayrollRun((int) $item->payroll_run_id);
         });

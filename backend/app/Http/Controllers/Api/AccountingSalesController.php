@@ -44,7 +44,13 @@ final class AccountingSalesController extends Controller
             ->where("line.sales_invoice_id", $id)
             ->orderBy("line.id")
             ->get();
-        $invoice->serials = Schema::hasTable('product_serials') ? DB::table('product_serials as p')->join('articles as a','a.id','=','p.article_id')->where('p.sales_invoice_id',$id)->select('p.*','a.code as article_code')->get() : [];
+        $invoice->serials = Schema::hasTable("product_serials")
+            ? DB::table("product_serials as p")
+                ->join("articles as a", "a.id", "=", "p.article_id")
+                ->where("p.sales_invoice_id", $id)
+                ->select("p.*", "a.code as article_code")
+                ->get()
+            : [];
         return response()->json($invoice);
     }
 
@@ -583,7 +589,7 @@ final class AccountingSalesController extends Controller
 
     public function updateInvoice(Request $request, int $id): JsonResponse
     {
-        (new \App\Services\Inventory\SerialWarrantyService)->guardInvoice($id);
+        (new \App\Services\Inventory\SerialWarrantyService())->guardInvoice($id);
         if ($request->attributes->get("auth_user")?->sales_rep_id) {
             $request->merge([
                 "sales_rep_id" => $request->attributes->get("auth_user")->sales_rep_id,
@@ -877,7 +883,7 @@ final class AccountingSalesController extends Controller
 
     public function deleteInvoice(int $id): JsonResponse
     {
-        (new \App\Services\Inventory\SerialWarrantyService)->guardInvoice($id);
+        (new \App\Services\Inventory\SerialWarrantyService())->guardInvoice($id);
         return DB::transaction(function () use ($id) {
             $invoice = DB::table("sales_invoices")->find($id);
             abort_unless($invoice, 404, "Invoice not found.");

@@ -44,9 +44,47 @@ final class BusinessWorkflowController
             }
         }
         return response()->json([
-            'liability_balances'=>collect((new AccountController)->index(Request::create('/','GET',['as_of'=>$asOf]))->getData(true)['accounts'])->where('type','liability')->values(),
-            'salary_items'=>DB::table('payroll_items as p')->join('payroll_runs as r','r.id','=','p.payroll_run_id')->join('employees as e','e.id','=','p.employee_id')->select('p.*','r.number as payroll_number','r.period_end','r.status as payroll_status','e.name','e.department')->orderByDesc('r.period_end')->get()->map(function($p){$p->linked_payment=DB::table('salary_payments')->where('payroll_item_id',$p->id)->where('status','posted')->first();return $p;}),
-            'expenses'=>DB::table('payment_voucher_lines as l')->join('payment_vouchers as v','v.id','=','l.payment_voucher_id')->join('accounts as a','a.id','=','l.account_id')->where('a.code','5400')->select('l.*','v.number','v.payment_date','v.payee','v.status','a.name as account')->orderByDesc('v.id')->get(),
+            "liability_balances" => collect(
+                (new AccountController())
+                    ->index(Request::create("/", "GET", ["as_of" => $asOf]))
+                    ->getData(true)["accounts"],
+            )
+                ->where("type", "liability")
+                ->values(),
+            "salary_items" => DB::table("payroll_items as p")
+                ->join("payroll_runs as r", "r.id", "=", "p.payroll_run_id")
+                ->join("employees as e", "e.id", "=", "p.employee_id")
+                ->select(
+                    "p.*",
+                    "r.number as payroll_number",
+                    "r.period_end",
+                    "r.status as payroll_status",
+                    "e.name",
+                    "e.department",
+                )
+                ->orderByDesc("r.period_end")
+                ->get()
+                ->map(function ($p) {
+                    $p->linked_payment = DB::table("salary_payments")
+                        ->where("payroll_item_id", $p->id)
+                        ->where("status", "posted")
+                        ->first();
+                    return $p;
+                }),
+            "expenses" => DB::table("payment_voucher_lines as l")
+                ->join("payment_vouchers as v", "v.id", "=", "l.payment_voucher_id")
+                ->join("accounts as a", "a.id", "=", "l.account_id")
+                ->where("a.code", "5400")
+                ->select(
+                    "l.*",
+                    "v.number",
+                    "v.payment_date",
+                    "v.payee",
+                    "v.status",
+                    "a.name as account",
+                )
+                ->orderByDesc("v.id")
+                ->get(),
             "receipts" => $receipts,
             "supplier_invoices" => DB::table("supplier_invoices as i")
                 ->join("suppliers as s", "s.id", "=", "i.supplier_id")
@@ -152,14 +190,29 @@ final class BusinessWorkflowController
         });
     }
 
-    public function salaryPayment(Request $r,\App\Services\Accounting\SalaryPaymentService $service)
-    {
-        $d=$r->validate(['payroll_item_id'=>'required|exists:payroll_items,id','payment_account_id'=>'required|exists:accounts,id','payment_date'=>'required|date']);return response()->json(['id'=>$service->pay($d,$r->attributes->get('auth_user')?->id)],201);
+    public function salaryPayment(
+        Request $r,
+        \App\Services\Accounting\SalaryPaymentService $service,
+    ) {
+        $d = $r->validate([
+            "payroll_item_id" => "required|exists:payroll_items,id",
+            "payment_account_id" => "required|exists:accounts,id",
+            "payment_date" => "required|date",
+        ]);
+        return response()->json(
+            ["id" => $service->pay($d, $r->attributes->get("auth_user")?->id)],
+            201,
+        );
     }
 
-    public function reverseSalary(Request $r,int $id,\App\Services\Accounting\SalaryPaymentService $service)
-    {
-        $d=$r->validate(['void_date'=>'required|date','reason'=>'required|string|max:500']);$service->cancel($id,$d['void_date'],$d['reason'],$r->attributes->get('auth_user')?->id);return response()->json(['ok'=>true]);
+    public function reverseSalary(
+        Request $r,
+        int $id,
+        \App\Services\Accounting\SalaryPaymentService $service,
+    ) {
+        $d = $r->validate(["void_date" => "required|date", "reason" => "required|string|max:500"]);
+        $service->cancel($id, $d["void_date"], $d["reason"], $r->attributes->get("auth_user")?->id);
+        return response()->json(["ok" => true]);
     }
 
     public function purchaseReturn(Request $r, PurchaseReturnService $service)

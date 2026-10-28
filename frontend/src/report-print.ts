@@ -53,12 +53,30 @@ const formatDate = (value: string) =>
   });
 
 // Stock/master product reports are current snapshots, not period-filtered transactions.
-const snapshotReports = new Set(["product_report", "inventory_balance"]);
+const snapshotReports = new Set([
+  "product_report",
+  "inventory_balance",
+  "quotations",
+  "supplier_invoices",
+  "purchase_returns",
+  "cashier_closing",
+  "recurring_journals",
+  "bulk_inventory_import",
+  "inventory_operations",
+  "categories",
+  "brands",
+  "units",
+  "head_office_salaries",
+  "head_office_expenses",
+  "serial_warranty",
+]);
 
 export function buildReportDocument(report: PrintReport, generated = new Date()): string {
   const content = report.source.cloneNode(true) as HTMLElement;
   content
-    .querySelectorAll("button, input, select, svg, .report-title-row")
+    .querySelectorAll(
+      "button, input, select, textarea, svg, label, form, .report-title-row, .workflow-actions-cell",
+    )
     .forEach((node) => node.remove());
   const tables = [...content.querySelectorAll("table")];
   for (const table of tables) {
@@ -90,7 +108,7 @@ export function buildReportDocument(report: PrintReport, generated = new Date())
   });
   const period = snapshotReports.has(report.key)
     ? `Current snapshot · Generated ${generatedAt} (Sri Lanka)`
-    : report.key === "aging"
+    : ["aging", "all_payables"].includes(report.key)
       ? `As at ${formatDate(report.to)}`
       : `${formatDate(report.from)} – ${formatDate(report.to)}`;
   const recordCount = tables.reduce(

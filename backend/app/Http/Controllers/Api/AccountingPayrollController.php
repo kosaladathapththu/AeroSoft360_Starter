@@ -19,7 +19,11 @@ final class AccountingPayrollController extends Controller
         return DB::transaction(function () use ($request, $payrollRun, $payroll, $posting) {
             $existing = DB::table("payroll_runs")->lockForUpdate()->find($payrollRun);
             abort_unless($existing, 404, "Payroll run not found.");
-            abort_if($existing->status === 'posted', 422, 'Posted payroll runs are locked to their accounting journal.');
+            abort_if(
+                $existing->status === "posted",
+                422,
+                "Posted payroll runs are locked to their accounting journal.",
+            );
             $response = $payroll->updatePayrollRun($request, $payrollRun);
             $run = $response->getData(true);
             if ($run["status"] === "posted") {

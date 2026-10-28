@@ -116,15 +116,42 @@ Route::prefix("v1")->group(function (): void {
             \App\Http\Controllers\Api\BusinessWorkflowController::class,
             "cancelReturn",
         ])->middleware("permission:purchases.manage");
-        Route::post('/salary-payments', [\App\Http\Controllers\Api\BusinessWorkflowController::class, 'salaryPayment'])->middleware('permission:accounting.manage');
-        Route::post('/salary-payments/{id}/reverse', [\App\Http\Controllers\Api\BusinessWorkflowController::class, 'reverseSalary'])->middleware('permission:accounting.manage');
-        Route::get('/serial-warranties', [\App\Http\Controllers\Api\SerialWarrantyController::class,'index'])->middleware('permission:workspace.view');
-        Route::post('/product-serials', [\App\Http\Controllers\Api\SerialWarrantyController::class,'register'])->middleware('permission:stock.manage');
-        Route::post('/product-serials/attach', [\App\Http\Controllers\Api\SerialWarrantyController::class,'attach'])->middleware('permission:accounting.manage');
-        Route::post('/warranty-claims', [\App\Http\Controllers\Api\SerialWarrantyController::class,'claim'])->middleware('permission:stock.manage');
-        Route::put('/warranty-claims/{id}', [\App\Http\Controllers\Api\SerialWarrantyController::class,'resolve'])->middleware('permission:stock.manage');
-        Route::get('/point-of-sale', [\App\Http\Controllers\Api\PointOfSaleController::class,'index'])->middleware('permission:workspace.view');
-        Route::post('/point-of-sale/checkout', [\App\Http\Controllers\Api\PointOfSaleController::class,'checkout'])->middleware('permission:accounting.manage');
+        Route::post("/salary-payments", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "salaryPayment",
+        ])->middleware("permission:accounting.manage");
+        Route::post("/salary-payments/{id}/reverse", [
+            \App\Http\Controllers\Api\BusinessWorkflowController::class,
+            "reverseSalary",
+        ])->middleware("permission:accounting.manage");
+        Route::get("/serial-warranties", [
+            \App\Http\Controllers\Api\SerialWarrantyController::class,
+            "index",
+        ])->middleware("permission:workspace.view");
+        Route::post("/product-serials", [
+            \App\Http\Controllers\Api\SerialWarrantyController::class,
+            "register",
+        ])->middleware("permission:stock.manage");
+        Route::post("/product-serials/attach", [
+            \App\Http\Controllers\Api\SerialWarrantyController::class,
+            "attach",
+        ])->middleware("permission:accounting.manage");
+        Route::post("/warranty-claims", [
+            \App\Http\Controllers\Api\SerialWarrantyController::class,
+            "claim",
+        ])->middleware("permission:stock.manage");
+        Route::put("/warranty-claims/{id}", [
+            \App\Http\Controllers\Api\SerialWarrantyController::class,
+            "resolve",
+        ])->middleware("permission:stock.manage");
+        Route::get("/point-of-sale", [
+            \App\Http\Controllers\Api\PointOfSaleController::class,
+            "index",
+        ])->middleware("permission:workspace.view");
+        Route::post("/point-of-sale/checkout", [
+            \App\Http\Controllers\Api\PointOfSaleController::class,
+            "checkout",
+        ])->middleware("permission:accounting.manage");
         Route::get("/workspace", [ProcurementController::class, "workspace"])->middleware(
             "permission:workspace.view",
         );
