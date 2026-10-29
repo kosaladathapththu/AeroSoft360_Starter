@@ -46,7 +46,7 @@ $tables = [
         "created_at",
         "updated_at",
     ],
-    "customer_po_lines" => [
+    "customer_po_lines" => ["fixed_rate", "custom_rate", "fixed_rates",
         "customer_po_id",
         "article_id",
         "colour",
@@ -71,7 +71,7 @@ $tables = [
         "created_at",
         "updated_at",
     ],
-    "sales_order_size_lines" => [
+    "sales_order_size_lines" => ["fixed_rate",
         "sales_order_id",
         "article_id",
         "size_label",

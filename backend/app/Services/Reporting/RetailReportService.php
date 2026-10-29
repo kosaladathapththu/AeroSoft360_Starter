@@ -3,6 +3,7 @@
 namespace App\Services\Reporting;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class RetailReportService
 {
@@ -59,8 +60,9 @@ final class RetailReportService
                 "c.credit_days",
                 "c.credit_limit",
                 "c.status",
-                DB::raw("COUNT(i.id) invoices"),
-                DB::raw("COALESCE(SUM(i.total),0) sales"),
+                DB::raw(Schema::hasColumn("sales_invoices","is_opening_balance") ? "COALESCE(SUM(CASE WHEN i.is_opening_balance = 1 THEN i.total ELSE 0 END),0) opening_receivable" : "0 as opening_receivable"),
+                DB::raw(Schema::hasColumn("sales_invoices","is_opening_balance") ? "SUM(CASE WHEN i.is_opening_balance = 0 THEN 1 ELSE 0 END) invoices" : "COUNT(i.id) invoices"),
+                DB::raw(Schema::hasColumn("sales_invoices","is_opening_balance") ? "COALESCE(SUM(CASE WHEN i.is_opening_balance = 0 THEN i.total ELSE 0 END),0) sales" : "COALESCE(SUM(i.total),0) sales"),
                 DB::raw("COALESCE(SUM(i.outstanding),0) outstanding"),
             )
             ->groupBy(
@@ -193,6 +195,7 @@ final class RetailReportService
             ->join("customers as c", "c.id", "=", "i.customer_id")
             ->join("sales_representatives as r", "r.id", "=", "i.sales_rep_id")
             ->whereBetween("i.invoice_date", [$from, $to])
+            ->when(Schema::hasColumn("sales_invoices","is_opening_balance"),fn($q)=>$q->where("i.is_opening_balance",false))
             ->select(
                 "i.number",
                 "i.invoice_date",
@@ -241,6 +244,7 @@ final class RetailReportService
             ->join("customers as c", "c.id", "=", "r.customer_id")
             ->join("sales_representatives as rep", "rep.id", "=", "r.sales_rep_id")
             ->whereBetween("r.receipt_date", [$from, $to])
+            ->when(Schema::hasColumn("customer_receipts","is_opening_balance"),fn($q)=>$q->where("r.is_opening_balance",false))
             ->select(
                 "r.number",
                 "r.receipt_date",

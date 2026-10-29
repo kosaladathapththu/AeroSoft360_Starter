@@ -16,7 +16,7 @@ final class AccountingSalesController extends Controller
     {
         $invoice = DB::table("sales_invoices as invoice")
             ->join("customers as customer", "customer.id", "=", "invoice.customer_id")
-            ->join("sales_representatives as rep", "rep.id", "=", "invoice.sales_rep_id")
+            ->leftJoin("sales_representatives as rep", "rep.id", "=", "invoice.sales_rep_id")
             ->leftJoin(
                 "sales_orders as sales_order",
                 "sales_order.id",
@@ -58,7 +58,7 @@ final class AccountingSalesController extends Controller
     {
         $recentInvoices = DB::table("sales_invoices as invoice")
             ->join("customers as customer", "customer.id", "=", "invoice.customer_id")
-            ->join("sales_representatives as rep", "rep.id", "=", "invoice.sales_rep_id")
+            ->leftJoin("sales_representatives as rep", "rep.id", "=", "invoice.sales_rep_id")
             ->select(
                 "invoice.id",
                 "invoice.number",
@@ -94,7 +94,7 @@ final class AccountingSalesController extends Controller
                 ->where("outstanding", ">", 0)
                 ->count(),
             "outstanding_total" => (float) DB::table("sales_invoices")->sum("outstanding"),
-            "collections_total" => (float) DB::table("customer_receipts")->sum("amount"),
+            "collections_total" => (float) DB::table("customer_receipts")->when(Schema::hasColumn("customer_receipts","is_opening_balance"),fn($q)=>$q->where("is_opening_balance",false))->sum("amount"),
             "commission_total" => $automaticCommission + $manualCommission,
             "recent_invoices" => $recentInvoices,
             "recent_receipts" => $recentReceipts,
@@ -405,6 +405,7 @@ final class AccountingSalesController extends Controller
     {
         abort_if(
             DB::table("customer_pos")->where("customer_id", $id)->exists() ||
+                DB::table("customer_receipts")->where("customer_id", $id)->exists() ||
                 DB::table("sales_invoices")->where("customer_id", $id)->exists(),
             422,
             "Customer has transactions and cannot be deleted. Set it inactive instead.",
@@ -624,10 +625,12 @@ final class AccountingSalesController extends Controller
             "lines.*.colour" => ["nullable", "string", "max:80"],
             "lines.*.quantity" => ["required", "numeric", "gt:0"],
             "lines.*.rate" => ["required", "numeric", "gte:0"],
+            "lines.*.set_item_id"=>["nullable","integer","exists:article_set_items,id"],
         ]);
         return DB::transaction(function () use ($data, $id) {
             $invoice = DB::table("sales_invoices")->lockForUpdate()->find($id);
             abort_unless($invoice, 404, "Invoice not found.");
+            abort_if((bool)($invoice->is_opening_balance ?? false),422,"Opening balances cannot be edited or deleted as sales invoices.");
             abort_if(
                 DB::table("receipt_allocations")->where("invoice_id", $id)->exists(),
                 422,
@@ -770,6 +773,7 @@ final class AccountingSalesController extends Controller
                         ]);
                 }
                 DB::table("sales_invoice_lines")->insert([
+                    "fixed_rate" => $oldLines->first(fn($old)=>(int)$old->article_id===(int)$line["article_id"] && $old->size_label===$line["size_label"])->fixed_rate ?? $orderLine->fixed_rate ?? \App\Services\Accounting\FixedRateService::catalog((int)$line["article_id"],$line["size_label"],isset($line["set_item_id"])?(int)$line["set_item_id"]:null),
                     "sales_invoice_id" => $id,
                     "sales_order_size_line_id" => $orderLineId,
                     "article_id" => $line["article_id"],
@@ -887,6 +891,7 @@ final class AccountingSalesController extends Controller
         return DB::transaction(function () use ($id) {
             $invoice = DB::table("sales_invoices")->find($id);
             abort_unless($invoice, 404, "Invoice not found.");
+            abort_if((bool)($invoice->is_opening_balance ?? false),422,"Opening balances cannot be edited or deleted as sales invoices.");
             abort_if(
                 DB::table("receipt_allocations")->where("invoice_id", $id)->exists(),
                 422,
@@ -930,16 +935,19 @@ final class AccountingSalesController extends Controller
         return DB::transaction(function () use ($data, $id) {
             $receipt = DB::table("customer_receipts")->find($id);
             abort_unless($receipt, 404, "Collection not found.");
+            abort_if((bool)($receipt->is_opening_balance ?? false),422,"Opening customer credits cannot be edited or deleted as cash receipts.");
             $allocation = DB::table("receipt_allocations")->where("receipt_id", $id)->first();
             abort_unless($allocation, 422, "Collection allocation is missing.");
             $invoice = DB::table("sales_invoices")->find($allocation->invoice_id);
             abort_unless($invoice, 422, "Linked invoice is missing.");
+            $opening = (bool)($invoice->is_opening_balance ?? false);
+            if ($opening) $data['commission_decision'] = 'cancel';
             $payeeId =
                 $data["commission_decision"] === "collector"
                     ? (int) $data["collector_sales_rep_id"]
                     : (int) $invoice->sales_rep_id;
             $payee = DB::table("sales_representatives")->find($payeeId);
-            abort_unless($payee, 422, "Commission recipient is missing.");
+            abort_unless($payee || $opening, 422, "Commission recipient is missing.");
             $days = max(
                 0,
                 (int) floor(
@@ -949,7 +957,7 @@ final class AccountingSalesController extends Controller
             $limit = (int) (DB::table("commission_settings")->value("max_collection_days") ?? 100);
             $eligible = $days <= $limit;
             $cancelled = $data["commission_decision"] === "cancel";
-            $rate = (float) $payee->default_commission_rate;
+            $rate = (float) ($payee->default_commission_rate ?? 0);
             $commission =
                 !$cancelled && $eligible
                     ? round((float) $allocation->commission_pieces * $rate, 2)
@@ -1019,6 +1027,7 @@ final class AccountingSalesController extends Controller
         return DB::transaction(function () use ($id) {
             $receipt = DB::table("customer_receipts")->find($id);
             abort_unless($receipt, 404, "Collection not found.");
+            abort_if((bool)($receipt->is_opening_balance ?? false),422,"Opening customer credits cannot be edited or deleted as cash receipts.");
             foreach (
                 DB::table("receipt_allocations")->where("receipt_id", $id)->get()
                 as $allocation
@@ -1098,6 +1107,7 @@ final class AccountingSalesController extends Controller
             "lines.*.colour" => ["nullable", "string", "max:80"],
             "lines.*.quantity" => ["required", "numeric", "gt:0"],
             "lines.*.rate" => ["required", "numeric", "gte:0"],
+            "lines.*.set_item_id"=>["nullable","integer","exists:article_set_items,id"],
         ]);
         return DB::transaction(function () use ($data, $posting) {
             $customer = DB::table("customers")->find($data["customer_id"]);
@@ -1270,6 +1280,7 @@ final class AccountingSalesController extends Controller
                     "updated_at" => now(),
                 ]);
                 DB::table("sales_invoice_lines")->insert([
+                    "fixed_rate" => \App\Services\Accounting\FixedRateService::catalog((int)$line["article_id"],$line["size_label"],isset($line["set_item_id"])?(int)$line["set_item_id"]:null),
                     "sales_invoice_id" => $invoiceId,
                     "sales_order_size_line_id" => $orderLineId,
                     "article_id" => $line["article_id"],
@@ -1380,6 +1391,7 @@ final class AccountingSalesController extends Controller
             "lines.*.article_id" => ["required", "integer", "exists:articles,id"],
             "lines.*.size_label" => ["required", "string", "max:30"],
             "lines.*.quantity" => ["required", "numeric", "min:0"],
+            "lines.*.rate" => ["nullable","numeric","min:0"],
         ]);
         return DB::transaction(function () use ($data, $id, $sales, $posting, $request) {
             $po = DB::table("customer_pos")->lockForUpdate()->find($id);
@@ -1416,6 +1428,7 @@ final class AccountingSalesController extends Controller
                         $dispatch[] = [
                             "sales_order_size_line_id" => $line->id,
                             "quantity" => $take,
+                            "rate" => $input["rate"] ?? null,
                         ];
                     }
                     $requested -= $take;

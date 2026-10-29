@@ -361,6 +361,7 @@ Route::prefix("v1")->group(function (): void {
         Route::get("/accounts", [AccountController::class, "index"])->middleware(
             "permission:workspace.view",
         );
+        Route::post('/accounts/{id}/opening-balance', [\App\Http\Controllers\Api\AccountOpeningController::class, 'store'])->middleware('permission:accounting.manage');
         Route::post("/accounts", [AccountController::class, "store"])->middleware(
             "permission:accounting.manage",
         );

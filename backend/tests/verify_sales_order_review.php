@@ -57,6 +57,7 @@ Schema::create("sales_orders", function (Blueprint $t) {
     $t->timestamps();
 });
 Schema::create("sales_order_size_lines", function (Blueprint $t) {
+    $t->decimal("fixed_rate")->nullable();
     $t->id();
     $t->integer("sales_order_id");
     $t->integer("article_id");

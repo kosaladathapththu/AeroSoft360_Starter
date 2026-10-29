@@ -74,6 +74,8 @@ final class CustomerProfileService
             0,
         );
         $invoiced = 0;
+        $openingDebit = 0;
+        $openingCredit = 0;
         $received = 0;
         $outstanding = 0;
         $overdue = 0;
@@ -100,7 +102,9 @@ final class CustomerProfileService
                             : ($days <= 90
                                 ? "days_61_90"
                                 : "days_90_plus")));
-            $invoiced += $amount;
+            if ($invoice->is_opening_balance ?? false) $openingDebit += $amount;
+            else $invoiced += $amount;
+            $invoice->document_kind = ($invoice->is_opening_balance ?? false) ? 'Opening receivable' : 'Sales invoice';
             $outstanding += $balance;
             $aging[$bucket] += $balance;
             if ($balance > 0) {
@@ -130,14 +134,16 @@ final class CustomerProfileService
             $invoice->payments = $byInvoice->get($invoice->id, collect())->values();
         }
         foreach ($payments as $payment) {
-            $received += (int) round((float) $payment->amount * 100);
+            if ($payment->is_opening_balance ?? false) $openingCredit += (int) round((float)$payment->amount*100);
+            else $received += (int) round((float) $payment->amount * 100);
+            $payment->document_kind = ($payment->is_opening_balance ?? false) ? 'Opening customer credit' : 'Payment received';
             $payment->allocations = $byReceipt->get($payment->id, collect())->values();
             $payment->invoice_references = $payment->allocations
                 ->pluck("invoice_number")
                 ->unique()
                 ->join(", ");
         }
-        $net = $invoiced - $received;
+        $net = $openingDebit + $invoiced - $received - $openingCredit;
         $credit = max(0, $outstanding - $net);
         $limit = (int) round((float) $customer->credit_limit * 100);
         $exposure = max(0, $net);
@@ -232,6 +238,8 @@ final class CustomerProfileService
             "as_of" => $asOf,
             "summary" => [
                 "total_invoiced" => $invoiced / 100,
+                "opening_receivable" => $openingDebit / 100,
+                "opening_customer_credit" => $openingCredit / 100,
                 "total_received" => $received / 100,
                 "outstanding" => $outstanding / 100,
                 "overdue" => $overdue / 100,

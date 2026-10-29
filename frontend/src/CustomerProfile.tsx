@@ -10,6 +10,7 @@ import "./customer-profile.css";
 type Column = [string, string, "money"?];
 const invoiceColumns: Column[] = [
   ["number", "Invoice"],
+  ["document_kind", "Document type"],
   ["invoice_date", "Date"],
   ["due_date", "Due date"],
   ["total", "Total", "money"],
@@ -20,6 +21,7 @@ const invoiceColumns: Column[] = [
 ];
 const paymentColumns: Column[] = [
   ["number", "Receipt"],
+  ["document_kind", "Document type"],
   ["receipt_date", "Date"],
   ["amount", "Received", "money"],
   ["payment_method", "Method"],
@@ -33,6 +35,7 @@ const lineColumns: Column[] = [
   ["colour", "Colour"],
   ["size_label", "Size"],
   ["quantity", "Quantity"],
+  ["fixed_rate_display", "Fixed rate"],
   ["rate", "Rate", "money"],
   ["line_total", "Amount", "money"],
 ];
@@ -100,7 +103,7 @@ export default function CustomerProfile({
     };
   }, [api, token, id, date, reload]);
   const table = (values: any[], columns: Column[], actions?: (row: any) => React.ReactNode) => (
-    <WorkflowTable values={values} columns={columns} actions={actions} />
+    <WorkflowTable values={values.map(row=>({...row,fixed_rate_display:row.fixed_rate == null ? 'Not recorded' : money(row.fixed_rate)}))} columns={columns} actions={actions} />
   );
   const cards = (entries: [string, any][]) => (
     <div className="customer-profile-cards">
@@ -149,6 +152,8 @@ export default function CustomerProfile({
             <h3>Account summary</h3>
             {cards([
               ["Total invoiced", money(s.total_invoiced)],
+              ["Opening receivable", money(s.opening_receivable)],
+              ["Opening customer credit", money(s.opening_customer_credit)],
               ["Payments received", money(s.total_received)],
               ["Net amount due", money(s.net_balance)],
               ["Customer credit / unapplied payments", money(s.customer_credit)],

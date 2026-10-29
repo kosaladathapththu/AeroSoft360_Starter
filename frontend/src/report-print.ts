@@ -16,7 +16,7 @@ export const reportTotalColumns: Record<string, string[]> = {
   sales_report: ["total", "received_amount", "outstanding"],
   product_sales: ["quantity", "line_total"],
   receipt_report: ["amount"],
-  customer_report: ["invoices", "sales", "outstanding"],
+  customer_report: ["invoices", "sales", "opening_receivable", "outstanding"],
   purchase_report: ["total"],
   product_purchase: ["quantity", "line_total"],
   supplier_report: ["documents", "total"],

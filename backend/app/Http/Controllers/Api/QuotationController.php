@@ -96,6 +96,7 @@ final class QuotationController
                     "colour" => $line["colour"] ?? null,
                     "quantity" => $line["quantity"],
                     "rate" => $rate,
+                    "fixed_rate" => (float)$item->unit_price,
                     "total" => $amount,
                 ];
             }
@@ -190,6 +191,9 @@ final class QuotationController
                     "sets" => 0,
                     "pieces" => $line["quantity"],
                     "rate" => $line["rate"],
+                    "fixed_rate" => $line['fixed_rate'] ?? null,
+                    "custom_rate" => $line['rate'],
+                    "fixed_rates" => json_encode([$item->id => $line['fixed_rate'] ?? $item->unit_price]),
                     "line_total" => $line["total"],
                     "created_at" => now(),
                     "updated_at" => now(),
@@ -201,6 +205,7 @@ final class QuotationController
                     "colour" => $line["colour"],
                     "quantity" => $line["quantity"],
                     "invoiced_quantity" => 0,
+                    "fixed_rate" => $line['fixed_rate'] ?? null,
                     "rate" => $line["rate"],
                     "created_at" => now(),
                     "updated_at" => now(),

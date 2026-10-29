@@ -91,7 +91,7 @@ class SalesController
             ->groupBy("sales_invoice_id");
         $invoices = DB::table("sales_invoices as i")
             ->join("customers as c", "c.id", "=", "i.customer_id")
-            ->join("sales_representatives as r", "r.id", "=", "i.sales_rep_id")
+            ->leftJoin("sales_representatives as r", "r.id", "=", "i.sales_rep_id")
             ->leftJoin("sales_orders as so", "so.id", "=", "i.sales_order_id")
             ->leftJoin("customer_pos as po", "po.id", "=", "so.customer_po_id")
             ->select(
@@ -108,7 +108,7 @@ class SalesController
             });
         $receipts = DB::table("customer_receipts as p")
             ->join("customers as c", "c.id", "=", "p.customer_id")
-            ->join("sales_representatives as owner", "owner.id", "=", "p.sales_rep_id")
+            ->leftJoin("sales_representatives as owner", "owner.id", "=", "p.sales_rep_id")
             ->leftJoin(
                 "sales_representatives as collector",
                 "collector.id",
@@ -154,6 +154,7 @@ class SalesController
             ->latest("a.id")
             ->get();
         return response()->json([
+            "opening_accounts" => DB::table("accounts")->where("type","equity")->where("is_postable",true)->where("is_active",true)->get(),
             "payment_accounts" => DB::table("accounts")
                 ->where("is_postable", true)
                 ->orderBy("code")
@@ -183,10 +184,18 @@ class SalesController
             "address" => "nullable|max:255",
             "credit_days" => "required|integer|min:0|max:365",
             "credit_limit" => "required|numeric|min:0",
+            "opening_balance" => "nullable|numeric|min:0",
+            "opening_type" => "nullable|in:receivable,credit",
+            "opening_date" => "nullable|date_format:Y-m-d",
+            "opening_due_date" => "nullable|date_format:Y-m-d",
+            "opening_account_id" => "nullable|exists:accounts,id",
         ]);
-        $id = DB::table("customers")->insertGetId(
-            $d + ["status" => "active", "created_at" => now(), "updated_at" => now()],
-        );
+        $id = DB::transaction(function () use ($d) {
+            $fields = array_diff_key($d, array_flip(['opening_balance','opening_type','opening_date','opening_due_date','opening_account_id']));
+            $id = DB::table("customers")->insertGetId($fields + ["status"=>"active","created_at"=>now(),"updated_at"=>now()]);
+            app(\App\Services\Accounting\CustomerOpeningService::class)->create($id,$d);
+            return $id;
+        });
         return response()->json(DB::table("customers")->find($id), 201);
     }
     public function updateCustomer(Request $r, int $id): JsonResponse
@@ -431,6 +440,8 @@ class SalesController
             "sales_rep_id" => "required|exists:sales_representatives,id",
             "customer_po_reference" => "nullable|max:80",
             "po_date" => "required|date",
+            "opening_balance"=>"nullable|numeric|min:0", "opening_type"=>"nullable|in:receivable,credit",
+            "opening_date"=>"nullable|date_format:Y-m-d", "opening_due_date"=>"nullable|date_format:Y-m-d", "opening_account_id"=>"nullable|exists:accounts,id",
             "sale_type" => "required|in:cash,credit,mixed",
             "cash_amount" => "nullable|required_if:sale_type,mixed|numeric|min:0",
             "lines" => "required|array|min:1",
@@ -439,6 +450,7 @@ class SalesController
             "lines.*.set_template_id" => "nullable|exists:article_set_templates,id",
             "lines.*.set_item_id" => "nullable|exists:article_set_items,id",
             "lines.*.quantity" => "required|numeric|gt:0",
+            "lines.*.rate" => "nullable|numeric|min:0",
         ]);
         $po = DB::transaction(function () use ($d) {
             $customerId = $d["customer_id"] ?? null;
@@ -456,6 +468,7 @@ class SalesController
                     "updated_at" => now(),
                 ]);
             }
+            if (!($d['customer_id'] ?? null)) app(\App\Services\Accounting\CustomerOpeningService::class)->create($customerId,$d);
             $num =
                 "CPO-" .
                 now()->format("ym") .
@@ -501,6 +514,10 @@ class SalesController
                     $itemId = $item->id;
                     $setId = $item->set_template_id;
                 }
+                $fixedRate = $value / max(1,$pieces);
+                $fixedRates = ($line["order_mode"] === "badge" ? $items : collect([$item]))->pluck('unit_price','id')->all();
+                $customRate = isset($line['rate']) ? round((float)$line['rate'],2) : null;
+                if ($customRate !== null) $value = round($pieces * $customRate,2);
                 $total += $value;
                 DB::table("customer_po_lines")->insert([
                     "customer_po_id" => $id,
@@ -512,6 +529,7 @@ class SalesController
                     "sets" => $line["order_mode"] === "badge" ? $units : 0,
                     "pieces" => $pieces,
                     "rate" => $value / max(1, $pieces),
+                    "fixed_rate" => $fixedRate, "custom_rate" => $customRate, "fixed_rates" => json_encode($fixedRates),
                     "line_total" => $value,
                     "created_at" => now(),
                     "updated_at" => now(),
@@ -557,6 +575,7 @@ class SalesController
             "lines.*.set_template_id" => "nullable|exists:article_set_templates,id",
             "lines.*.set_item_id" => "nullable|exists:article_set_items,id",
             "lines.*.quantity" => "required|numeric|gt:0",
+            "lines.*.rate" => "nullable|numeric|min:0",
         ]);
         $po = DB::transaction(function () use ($d, $id) {
             $po = DB::table("customer_pos")->lockForUpdate()->find($id);
@@ -576,6 +595,7 @@ class SalesController
                     "sale_type" => $d["sale_type"],
                     "updated_at" => now(),
                 ]);
+            $oldLines = DB::table("customer_po_lines")->where("customer_po_id",$id)->get();
             DB::table("customer_po_lines")->where("customer_po_id", $id)->delete();
             $total = 0;
             foreach ($d["lines"] as $line) {
@@ -605,6 +625,17 @@ class SalesController
                     $itemId = $item->id;
                     $setId = $item->set_template_id;
                 }
+                $fixedRate = $value / max(1,$pieces);
+                $fixedRates = ($line["order_mode"] === "badge" ? $items : collect([$item]))->pluck('unit_price','id')->all();
+                $old = $oldLines->first(fn($old)=>(int)$old->set_template_id===(int)$setId && (int)$old->set_item_id===(int)$itemId && $old->order_mode===$line['order_mode']);
+                if ($old && $old->fixed_rates) {
+                    $fixedRates = json_decode($old->fixed_rates,true);
+                    $priceItems = $line['order_mode']==='badge' ? $items : collect([$item]);
+                    $value = $priceItems->sum(fn($i)=>(float)($fixedRates[$i->id] ?? $i->unit_price)*($line['order_mode']==='badge'?(float)$i->quantity:1))*$units;
+                    $fixedRate = $value/max(1,$pieces);
+                }
+                $customRate = isset($line['rate']) ? round((float)$line['rate'],2) : null;
+                if ($customRate !== null) $value = round($pieces * $customRate,2);
                 $total += $value;
                 DB::table("customer_po_lines")->insert([
                     "customer_po_id" => $id,
@@ -615,6 +646,7 @@ class SalesController
                     "sets" => $line["order_mode"] === "badge" ? $units : 0,
                     "pieces" => $pieces,
                     "rate" => $value / max(1, $pieces),
+                    "fixed_rate" => $fixedRate, "custom_rate" => $customRate, "fixed_rates" => json_encode($fixedRates),
                     "line_total" => $value,
                     "created_at" => now(),
                     "updated_at" => now(),
@@ -753,7 +785,7 @@ class SalesController
                 }
                 if ($qty > 0) {
                     $prepared[] = [$line, $item, $qty];
-                    $total += round($qty * (float) $item->unit_price, 2);
+                    $total += round($qty * \App\Services\Accounting\FixedRateService::poRate($line,$item), 2);
                 }
             }
             abort_if(
@@ -790,7 +822,8 @@ class SalesController
                     "colour" => $line->colour,
                     "quantity" => $qty,
                     "invoiced_quantity" => 0,
-                    "rate" => $item->unit_price,
+                    "rate" => \App\Services\Accounting\FixedRateService::poRate($line,$item),
+                    "fixed_rate" => \App\Services\Accounting\FixedRateService::poFixed($line,$item),
                     "created_at" => now(),
                     "updated_at" => now(),
                 ]);
@@ -821,6 +854,7 @@ class SalesController
             "invoice_date" => "required|date",
             "lines" => "required|array|min:1",
             "lines.*.sales_order_size_line_id" => "required|exists:sales_order_size_lines,id",
+            "lines.*.rate" => "nullable|numeric|min:0",
             "lines.*.quantity" => "required|numeric|min:0",
         ]);
         $invoice = DB::transaction(function () use ($d, $id) {
@@ -844,6 +878,7 @@ class SalesController
                     422,
                     "Dispatched quantity for size {$line->size_label} exceeds the remaining quantity.",
                 );
+                if (isset($input['rate'])) $line->rate = (float)$input['rate'];
                 $prepared[] = [$line, $qty];
                 $total += round($qty * (float) $line->rate, 2);
             }
@@ -889,6 +924,7 @@ class SalesController
                     "size_label" => $line->size_label,
                     "quantity" => $qty,
                     "rate" => $line->rate,
+                    "fixed_rate" => $line->fixed_rate ?? null,
                     "line_total" => $qty * $line->rate,
                     "created_at" => now(),
                     "updated_at" => now(),
@@ -971,12 +1007,14 @@ class SalesController
             422,
             "Choose an active cash or bank account for the collection.",
         );
+        $opening = (bool)($invoice->is_opening_balance ?? false);
+        if ($opening) $d['commission_decision'] = 'cancel';
         $payeeId =
             $d["commission_decision"] === "collector"
                 ? (int) $d["collector_sales_rep_id"]
                 : (int) $invoice->sales_rep_id;
         $payee = DB::table("sales_representatives")->find($payeeId);
-        abort_unless($payee, 422, "The selected commission recipient is missing.");
+        abort_unless($payee || $opening, 422, "The selected commission recipient is missing.");
         $num =
             "REC-" .
             now()->format("ym") .
@@ -985,7 +1023,7 @@ class SalesController
         $rid = DB::table("customer_receipts")->insertGetId([
             "number" => $num,
             "customer_id" => $d["customer_id"],
-            "sales_rep_id" => $invoice->sales_rep_id,
+            "sales_rep_id" => $invoice->sales_rep_id ?? $d["collector_sales_rep_id"],
             "collector_sales_rep_id" => $d["collector_sales_rep_id"],
             "payment_account_id" => $cash->id,
             "receipt_date" => $d["receipt_date"],
@@ -1008,7 +1046,7 @@ class SalesController
             ->sum("quantity");
         $collectedRatio = min(1, (float) $d["amount"] / max(0.01, (float) $invoice->total));
         $commissionPieces = round($invoicePieces * $collectedRatio, 4);
-        $rate = (float) $payee->default_commission_rate;
+        $rate = (float) ($payee->default_commission_rate ?? 0);
         $limit = DB::table("commission_settings")->value("max_collection_days") ?? 100;
         $eligible = $days <= (int) $limit;
         $cancelled = $d["commission_decision"] === "cancel";
@@ -1057,7 +1095,7 @@ class SalesController
         $asOf = $r->validate(["as_of" => "nullable|date"])["as_of"] ?? now()->toDateString();
         $rows = DB::table("sales_invoices as i")
             ->join("customers as c", "c.id", "=", "i.customer_id")
-            ->join("sales_representatives as rep", "rep.id", "=", "i.sales_rep_id")
+            ->leftJoin("sales_representatives as rep", "rep.id", "=", "i.sales_rep_id")
             ->where("i.outstanding", ">", 0)
             ->whereDate("i.invoice_date", "<=", $asOf)
             ->select(

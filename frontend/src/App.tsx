@@ -41,6 +41,10 @@ import "./popups.css";
 import { confirmDialog, showNotice } from "./AppDialogs";
 import InvoiceBill from "./InvoiceBill";
 import CustomerProfile from "./CustomerProfile";
+import CustomerOpeningFields from "./CustomerOpeningFields";
+import RateFields from "./RateFields";
+import { fixedItemRate, givenItemRate } from "./rates";
+import "./rates.css";
 import { matchesSearch } from "./search";
 import { reportSearchCatalog, pageSearchKeywords } from "./search-catalog";
 import GlobalSearchRecords from "./GlobalSearchRecords";
@@ -2736,7 +2740,8 @@ function ConvertPoModal({
             size_label: item.size_label,
             colour: line.colour,
             ordered: Number(line.pieces),
-            rate: Number(item.unit_price),
+            fixed_rate: fixedItemRate(line,item),
+            rate: givenItemRate(line,item),
           });
       } else {
         set?.items.forEach((item: any) =>
@@ -2749,7 +2754,8 @@ function ConvertPoModal({
             size_label: item.size_label,
             colour: line.colour,
             ordered: Number(item.quantity) * Number(line.sets),
-            rate: Number(item.unit_price),
+            fixed_rate: fixedItemRate(line,item),
+            rate: givenItemRate(line,item),
           }),
         );
       }
@@ -3293,6 +3299,7 @@ function PoInvoiceModal({
   const eligible = data.pos.filter((po: any) => ["draft", "ordered"].includes(po.status));
   const [poId, setPoId] = useState<number>(Number(eligible[0]?.id || 0));
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [rates, setRates] = useState<Record<string,number>>({});
   const [busy, setBusy] = useState(false);
   const po = eligible.find((item: any) => Number(item.id) === poId);
   const lines = useMemo(() => {
@@ -3308,6 +3315,7 @@ function PoInvoiceModal({
           size_label: line.size_label,
           remaining: Number(line.remaining_quantity),
           rate: Number(line.rate),
+          fixed_rate: line.fixed_rate,
         }));
     const expanded: any[] = [];
     po.lines.forEach((line: any) => {
@@ -3322,7 +3330,8 @@ function PoInvoiceModal({
             article_name: line.article_name,
             size_label: item.size_label,
             remaining: Number(line.pieces),
-            rate: Number(item.unit_price),
+            fixed_rate: fixedItemRate(line,item),
+            rate: givenItemRate(line,item),
           });
       } else
         set?.items.forEach((item: any) =>
@@ -3332,7 +3341,8 @@ function PoInvoiceModal({
             article_name: line.article_name,
             size_label: item.size_label,
             remaining: Number(item.quantity) * Number(line.sets),
-            rate: Number(item.unit_price),
+            fixed_rate: fixedItemRate(line,item),
+            rate: givenItemRate(line,item),
           }),
         );
     });
@@ -3345,6 +3355,7 @@ function PoInvoiceModal({
     return [...grouped.values()];
   }, [po, poId, data.orders, data.articles]);
   useEffect(() => {
+    setRates({});
     setQuantities(
       Object.fromEntries(
         lines.map((line: any) => [`${line.article_id}|${line.size_label}`, line.remaining]),
@@ -3353,7 +3364,7 @@ function PoInvoiceModal({
   }, [poId, lines.length]);
   const total = lines.reduce(
     (sum: number, line: any) =>
-      sum + Number(quantities[`${line.article_id}|${line.size_label}`] || 0) * line.rate,
+      sum + Number(quantities[`${line.article_id}|${line.size_label}`] || 0) * Number(rates[`${line.article_id}|${line.size_label}`] ?? line.rate),
     0,
   );
   return (
@@ -3372,6 +3383,7 @@ function PoInvoiceModal({
               lines: lines.map((line: any) => ({
                 article_id: line.article_id,
                 size_label: line.size_label,
+                rate: rates[`${line.article_id}|${line.size_label}`] ?? null,
                 quantity: Number(quantities[`${line.article_id}|${line.size_label}`] || 0),
               })),
             });
@@ -3462,7 +3474,7 @@ function PoInvoiceModal({
                           }))
                         }
                       />
-                      <span>{money(line.rate)}</span>
+                      <label>Fixed: {line.fixed_rate == null ? "Not recorded" : money(line.fixed_rate)}<input aria-label={`Given rate for ${line.article_code} size ${line.size_label}`} type="number" min="0" step="0.01" value={rates[key] ?? line.rate} onChange={e=>setRates(all=>({...all,[key]:Number(e.target.value)}))} /></label>
                     </div>
                   );
                 })}
@@ -3502,9 +3514,10 @@ function DispatchInvoiceModal({
   const [quantities, setQuantities] = useState<Record<number, number>>(
     Object.fromEntries(available.map((line: any) => [line.id, Number(line.remaining_quantity)])),
   );
+  const [rates, setRates] = useState<Record<number,number>>(Object.fromEntries(available.map((line: any)=>[line.id,Number(line.rate)])));
   const [busy, setBusy] = useState(false);
   const total = available.reduce(
-    (sum: number, line: any) => sum + Number(quantities[line.id] || 0) * Number(line.rate),
+    (sum: number, line: any) => sum + Number(quantities[line.id] || 0) * Number(rates[line.id] ?? line.rate),
     0,
   );
   return (
@@ -3522,6 +3535,7 @@ function DispatchInvoiceModal({
               lines: available.map((line: any) => ({
                 sales_order_size_line_id: line.id,
                 quantity: Number(quantities[line.id] || 0),
+                rate: rates[line.id],
               })),
             });
           } finally {
@@ -3561,6 +3575,8 @@ function DispatchInvoiceModal({
               <div className="dispatch-row" key={line.id}>
                 <span>
                   <b>{line.article_code}</b>
+                  <small>Fixed rate: {line.fixed_rate == null ? "Not recorded" : money(line.fixed_rate)}</small>
+                  <label>Given rate<input type="number" min="0" step="0.01" value={rates[line.id]} onChange={e => setRates(all=>({...all,[line.id]:Number(e.target.value)}))} required /></label>
                   <small>
                     {line.article_name} · Size {line.size_label}
                   </small>
@@ -3578,7 +3594,7 @@ function DispatchInvoiceModal({
                     setQuantities((all) => ({ ...all, [line.id]: Number(e.target.value) }))
                   }
                 />
-                <b>{money(Number(quantities[line.id] || 0) * Number(line.rate))}</b>
+                <b>{money(Number(quantities[line.id] || 0) * Number(rates[line.id] ?? line.rate))}</b>
               </div>
             ))}
           </div>
@@ -3762,6 +3778,8 @@ function SalesCreateModal({
     ...(initial?.lines?.length
       ? initial.lines.map((line: any) => ({
           article_id: Number(line.article_id),
+          custom_rate: line.custom_rate,
+          fixed_rates: line.fixed_rates,
           order_mode: (line.order_mode || "badge") === "size" ? "custom" : "badge",
           set_template_id: Number(line.set_template_id || 0),
           set_item_id: Number(line.set_item_id || 0),
@@ -3831,6 +3849,8 @@ function SalesCreateModal({
               article_id: Number(articleId),
               set_template_id: Number(set?.id || 0),
               colour: firstStoredLine?.colour || "",
+              given_rates: Object.fromEntries((set?.items || []).map((item: any)=>[item.id, initial.lines.find((stored: any)=>Number(stored.article_id)===Number(articleId) && stored.size_label===item.size_label)?.rate ?? item.unit_price])),
+              fixed_rates: Object.fromEntries((set?.items || []).map((item: any)=>[item.id, initial.lines.find((stored: any)=>Number(stored.article_id)===Number(articleId) && stored.size_label===item.size_label)?.fixed_rate ?? item.unit_price])),
               sets: Math.max(
                 1,
                 Number(firstStoredLine?.quantity || 1) /
@@ -3875,7 +3895,7 @@ function SalesCreateModal({
       .filter((set: any) => set.status !== "inactive")
       .map((set: any) => ({ ...set, article })),
   );
-  const poLineTotal = (line: any) => {
+  const poFixedTotal = (line: any) => {
     if (line.order_mode === "custom") {
       const items = data.articles.flatMap((article: any) =>
         article.sets.flatMap((set: any) => set.items),
@@ -3904,6 +3924,11 @@ function SalesCreateModal({
       colourMultiplier
     );
   };
+  const poLinePieces = (line: any) => {
+    if (line.order_mode === "custom") return Object.entries(line.custom_sizes || {}).reduce((sum: number,[id,qty]: any) => sum + (Object.values(line.custom_colour_quantities?.[id] || {}).reduce((a: number,b: any)=>a+Number(b||0),0) || Number(qty||0)),0);
+    return Number(availableSets.find((set: any)=>Number(set.id)===Number(line.set_template_id))?.pieces || 0)*Number(line.quantity||0)*Math.max(1,Number(line.selected_colours?.length||0));
+  };
+  const poLineTotal = (line: any) => line.custom_rate == null ? poFixedTotal(line) : Number(line.custom_rate)*poLinePieces(line);
   const poGrandTotal = poLines.reduce((total: number, line: any) => total + poLineTotal(line), 0);
   const poTotalPieces = poLines.reduce((total: number, line: any) => {
     if (line.order_mode === "custom") {
@@ -3947,30 +3972,36 @@ function SalesCreateModal({
           return selectedColours
             .map((colour: string) => ({
               article_id: Number(line.article_id),
+              set_item_id: item.id,
               size_label: item.size_label,
               colour,
               quantity: Number(line.custom_colour_quantities?.[item.id]?.[colour] || 0),
-              rate: Number(item.unit_price),
+              fixed_rate: Number(line.fixed_rates?.[item.id] ?? item.unit_price),
+              rate: Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price),
             }))
             .filter((entry: any) => entry.quantity > 0);
         return fallbackQuantity > 0
           ? [
               {
                 article_id: Number(line.article_id),
+              set_item_id: item.id,
                 size_label: item.size_label,
                 colour: null,
                 quantity: fallbackQuantity,
-                rate: Number(item.unit_price),
+                fixed_rate: Number(line.fixed_rates?.[item.id] ?? item.unit_price),
+              rate: Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price),
               },
             ]
           : [];
       });
     return (set?.items || []).map((item: any) => ({
       article_id: Number(line.article_id),
+              set_item_id: item.id,
       size_label: item.size_label,
       colour: line.colour || null,
       quantity: Number(item.quantity) * Number(line.sets || 0),
-      rate: Number(item.unit_price),
+      fixed_rate: Number(line.fixed_rates?.[item.id] ?? item.unit_price),
+              rate: Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price),
     }));
   });
   const invoiceSubtotal = expandedInvoiceLines.reduce(
@@ -4070,6 +4101,7 @@ function SalesCreateModal({
         address: f.get("address"),
         credit_days: Number(f.get("credit_days")),
         credit_limit: Number(f.get("credit_limit")),
+        ...(!initial ? { opening_balance: Number(f.get("opening_balance") || 0), opening_type: f.get("opening_type"), opening_date: f.get("opening_date") || null, opening_due_date: f.get("opening_due_date") || null, opening_account_id: f.get("opening_account_id") ? Number(f.get("opening_account_id")) : null } : {}),
         status: initial?.status || "active",
       };
     } else if (type === "rep") {
@@ -4110,6 +4142,8 @@ function SalesCreateModal({
         sale_type: f.get("sale_type"),
         cash_amount:
           poSaleType === "mixed" ? poCashAmount : poSaleType === "cash" ? poGrandTotal : 0,
+        opening_balance: newCustomer ? Number(f.get("opening_balance") || 0) : 0,
+        opening_type: f.get("opening_type"), opening_date: f.get("opening_date") || null, opening_due_date: f.get("opening_due_date") || null, opening_account_id: f.get("opening_account_id") ? Number(f.get("opening_account_id")) : null,
         lines: poLines.flatMap((line: any) =>
           line.order_mode === "custom"
             ? Object.entries(line.custom_sizes || {})
@@ -4126,6 +4160,7 @@ function SalesCreateModal({
                     colour,
                     order_mode: "size",
                     set_template_id: item?.set_template_id,
+                    rate: line.custom_rate ?? null,
                     set_item_id: Number(itemId),
                     quantity: colour
                       ? Number(line.custom_colour_quantities?.[itemId]?.[colour] || 1)
@@ -4135,10 +4170,11 @@ function SalesCreateModal({
             : line.selected_colours?.length
               ? line.selected_colours.map((colour: string) => ({
                   ...line,
+                  rate: line.custom_rate ?? null,
                   colour,
                   selected_colours: undefined,
                 }))
-              : [{ ...line, colour: null, selected_colours: undefined }],
+              : [{ ...line, rate: line.custom_rate ?? null, colour: null, selected_colours: undefined }],
         ),
       };
       if (
@@ -4392,6 +4428,7 @@ function SalesCreateModal({
                 Address
                 <input name="address" defaultValue={initial?.address} />
               </label>
+              {!initial && <CustomerOpeningFields accounts={data.opening_accounts || []} />}
             </>
           ) : type === "rep" ? (
             <>
@@ -4841,6 +4878,7 @@ function SalesCreateModal({
                         Address
                         <input name="customer_address" placeholder="Billing or delivery address" />
                       </label>
+                      <CustomerOpeningFields accounts={data.opening_accounts || []} />
                     </>
                   )}
                   <label>
@@ -5129,9 +5167,10 @@ function SalesCreateModal({
                             />
                           )}
                         </label>
+                          <RateFields items={selectableItems} rate={line.custom_rate} change={rate => setPoLines(lines => lines.map((value,i) => i === index ? {...value,custom_rate:rate} : value))} />
                         <label>
                           {line.order_mode === "badge" ? "Set template" : "Selected sizes"}
-                          {line.order_mode === "badge" ? (
+                      {line.order_mode === "badge" ? (
                             <select
                               value={line.set_template_id}
                               onChange={(e) =>
@@ -5658,11 +5697,11 @@ function SalesCreateModal({
                         0,
                       ),
                   );
-                  const setPrice = Number(
+                  const setPrice = line.custom_rate != null ? Number(line.custom_rate)*piecesPerSet : Number(
                     set?.set_price ||
                       (set?.items || []).reduce(
                         (sum: number, item: any) =>
-                          sum + Number(item.quantity || 0) * Number(item.unit_price || 0),
+                          sum + Number(item.quantity || 0) * Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price ?? 0),
                         0,
                       ),
                   );
@@ -5792,6 +5831,7 @@ function SalesCreateModal({
                           <Trash2 />
                         </button>
                       </div>
+                      <RateFields items={set?.items || []} rate={line.custom_rate} change={rate => setInvoiceLines(lines => lines.map((value,i) => i === index ? {...value,custom_rate:rate} : value))} />
                       {line.order_mode !== "custom" ? (
                         <div className="invoice-complete-controls">
                           <label>

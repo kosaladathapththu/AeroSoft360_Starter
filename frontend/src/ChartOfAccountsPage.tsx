@@ -8,6 +8,7 @@ import {
   financeToday,
 } from "./finance-utils";
 import "./finance-management.css";
+import AccountOpeningModal from "./AccountOpeningModal";
 
 export default function ChartOfAccountsPage({
   api,
@@ -28,6 +29,7 @@ export default function ChartOfAccountsPage({
   const [type, setType] = useState("all");
   const [editor, setEditor] = useState<any>(undefined);
   const [ledger, setLedger] = useState<any>(null);
+  const [opening, setOpening] = useState(false);
   const load = useCallback(async () => {
     const result = await financeRequest(api, token, `accounts?as_of=${date}`);
     setData(result);
@@ -50,9 +52,12 @@ export default function ChartOfAccountsPage({
           <p>Manage ledger accounts, cash/bank accounts and cash-flow classifications.</p>
         </div>
         {canManage && (
+          <div className="report-downloads">
+          <button onClick={() => setOpening(true)} disabled={!data}>Opening balances</button>
           <button className="primary" onClick={() => setEditor(null)}>
             <Plus /> New account
           </button>
+          </div>
         )}
       </div>
       {error && (
@@ -228,6 +233,7 @@ export default function ChartOfAccountsPage({
           }}
         />
       )}
+      {opening && <AccountOpeningModal accounts={(data?.accounts || []).filter((a:any)=>a.is_active && a.is_postable && ['asset','liability','equity'].includes(a.type) && !['1100','2100','3990'].includes(a.code))} close={()=>setOpening(false)} save={async(id,body)=>{await financeRequest(api,token,`accounts/${id}/opening-balance`,body,'POST');await load();onChanged();setOpening(false);}} />}
       {ledger && (
         <AccountLedger
           api={api}

@@ -21,10 +21,10 @@ export function BillDocument({ invoice }: { invoice: any }) {
       <div className="bill-brand">
         <div>
           <span>SUPUN AEROSOFT (PVT) LTD</span>
-          <p>Customer sales invoice</p>
+          <p>{invoice.is_opening_balance ? "Customer balance brought forward" : "Customer sales invoice"}</p>
         </div>
         <div>
-          <h1>INVOICE</h1>
+          <h1>{invoice.is_opening_balance ? "OPENING BALANCE" : "INVOICE"}</h1>
           <strong>{invoice.number}</strong>
         </div>
       </div>
@@ -76,7 +76,8 @@ export function BillDocument({ invoice }: { invoice: any }) {
             <th>Size</th>
             <th>Colour</th>
             <th>Qty</th>
-            <th>Unit price</th>
+            <th>Fixed rate</th>
+            <th>Rate</th>
             <th>Amount</th>
           </tr>
         </thead>
@@ -91,13 +92,14 @@ export function BillDocument({ invoice }: { invoice: any }) {
               <td>{line.size_label}</td>
               <td>{line.colour || "—"}</td>
               <td>{Number(line.quantity).toLocaleString()}</td>
+              <td>{line.fixed_rate == null ? "Not recorded" : money(line.fixed_rate)}</td>
               <td>{money(line.rate)}</td>
               <td>{money(line.line_total)}</td>
             </tr>
           ))}
           {invoice.lines.length === 0 && (
             <tr>
-              <td colSpan={7}>
+              <td colSpan={8}>
                 This invoice has no saved item breakdown. The recorded totals are shown below.
               </td>
             </tr>

@@ -145,6 +145,7 @@ final class CustomerPoExporter
                 "Stored rate (LKR)",
                 "Rate basis",
                 "Line total (LKR)",
+                "Fixed rate per piece (LKR)",
             ]);
             $numbers = $orders->pluck("number", "id");
             $row = 6;
@@ -161,8 +162,9 @@ final class CustomerPoExporter
                     (float) $line->sets,
                     (float) $line->pieces,
                     (float) $line->rate,
-                    $individual ? "Per piece" : "Per set",
+                    "Per piece",
                     (float) $line->line_total,
+                    $line->fixed_rate ?? 'Not recorded',
                 ]);
             }
             $this->row($items, $row, [
@@ -191,7 +193,7 @@ final class CustomerPoExporter
                 ->getStyle("L6:L$row")
                 ->getNumberFormat()
                 ->setFormatCode("#,##0.00");
-            $this->finish($items, 12, $row - 1);
+            $this->finish($items, 13, $row - 1);
             $book->setActiveSheetIndex(0);
             return $book;
         });

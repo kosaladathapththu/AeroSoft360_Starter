@@ -65,7 +65,7 @@ export default function CollectionFields({
           <div>
             <small>Customer</small>
             <b>{invoice.customer_name}</b>
-            <span>Salesperson: {invoice.rep_name}</span>
+            <span>{invoice.is_opening_balance ? "Opening receivable brought forward" : `Salesperson: ${invoice.rep_name}`}</span>
           </div>
           <div>
             <small>Balance to collect</small>
@@ -207,15 +207,16 @@ export default function CollectionFields({
           </label>
           <label>
             Commission recipient
-            <select name="commission_decision" defaultValue="invoice_salesperson">
+            <select key={invoice.is_opening_balance ? 'opening' : 'invoice'} name="commission_decision" defaultValue={invoice.is_opening_balance ? 'cancel' : 'invoice_salesperson'} disabled={Boolean(invoice.is_opening_balance)}>
               <option value="invoice_salesperson">Invoice salesperson</option>
               <option value="collector">Payment collector</option>
               <option value="cancel">No commission</option>
             </select>
+            {invoice.is_opening_balance && <input name="commission_decision" type="hidden" value="cancel" />}
           </label>
         </div>
         <p>
-          Commission defaults to the invoice salesperson. The{" "}
+          {invoice.is_opening_balance ? 'Opening receivables do not earn sales commission. ' : 'Commission defaults to the invoice salesperson. '}
           {data.commission_settings?.max_collection_days || 100}-day collection policy applies.
         </p>
       </details>
