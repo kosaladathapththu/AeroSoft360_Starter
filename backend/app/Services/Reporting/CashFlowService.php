@@ -20,12 +20,14 @@ final class CashFlowService
                 "SUM(CASE WHEN j.posting_date < ? OR j.source_type = 'account_opening' THEN l.debit-l.credit ELSE 0 END) as opening",
                 [$from],
             )
-            ->selectRaw("SUM(CASE WHEN j.posting_date >= ? AND j.source_type <> 'account_opening' THEN l.debit ELSE 0 END) as receipts", [
-                $from,
-            ])
-            ->selectRaw("SUM(CASE WHEN j.posting_date >= ? AND j.source_type <> 'account_opening' THEN l.credit ELSE 0 END) as payments", [
-                $from,
-            ])
+            ->selectRaw(
+                "SUM(CASE WHEN j.posting_date >= ? AND COALESCE(j.source_type,'') <> 'account_opening' THEN l.debit ELSE 0 END) as receipts",
+                [$from],
+            )
+            ->selectRaw(
+                "SUM(CASE WHEN j.posting_date >= ? AND COALESCE(j.source_type,'') <> 'account_opening' THEN l.credit ELSE 0 END) as payments",
+                [$from],
+            )
             ->selectRaw("SUM(l.debit-l.credit) as closing")
             ->groupBy("l.account_id")
             ->get()
@@ -56,7 +58,11 @@ final class CashFlowService
             ->join("journal_entries as j", "j.id", "=", "l.journal_entry_id")
             ->where("j.status", "posted")
             ->whereBetween("j.posting_date", [$from, $to])
-            ->where('j.source_type','<>','account_opening')
+            ->where(
+                fn($q) => $q
+                    ->whereNull("j.source_type")
+                    ->orWhere("j.source_type", "<>", "account_opening"),
+            )
             ->whereIn("j.id", $cashJournals)
             ->select(
                 "l.*",

@@ -103,7 +103,14 @@ export default function CustomerProfile({
     };
   }, [api, token, id, date, reload]);
   const table = (values: any[], columns: Column[], actions?: (row: any) => React.ReactNode) => (
-    <WorkflowTable values={values.map(row=>({...row,fixed_rate_display:row.fixed_rate == null ? 'Not recorded' : money(row.fixed_rate)}))} columns={columns} actions={actions} />
+    <WorkflowTable
+      values={values.map((row) => ({
+        ...row,
+        fixed_rate_display: row.fixed_rate == null ? "Not recorded" : money(row.fixed_rate),
+      }))}
+      columns={columns}
+      actions={actions}
+    />
   );
   const cards = (entries: [string, any][]) => (
     <div className="customer-profile-cards">

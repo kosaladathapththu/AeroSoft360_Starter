@@ -102,9 +102,13 @@ final class CustomerProfileService
                             : ($days <= 90
                                 ? "days_61_90"
                                 : "days_90_plus")));
-            if ($invoice->is_opening_balance ?? false) $openingDebit += $amount;
-            else $invoiced += $amount;
-            $invoice->document_kind = ($invoice->is_opening_balance ?? false) ? 'Opening receivable' : 'Sales invoice';
+            if ($invoice->is_opening_balance ?? false) {
+                $openingDebit += $amount;
+            } else {
+                $invoiced += $amount;
+            }
+            $invoice->document_kind =
+                $invoice->is_opening_balance ?? false ? "Opening receivable" : "Sales invoice";
             $outstanding += $balance;
             $aging[$bucket] += $balance;
             if ($balance > 0) {
@@ -134,9 +138,15 @@ final class CustomerProfileService
             $invoice->payments = $byInvoice->get($invoice->id, collect())->values();
         }
         foreach ($payments as $payment) {
-            if ($payment->is_opening_balance ?? false) $openingCredit += (int) round((float)$payment->amount*100);
-            else $received += (int) round((float) $payment->amount * 100);
-            $payment->document_kind = ($payment->is_opening_balance ?? false) ? 'Opening customer credit' : 'Payment received';
+            if ($payment->is_opening_balance ?? false) {
+                $openingCredit += (int) round((float) $payment->amount * 100);
+            } else {
+                $received += (int) round((float) $payment->amount * 100);
+            }
+            $payment->document_kind =
+                $payment->is_opening_balance ?? false
+                    ? "Opening customer credit"
+                    : "Payment received";
             $payment->allocations = $byReceipt->get($payment->id, collect())->values();
             $payment->invoice_references = $payment->allocations
                 ->pluck("invoice_number")

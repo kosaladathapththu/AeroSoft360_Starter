@@ -1,5 +1,30 @@
-.fixed-rate-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 16px; margin: 12px 0; background: #edf7f6; border: 1px solid #c9e3df; border-radius: 10px; }
-.fixed-rate-fields span { display: inline-block; padding: 6px 12px 6px 0; font-size: 13px; color: #526e78; }
-.opening-balance-fields { padding: 18px; margin: 20px 0; border: 1px solid #c9dce5; border-radius: 10px; }
-.opening-balance-fields legend { font-weight: 700; }
-@media(max-width: 700px) { .fixed-rate-fields { grid-template-columns: 1fr; } }
+.fixed-rate-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 16px;
+  margin: 12px 0;
+  background: #edf7f6;
+  border: 1px solid #c9e3df;
+  border-radius: 10px;
+}
+.fixed-rate-fields span {
+  display: inline-block;
+  padding: 6px 12px 6px 0;
+  font-size: 13px;
+  color: #526e78;
+}
+.opening-balance-fields {
+  padding: 18px;
+  margin: 20px 0;
+  border: 1px solid #c9dce5;
+  border-radius: 10px;
+}
+.opening-balance-fields legend {
+  font-weight: 700;
+}
+@media (max-width: 700px) {
+  .fixed-rate-fields {
+    grid-template-columns: 1fr;
+  }
+}

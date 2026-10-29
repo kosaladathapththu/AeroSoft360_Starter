@@ -53,10 +53,12 @@ export default function ChartOfAccountsPage({
         </div>
         {canManage && (
           <div className="report-downloads">
-          <button onClick={() => setOpening(true)} disabled={!data}>Opening balances</button>
-          <button className="primary" onClick={() => setEditor(null)}>
-            <Plus /> New account
-          </button>
+            <button onClick={() => setOpening(true)} disabled={!data}>
+              Opening balances
+            </button>
+            <button className="primary" onClick={() => setEditor(null)}>
+              <Plus /> New account
+            </button>
           </div>
         )}
       </div>
@@ -233,7 +235,24 @@ export default function ChartOfAccountsPage({
           }}
         />
       )}
-      {opening && <AccountOpeningModal accounts={(data?.accounts || []).filter((a:any)=>a.is_active && a.is_postable && ['asset','liability','equity'].includes(a.type) && !['1100','2100','3990'].includes(a.code))} close={()=>setOpening(false)} save={async(id,body)=>{await financeRequest(api,token,`accounts/${id}/opening-balance`,body,'POST');await load();onChanged();setOpening(false);}} />}
+      {opening && (
+        <AccountOpeningModal
+          accounts={(data?.accounts || []).filter(
+            (a: any) =>
+              a.is_active &&
+              a.is_postable &&
+              ["asset", "liability", "equity"].includes(a.type) &&
+              !["1100", "2100", "3990"].includes(a.code),
+          )}
+          close={() => setOpening(false)}
+          save={async (id, body) => {
+            await financeRequest(api, token, `accounts/${id}/opening-balance`, body, "POST");
+            await load();
+            onChanged();
+            setOpening(false);
+          }}
+        />
+      )}
       {ledger && (
         <AccountLedger
           api={api}

@@ -21,7 +21,11 @@ export function BillDocument({ invoice }: { invoice: any }) {
       <div className="bill-brand">
         <div>
           <span>SUPUN AEROSOFT (PVT) LTD</span>
-          <p>{invoice.is_opening_balance ? "Customer balance brought forward" : "Customer sales invoice"}</p>
+          <p>
+            {invoice.is_opening_balance
+              ? "Customer balance brought forward"
+              : "Customer sales invoice"}
+          </p>
         </div>
         <div>
           <h1>{invoice.is_opening_balance ? "OPENING BALANCE" : "INVOICE"}</h1>

@@ -3907,7 +3907,7 @@ function SalesCreateModal({
           ).reduce((sum: number, value: any) => sum + Number(value || 0), 0);
           return (
             total +
-            Number(items.find((item: any) => Number(item.id) === Number(itemId))?.unit_price || 0) *
+            fixedItemRate(line, items.find((item: any) => Number(item.id) === Number(itemId)) || {}) *
               (colourQuantities || Number(quantity || 0))
           );
         },
@@ -3916,10 +3916,7 @@ function SalesCreateModal({
     }
     const colourMultiplier = Math.max(1, Number(line.selected_colours?.length || 0));
     return (
-      Number(
-        availableSets.find((set: any) => Number(set.id) === Number(line.set_template_id))
-          ?.set_price || 0,
-      ) *
+      (availableSets.find((set: any) => Number(set.id) === Number(line.set_template_id))?.items || []).reduce((sum: number,item: any)=>sum+Number(item.quantity)*fixedItemRate(line,item),0) *
       Number(line.quantity || 0) *
       colourMultiplier
     );
