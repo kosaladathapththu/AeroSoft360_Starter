@@ -45,6 +45,11 @@ import CustomerOpeningFields from "./CustomerOpeningFields";
 import RateFields from "./RateFields";
 import { fixedItemRate, givenItemRate } from "./rates";
 import "./rates.css";
+import WorkflowSteps from "./WorkflowSteps";
+import ReceivingPage from "./ReceivingPage";
+import PurchasingOverview from "./PurchasingOverview";
+import PurchaseOrderLines, { PurchaseDraftLine } from "./PurchaseOrderLines";
+import { pageLabel, WorkflowContext } from "./workflow";
 import { matchesSearch } from "./search";
 import { reportSearchCatalog, pageSearchKeywords } from "./search-catalog";
 import GlobalSearchRecords from "./GlobalSearchRecords";
@@ -53,6 +58,7 @@ import CollectionFields from "./CollectionFields";
 import PaymentVouchersPage from "./PaymentVouchersPage";
 import ChartOfAccountsPage from "./ChartOfAccountsPage";
 import CashFlowPage from "./CashFlowPage";
+import "./layout-fixes.css";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -169,6 +175,7 @@ export default function App() {
     [searchOpen, setSearchOpen] = useState(false);
   const [requestedReport, setRequestedReport] = useState("");
   const [reportSearchVersion, setReportSearchVersion] = useState(0);
+  const [workflowContext, setWorkflowContext] = useState<WorkflowContext>({});
   const token = () => localStorage.getItem("aerosoft_token");
   const load = useCallback(async () => {
     const saved = localStorage.getItem("aerosoft_token");
@@ -244,12 +251,12 @@ export default function App() {
       name: "Sales",
       icon: ClipboardCheck,
       items: [
-        ["Point of Sale", Check],
         ["Quotations", FileText],
         ["Customer POs", ClipboardCheck],
         ["Sales Orders", FileText],
         ["Invoices", FileText],
         ["Collections", Check],
+        ["Point of Sale", Check],
         ["Debtors Aging", ShieldCheck],
         ["Commissions", FileText],
       ],
@@ -269,15 +276,22 @@ export default function App() {
       ],
     },
     {
-      name: "Purchasing & Inventory",
+      name: "Purchasing",
       icon: Warehouse,
       items: [
-        ["Inventory Overview", Warehouse],
-        ["Suppliers", Building2],
+        ["Purchasing Overview", LayoutDashboard],
         ["Purchase Orders", FileText],
         ["Receive Goods", ClipboardCheck],
         ["Supplier Invoices", FileText],
         ["Purchase Returns", FileText],
+        ["Suppliers", Building2],
+      ],
+    },
+    {
+      name: "Inventory",
+      icon: Warehouse,
+      items: [
+        ["Inventory Overview", Warehouse],
         ["Raw Material Stock", Warehouse],
         ["Finished Goods Stock", PackagePlus],
         ["Bulk Inventory Import", FileUp],
@@ -310,31 +324,47 @@ export default function App() {
       items: [["Access Control", ShieldCheck]],
     },
   ] as const;
-  const goToPage = (name: string) => {
+  const goToPage = (name: string, context?: WorkflowContext) => {
+    setWorkflowContext({ ...context, version: Date.now() });
     setRequestedReport("");
     setPage(name);
     setMenu(false);
-    setSearch("");
+    setSearch(context?.query || "");
     setSearchOpen(false);
-    const group = navGroups.find(group => group.items.some(([page]) => page === name));
+    const group = navGroups.find((group) => group.items.some(([page]) => page === name));
     if (group) setOpenNavGroup(group.name);
   };
   const searchPages = [
     { name: "Dashboard", group: "Workspace" },
     ...navGroups
-      .filter(group => group.name !== "Administration" || profile?.permissions.includes("admin.manage"))
-      .flatMap(group => group.items.map(([name]) => ({ name, group: group.name, keywords: pageSearchKeywords[name] || "" }))),
-  ].filter(item => matchesSearch(item, search));
-  const searchReports = reportSearchCatalog.filter(report => matchesSearch(["Reports", ...report], search));
-  const openSearchReport = (key: string) => { goToPage("Reports"); setRequestedReport(key); setReportSearchVersion(value => value + 1); };
-  const openSearchRecord = (name: string, query: string) => { goToPage(name); setSearch(query); };
+      .filter(
+        (group) => group.name !== "Administration" || profile?.permissions.includes("admin.manage"),
+      )
+      .flatMap((group) =>
+        group.items.map(([name]) => ({
+          name,
+          group: group.name,
+          keywords: pageSearchKeywords[name] || "",
+        })),
+      ),
+  ].filter((item) => matchesSearch(item, search));
+  const searchReports = reportSearchCatalog.filter((report) =>
+    matchesSearch(["Reports", ...report], search),
+  );
+  const openSearchReport = (key: string) => {
+    goToPage("Reports");
+    setRequestedReport(key);
+    setReportSearchVersion((value) => value + 1);
+  };
+  const openSearchRecord = (name: string, query: string) => {
+    goToPage(name);
+    setSearch(query);
+  };
   const rows = useMemo(() => {
-    if (page === "Suppliers")
-      return data.suppliers.filter((x) => matchesSearch(x, search));
+    if (page === "Suppliers") return data.suppliers.filter((x) => matchesSearch(x, search));
     if (page === "Purchase Orders" || page === "Receive Goods")
       return data.purchase_orders.filter((x) => matchesSearch(x, search));
-    if (page === "Raw Material Stock")
-      return data.stock.filter((x) => matchesSearch(x, search));
+    if (page === "Raw Material Stock") return data.stock.filter((x) => matchesSearch(x, search));
     return data.journals.filter((x) => matchesSearch(x, search));
   }, [data, page, search]);
   const remove = async (row: RecordRow) => {
@@ -450,7 +480,7 @@ export default function App() {
                           key={name}
                         >
                           <Icon />
-                          <span>{name}</span>
+                          <span>{pageLabel(name)}</span>
                         </button>
                       ))}
                     </div>
@@ -474,11 +504,14 @@ export default function App() {
           </button>
           <div>
             <span>Workspace</span>
-            <b>{page}</b>
+            <b>{pageLabel(page)}</b>
           </div>
-          <div className="search workspace-search" onBlur={e => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSearchOpen(false);
-          }}>
+          <div
+            className="search workspace-search"
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSearchOpen(false);
+            }}
+          >
             <Search />
             <input
               placeholder="Search records"
@@ -488,172 +521,250 @@ export default function App() {
               maxLength={120}
               value={search}
               onFocus={() => setSearchOpen(true)}
-              onChange={(e) => { setSearch(e.target.value); setSearchOpen(true); }}
-              onKeyDown={e => {
-                if (e.key === "Escape") { setSearch(""); setSearchOpen(false); }
-                if (e.key === "Enter" && search.trim() && searchPages.length + searchReports.length === 1) {
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setSearchOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setSearch("");
+                  setSearchOpen(false);
+                }
+                if (
+                  e.key === "Enter" &&
+                  search.trim() &&
+                  searchPages.length + searchReports.length === 1
+                ) {
                   e.preventDefault();
                   if (searchReports.length) openSearchReport(searchReports[0][0]);
                   else goToPage(searchPages[0].name);
                 }
                 if (e.key === "ArrowDown" && search.trim()) {
                   e.preventDefault();
-                  e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(".workspace-search-results button")?.focus();
+                  e.currentTarget.parentElement
+                    ?.querySelector<HTMLButtonElement>(".workspace-search-results button")
+                    ?.focus();
                 }
               }}
             />
-            {search && <button className="workspace-search-clear" aria-label="Clear search" onClick={() => { setSearch(""); setSearchOpen(false); }}><X size={16} /></button>}
-            {searchOpen && search.trim() && <div id="workspace-search-results" className="workspace-search-results">
-              <p>Search current lists or open a matching page:</p>
-              {searchPages.map(item => <button key={item.name} onClick={() => goToPage(item.name)}><b>{item.name}</b><small>{item.group}</small></button>)}
-              <p>Reports</p>
-              {searchReports.map(([key, name]) => <button key={key} onClick={() => openSearchReport(key)}><b>{name}</b><small>Open report</small></button>)}
-              {!searchPages.length && !searchReports.length && <p>No matching pages or reports.</p>}
-              <GlobalSearchRecords api={API} token={token() || ""} query={search} open={openSearchRecord} />
-            </div>}
+            {search && (
+              <button
+                className="workspace-search-clear"
+                aria-label="Clear search"
+                onClick={() => {
+                  setSearch("");
+                  setSearchOpen(false);
+                }}
+              >
+                <X size={16} />
+              </button>
+            )}
+            {searchOpen && search.trim() && (
+              <div id="workspace-search-results" className="workspace-search-results">
+                <p>Search current lists or open a matching page:</p>
+                {searchPages.map((item) => (
+                  <button key={item.name} onClick={() => goToPage(item.name)}>
+                    <b>{pageLabel(item.name)}</b>
+                    <small>{item.group}</small>
+                  </button>
+                ))}
+                <p>Reports</p>
+                {searchReports.map(([key, name]) => (
+                  <button key={key} onClick={() => openSearchReport(key)}>
+                    <b>{name}</b>
+                    <small>Open report</small>
+                  </button>
+                ))}
+                {!searchPages.length && !searchReports.length && (
+                  <p>No matching pages or reports.</p>
+                )}
+                <GlobalSearchRecords
+                  api={API}
+                  token={token() || ""}
+                  query={search}
+                  open={openSearchRecord}
+                />
+              </div>
+            )}
           </div>
           <button className="refresh" onClick={load}>
             <RefreshCw />
           </button>
         </header>
         <section className="content">
-          {page === "Point of Sale" ? (
-            <PointOfSalePage
+          {page !== "Dashboard" && <WorkflowSteps page={page} go={goToPage} />}
+          {page === "Purchasing Overview" ? (
+            <PurchasingOverview
               api={API}
               token={token() || ""}
-              user={profile.user}
-              canManage={profile.permissions.includes("accounting.manage")}
-              search={search}
+              orders={data.purchase_orders}
               go={goToPage}
             />
-          ) : page === "Serials & Warranty" ? (
-            <SerialWarrantyPage
+          ) : page === "Receive Goods" ? (
+            <ReceivingPage
+              key={workflowContext.version}
               api={API}
               token={token() || ""}
-              permissions={profile.permissions}
-              search={search}
-              go={goToPage}
-            />
-          ) : workflowPages.includes(page) ? (
-            <BusinessWorkflowsPage
-              key={page}
-              api={API}
-              token={token() || ""}
-              page={page}
+              orders={data.purchase_orders}
               permissions={profile.permissions}
               search={search}
               go={goToPage}
               onChanged={load}
-              user={profile.user}
+              initialOrderId={workflowContext.orderId}
             />
-          ) : [
-              "Dashboard",
-              "Customers",
-              "Salespersons",
-              "Pricing List",
-              "Customer POs",
-              "Sales Orders",
-              "Invoices",
-              "Collections",
-              "Debtors Aging",
-              "Commissions",
-              "Finished Goods Stock",
-              "Inventory Overview",
-            ].includes(page) ? (
-            <SalesPage
-              token={token() || ""}
-              page={page}
-              go={setPage}
-              currentUser={profile.user}
-              rawStock={data.stock}
-              search={search}
-            />
-          ) : page === "Employees" ? (
-            <EmployeesPage token={token() || ""} search={search} />
-          ) : page === "Payroll" ? (
-            <PayrollPage token={token() || ""} go={goToPage} search={search} />
-          ) : page === "Payment Vouchers" ? (
-            <PaymentVouchersPage
-              api={API}
-              token={token() || ""}
-              canManage={profile.permissions.includes("accounting.manage")}
-              search={search}
-              onChanged={load}
-            />
-          ) : page === "Chart of Accounts" ? (
-            <ChartOfAccountsPage
-              api={API}
-              token={token() || ""}
-              canManage={profile.permissions.includes("accounting.manage")}
-              search={search}
-              onChanged={load}
-            />
-          ) : page === "Cash Flow" ? (
-            <CashFlowPage api={API} token={token() || ""} search={search} go={setPage} />
-          ) : page === "Reports" ? (
-            <ReportsPage key={reportSearchVersion} token={token() || ""} search={search} requestedReport={requestedReport} />
-          ) : page === "Access Control" ? (
-            <AccessPage token={token() || ""} currentUserId={profile.user.id} search={search} />
           ) : (
             <>
-              <div className="heading">
-                <div>
-                  <span>SUPUN AEROSOFT (PVT) LTD</span>
-                  <h1>{page}</h1>
-                  <p>
-                    {page === "Dashboard"
-                      ? "Purchasing, goods receiving, batch stock and accounting in one controlled flow."
-                      : "Search, review and process authorized business records."}
-                  </p>
-                </div>
-                {page === "Suppliers" && (
-                  <button className="primary" onClick={() => setModal("supplier")}>
-                    <Plus /> Add Supplier
-                  </button>
-                )}
-                {page === "Purchase Orders" && (
-                  <button className="primary" onClick={() => setModal("po")}>
-                    <Plus /> New Purchase Order
-                  </button>
-                )}
-                {page === "Receive Goods" && (
-                  <button className="primary" onClick={() => setModal("grn")}>
-                    <PackagePlus /> Receive Goods
-                  </button>
-                )}
-                {page === "General Ledger" && (
-                  <button className="primary" onClick={() => setModal("journal")}>
-                    <Plus /> New Journal Entry
-                  </button>
-                )}
-                {page === "Raw Material Stock" && (
-                  <button className="primary" onClick={() => setModal("stock_adjustment")}>
-                    <Plus /> Adjust Stock
-                  </button>
-                )}
-              </div>
-              {error && <div className="error">{error}</div>}
-              {loading ? (
-                <div className="loading">
-                  <Loader2 /> Loading records…
-                </div>
-              ) : page === "Dashboard" ? (
-                <Dashboard data={data} go={setPage} />
-              ) : (
-                <Records
-                  page={page}
-                  rows={rows as RecordRow[]}
-                  approve={async (id) => {
-                    try {
-                      await call(`/purchase-orders/${id}/approve`);
-                    } catch (e) {
-                      setError((e as Error).message);
-                    }
-                  }}
-                  edit={setEditing}
-                  view={setViewing}
-                  remove={remove}
+              {page === "Point of Sale" ? (
+                <PointOfSalePage
+                  api={API}
+                  token={token() || ""}
+                  user={profile.user}
+                  canManage={profile.permissions.includes("accounting.manage")}
+                  search={search}
+                  go={goToPage}
                 />
+              ) : page === "Serials & Warranty" ? (
+                <SerialWarrantyPage
+                  api={API}
+                  token={token() || ""}
+                  permissions={profile.permissions}
+                  search={search}
+                  go={goToPage}
+                />
+              ) : workflowPages.includes(page) ? (
+                <BusinessWorkflowsPage
+                  key={page}
+                  api={API}
+                  token={token() || ""}
+                  page={page}
+                  permissions={profile.permissions}
+                  search={search}
+                  go={goToPage}
+                  onChanged={load}
+                  context={workflowContext}
+                  user={profile.user}
+                />
+              ) : [
+                  "Dashboard",
+                  "Customers",
+                  "Salespersons",
+                  "Pricing List",
+                  "Customer POs",
+                  "Sales Orders",
+                  "Invoices",
+                  "Collections",
+                  "Debtors Aging",
+                  "Commissions",
+                  "Finished Goods Stock",
+                  "Inventory Overview",
+                ].includes(page) ? (
+                <SalesPage
+                  token={token() || ""}
+                  page={page}
+                  go={goToPage}
+                  currentUser={profile.user}
+                  rawStock={data.stock}
+                  search={search}
+                />
+              ) : page === "Employees" ? (
+                <EmployeesPage token={token() || ""} search={search} />
+              ) : page === "Payroll" ? (
+                <PayrollPage token={token() || ""} go={goToPage} search={search} />
+              ) : page === "Payment Vouchers" ? (
+                <PaymentVouchersPage
+                  api={API}
+                  token={token() || ""}
+                  canManage={profile.permissions.includes("accounting.manage")}
+                  search={search}
+                  onChanged={load}
+                  context={workflowContext}
+                />
+              ) : page === "Chart of Accounts" ? (
+                <ChartOfAccountsPage
+                  api={API}
+                  token={token() || ""}
+                  canManage={profile.permissions.includes("accounting.manage")}
+                  search={search}
+                  onChanged={load}
+                />
+              ) : page === "Cash Flow" ? (
+                <CashFlowPage api={API} token={token() || ""} search={search} go={setPage} />
+              ) : page === "Reports" ? (
+                <ReportsPage
+                  key={reportSearchVersion}
+                  token={token() || ""}
+                  search={search}
+                  requestedReport={requestedReport}
+                />
+              ) : page === "Access Control" ? (
+                <AccessPage token={token() || ""} currentUserId={profile.user.id} search={search} />
+              ) : (
+                <>
+                  <div className="heading">
+                    <div>
+                      <span>SUPUN AEROSOFT (PVT) LTD</span>
+                      <h1>{page}</h1>
+                      <p>
+                        {page === "Dashboard"
+                          ? "Purchasing, goods receiving, batch stock and accounting in one controlled flow."
+                          : "Search, review and process authorized business records."}
+                      </p>
+                    </div>
+                    {page === "Suppliers" && (
+                      <button className="primary" onClick={() => setModal("supplier")}>
+                        <Plus /> Add Supplier
+                      </button>
+                    )}
+                    {page === "Purchase Orders" && (
+                      <button className="primary" onClick={() => setModal("po")}>
+                        <Plus /> New Purchase Order
+                      </button>
+                    )}
+                    {page === "Receive Goods" && (
+                      <button className="primary" onClick={() => setModal("grn")}>
+                        <PackagePlus /> Receive Goods
+                      </button>
+                    )}
+                    {page === "General Ledger" && (
+                      <button className="primary" onClick={() => setModal("journal")}>
+                        <Plus /> New Journal Entry
+                      </button>
+                    )}
+                    {page === "Raw Material Stock" && (
+                      <button className="primary" onClick={() => setModal("stock_adjustment")}>
+                        <Plus /> Adjust Stock
+                      </button>
+                    )}
+                  </div>
+                  {error && <div className="error">{error}</div>}
+                  {loading ? (
+                    <div className="loading">
+                      <Loader2 /> Loading records…
+                    </div>
+                  ) : page === "Dashboard" ? (
+                    <Dashboard data={data} go={setPage} />
+                  ) : (
+                    <Records
+                      page={page}
+                      rows={rows as RecordRow[]}
+                      approve={async (id) => {
+                        try {
+                          await call(`/purchase-orders/${id}/approve`);
+                        } catch (e) {
+                          setError((e as Error).message);
+                        }
+                      }}
+                      edit={setEditing}
+                      view={setViewing}
+                      remove={remove}
+                      receive={
+                        profile.permissions.includes("stock.manage")
+                          ? (id) => goToPage("Receive Goods", { orderId: id })
+                          : undefined
+                      }
+                    />
+                  )}
+                </>
               )}
             </>
           )}
@@ -742,7 +853,12 @@ function SalesPage({
     [expandedPriceArticles, setExpandedPriceArticles] = useState<Set<number>>(new Set());
   const priceFileRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (page === "Collections" && search.trim() && data?.receipts?.some((row: any) => matchesSearch(row, search)) && !data?.invoices?.some((row: any) => Number(row.outstanding) > 0 && matchesSearch(row, search))) {
+    if (
+      page === "Collections" &&
+      search.trim() &&
+      data?.receipts?.some((row: any) => matchesSearch(row, search)) &&
+      !data?.invoices?.some((row: any) => Number(row.outstanding) > 0 && matchesSearch(row, search))
+    ) {
       setCollectionView("history");
     }
   }, [page, search, data]);
@@ -940,8 +1056,8 @@ function SalesPage({
               Customer orders, invoicing, collections, aging and commission in one controlled flow.
             </p>
           </div>
-          <button className="primary" onClick={() => go("Customer POs")}>
-            <Plus /> New customer PO
+          <button className="primary" onClick={() => setModal("sales_order")}>
+            <Plus /> Create sales order
           </button>
         </div>
         {error && <div className="error">{error}</div>}
@@ -968,23 +1084,28 @@ function SalesPage({
           </article>
         </div>
         <div className="flow-card">
-          <h2>Customer order to commission</h2>
-          <p>The customer and article data continues through every step without re-entry.</p>
-          <div className="flow">
-            {[
-              ["1", "Customer PO", "Customer POs"],
-              ["2", "Sales Order", "Sales Orders"],
-              ["3", "Price & Size", "Pricing List"],
-              ["4", "Invoice", "Invoices"],
-              ["5", "Collection", "Collections"],
-              ["6", "Commission", "Commissions"],
-            ].map((x) => (
-              <button key={x[0]} onClick={() => go(x[2])}>
-                <i>{x[0]}</i>
-                <b>{x[1]}</b>
-              </button>
-            ))}
-          </div>
+          <h2>Sales — step by step</h2>
+          <p>
+            Start with a sales order, or use a quotation / customer PO first when needed. Confirm
+            prices and quantities before dispatching goods and issuing the invoice.
+          </p>
+          <WorkflowSteps page="Dashboard" go={go} />
+          <p>
+            For an immediate counter sale,{" "}
+            <button onClick={() => go("Point of Sale")}>Point of Sale</button> combines the invoice
+            and payment. <button onClick={() => go("Debtors Aging")}>Aging</button> tracks unpaid
+            balances; <button onClick={() => go("Commissions")}>commissions</button> follow eligible
+            collections.
+          </p>
+          <p>
+            Before you start: <button onClick={() => go("Customers")}>Customers</button> ·{" "}
+            <button onClick={() => go("Pricing List")}>Pricing List</button>
+          </p>
+        </div>
+        <div className="flow-card">
+          <h2>Purchasing — order to payment</h2>
+          <WorkflowSteps page="Purchasing Overview" go={go} />
+          <button onClick={() => go("Purchasing Overview")}>Open purchasing workspace →</button>
         </div>
         <div className="panels">
           <section>
@@ -2022,9 +2143,17 @@ function SalesPage({
           close={() => setBillInvoiceId(null)}
         />
       )}
-      {viewing && (page === "Customers" ? (
-        <CustomerProfile id={Number(viewing.id)} api={API} token={token} close={() => setViewing(null)} />
-      ) : <RecordView page={page} row={viewing} close={() => setViewing(null)} />)}
+      {viewing &&
+        (page === "Customers" ? (
+          <CustomerProfile
+            id={Number(viewing.id)}
+            api={API}
+            token={token}
+            close={() => setViewing(null)}
+          />
+        ) : (
+          <RecordView page={page} row={viewing} close={() => setViewing(null)} />
+        ))}
       {inventoryRecord && (
         <InventoryRecordModal
           record={inventoryRecord}
@@ -2740,8 +2869,8 @@ function ConvertPoModal({
             size_label: item.size_label,
             colour: line.colour,
             ordered: Number(line.pieces),
-            fixed_rate: fixedItemRate(line,item),
-            rate: givenItemRate(line,item),
+            fixed_rate: fixedItemRate(line, item),
+            rate: givenItemRate(line, item),
           });
       } else {
         set?.items.forEach((item: any) =>
@@ -2754,8 +2883,8 @@ function ConvertPoModal({
             size_label: item.size_label,
             colour: line.colour,
             ordered: Number(item.quantity) * Number(line.sets),
-            fixed_rate: fixedItemRate(line,item),
-            rate: givenItemRate(line,item),
+            fixed_rate: fixedItemRate(line, item),
+            rate: givenItemRate(line, item),
           }),
         );
       }
@@ -3299,7 +3428,7 @@ function PoInvoiceModal({
   const eligible = data.pos.filter((po: any) => ["draft", "ordered"].includes(po.status));
   const [poId, setPoId] = useState<number>(Number(eligible[0]?.id || 0));
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [rates, setRates] = useState<Record<string,number>>({});
+  const [rates, setRates] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const po = eligible.find((item: any) => Number(item.id) === poId);
   const lines = useMemo(() => {
@@ -3330,8 +3459,8 @@ function PoInvoiceModal({
             article_name: line.article_name,
             size_label: item.size_label,
             remaining: Number(line.pieces),
-            fixed_rate: fixedItemRate(line,item),
-            rate: givenItemRate(line,item),
+            fixed_rate: fixedItemRate(line, item),
+            rate: givenItemRate(line, item),
           });
       } else
         set?.items.forEach((item: any) =>
@@ -3341,8 +3470,8 @@ function PoInvoiceModal({
             article_name: line.article_name,
             size_label: item.size_label,
             remaining: Number(item.quantity) * Number(line.sets),
-            fixed_rate: fixedItemRate(line,item),
-            rate: givenItemRate(line,item),
+            fixed_rate: fixedItemRate(line, item),
+            rate: givenItemRate(line, item),
           }),
         );
     });
@@ -3364,7 +3493,9 @@ function PoInvoiceModal({
   }, [poId, lines.length]);
   const total = lines.reduce(
     (sum: number, line: any) =>
-      sum + Number(quantities[`${line.article_id}|${line.size_label}`] || 0) * Number(rates[`${line.article_id}|${line.size_label}`] ?? line.rate),
+      sum +
+      Number(quantities[`${line.article_id}|${line.size_label}`] || 0) *
+        Number(rates[`${line.article_id}|${line.size_label}`] ?? line.rate),
     0,
   );
   return (
@@ -3474,7 +3605,19 @@ function PoInvoiceModal({
                           }))
                         }
                       />
-                      <label>Fixed: {line.fixed_rate == null ? "Not recorded" : money(line.fixed_rate)}<input aria-label={`Given rate for ${line.article_code} size ${line.size_label}`} type="number" min="0" step="0.01" value={rates[key] ?? line.rate} onChange={e=>setRates(all=>({...all,[key]:Number(e.target.value)}))} /></label>
+                      <label>
+                        Fixed: {line.fixed_rate == null ? "Not recorded" : money(line.fixed_rate)}
+                        <input
+                          aria-label={`Given rate for ${line.article_code} size ${line.size_label}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={rates[key] ?? line.rate}
+                          onChange={(e) =>
+                            setRates((all) => ({ ...all, [key]: Number(e.target.value) }))
+                          }
+                        />
+                      </label>
                     </div>
                   );
                 })}
@@ -3514,10 +3657,13 @@ function DispatchInvoiceModal({
   const [quantities, setQuantities] = useState<Record<number, number>>(
     Object.fromEntries(available.map((line: any) => [line.id, Number(line.remaining_quantity)])),
   );
-  const [rates, setRates] = useState<Record<number,number>>(Object.fromEntries(available.map((line: any)=>[line.id,Number(line.rate)])));
+  const [rates, setRates] = useState<Record<number, number>>(
+    Object.fromEntries(available.map((line: any) => [line.id, Number(line.rate)])),
+  );
   const [busy, setBusy] = useState(false);
   const total = available.reduce(
-    (sum: number, line: any) => sum + Number(quantities[line.id] || 0) * Number(rates[line.id] ?? line.rate),
+    (sum: number, line: any) =>
+      sum + Number(quantities[line.id] || 0) * Number(rates[line.id] ?? line.rate),
     0,
   );
   return (
@@ -3575,8 +3721,22 @@ function DispatchInvoiceModal({
               <div className="dispatch-row" key={line.id}>
                 <span>
                   <b>{line.article_code}</b>
-                  <small>Fixed rate: {line.fixed_rate == null ? "Not recorded" : money(line.fixed_rate)}</small>
-                  <label>Given rate<input type="number" min="0" step="0.01" value={rates[line.id]} onChange={e => setRates(all=>({...all,[line.id]:Number(e.target.value)}))} required /></label>
+                  <small>
+                    Fixed rate: {line.fixed_rate == null ? "Not recorded" : money(line.fixed_rate)}
+                  </small>
+                  <label>
+                    Given rate
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={rates[line.id]}
+                      onChange={(e) =>
+                        setRates((all) => ({ ...all, [line.id]: Number(e.target.value) }))
+                      }
+                      required
+                    />
+                  </label>
                   <small>
                     {line.article_name} · Size {line.size_label}
                   </small>
@@ -3594,7 +3754,9 @@ function DispatchInvoiceModal({
                     setQuantities((all) => ({ ...all, [line.id]: Number(e.target.value) }))
                   }
                 />
-                <b>{money(Number(quantities[line.id] || 0) * Number(rates[line.id] ?? line.rate))}</b>
+                <b>
+                  {money(Number(quantities[line.id] || 0) * Number(rates[line.id] ?? line.rate))}
+                </b>
               </div>
             ))}
           </div>
@@ -3849,8 +4011,26 @@ function SalesCreateModal({
               article_id: Number(articleId),
               set_template_id: Number(set?.id || 0),
               colour: firstStoredLine?.colour || "",
-              given_rates: Object.fromEntries((set?.items || []).map((item: any)=>[item.id, initial.lines.find((stored: any)=>Number(stored.article_id)===Number(articleId) && stored.size_label===item.size_label)?.rate ?? item.unit_price])),
-              fixed_rates: Object.fromEntries((set?.items || []).map((item: any)=>[item.id, initial.lines.find((stored: any)=>Number(stored.article_id)===Number(articleId) && stored.size_label===item.size_label)?.fixed_rate ?? item.unit_price])),
+              given_rates: Object.fromEntries(
+                (set?.items || []).map((item: any) => [
+                  item.id,
+                  initial.lines.find(
+                    (stored: any) =>
+                      Number(stored.article_id) === Number(articleId) &&
+                      stored.size_label === item.size_label,
+                  )?.rate ?? item.unit_price,
+                ]),
+              ),
+              fixed_rates: Object.fromEntries(
+                (set?.items || []).map((item: any) => [
+                  item.id,
+                  initial.lines.find(
+                    (stored: any) =>
+                      Number(stored.article_id) === Number(articleId) &&
+                      stored.size_label === item.size_label,
+                  )?.fixed_rate ?? item.unit_price,
+                ]),
+              ),
               sets: Math.max(
                 1,
                 Number(firstStoredLine?.quantity || 1) /
@@ -3907,7 +4087,10 @@ function SalesCreateModal({
           ).reduce((sum: number, value: any) => sum + Number(value || 0), 0);
           return (
             total +
-            fixedItemRate(line, items.find((item: any) => Number(item.id) === Number(itemId)) || {}) *
+            fixedItemRate(
+              line,
+              items.find((item: any) => Number(item.id) === Number(itemId)) || {},
+            ) *
               (colourQuantities || Number(quantity || 0))
           );
         },
@@ -3916,16 +4099,39 @@ function SalesCreateModal({
     }
     const colourMultiplier = Math.max(1, Number(line.selected_colours?.length || 0));
     return (
-      (availableSets.find((set: any) => Number(set.id) === Number(line.set_template_id))?.items || []).reduce((sum: number,item: any)=>sum+Number(item.quantity)*fixedItemRate(line,item),0) *
+      (
+        availableSets.find((set: any) => Number(set.id) === Number(line.set_template_id))?.items ||
+        []
+      ).reduce(
+        (sum: number, item: any) => sum + Number(item.quantity) * fixedItemRate(line, item),
+        0,
+      ) *
       Number(line.quantity || 0) *
       colourMultiplier
     );
   };
   const poLinePieces = (line: any) => {
-    if (line.order_mode === "custom") return Object.entries(line.custom_sizes || {}).reduce((sum: number,[id,qty]: any) => sum + (Object.values(line.custom_colour_quantities?.[id] || {}).reduce((a: number,b: any)=>a+Number(b||0),0) || Number(qty||0)),0);
-    return Number(availableSets.find((set: any)=>Number(set.id)===Number(line.set_template_id))?.pieces || 0)*Number(line.quantity||0)*Math.max(1,Number(line.selected_colours?.length||0));
+    if (line.order_mode === "custom")
+      return Object.entries(line.custom_sizes || {}).reduce(
+        (sum: number, [id, qty]: any) =>
+          sum +
+          (Object.values(line.custom_colour_quantities?.[id] || {}).reduce(
+            (a: number, b: any) => a + Number(b || 0),
+            0,
+          ) || Number(qty || 0)),
+        0,
+      );
+    return (
+      Number(
+        availableSets.find((set: any) => Number(set.id) === Number(line.set_template_id))?.pieces ||
+          0,
+      ) *
+      Number(line.quantity || 0) *
+      Math.max(1, Number(line.selected_colours?.length || 0))
+    );
   };
-  const poLineTotal = (line: any) => line.custom_rate == null ? poFixedTotal(line) : Number(line.custom_rate)*poLinePieces(line);
+  const poLineTotal = (line: any) =>
+    line.custom_rate == null ? poFixedTotal(line) : Number(line.custom_rate) * poLinePieces(line);
   const poGrandTotal = poLines.reduce((total: number, line: any) => total + poLineTotal(line), 0);
   const poTotalPieces = poLines.reduce((total: number, line: any) => {
     if (line.order_mode === "custom") {
@@ -3981,24 +4187,24 @@ function SalesCreateModal({
           ? [
               {
                 article_id: Number(line.article_id),
-              set_item_id: item.id,
+                set_item_id: item.id,
                 size_label: item.size_label,
                 colour: null,
                 quantity: fallbackQuantity,
                 fixed_rate: Number(line.fixed_rates?.[item.id] ?? item.unit_price),
-              rate: Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price),
+                rate: Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price),
               },
             ]
           : [];
       });
     return (set?.items || []).map((item: any) => ({
       article_id: Number(line.article_id),
-              set_item_id: item.id,
+      set_item_id: item.id,
       size_label: item.size_label,
       colour: line.colour || null,
       quantity: Number(item.quantity) * Number(line.sets || 0),
       fixed_rate: Number(line.fixed_rates?.[item.id] ?? item.unit_price),
-              rate: Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price),
+      rate: Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price),
     }));
   });
   const invoiceSubtotal = expandedInvoiceLines.reduce(
@@ -4098,7 +4304,17 @@ function SalesCreateModal({
         address: f.get("address"),
         credit_days: Number(f.get("credit_days")),
         credit_limit: Number(f.get("credit_limit")),
-        ...(!initial ? { opening_balance: Number(f.get("opening_balance") || 0), opening_type: f.get("opening_type"), opening_date: f.get("opening_date") || null, opening_due_date: f.get("opening_due_date") || null, opening_account_id: f.get("opening_account_id") ? Number(f.get("opening_account_id")) : null } : {}),
+        ...(!initial
+          ? {
+              opening_balance: Number(f.get("opening_balance") || 0),
+              opening_type: f.get("opening_type"),
+              opening_date: f.get("opening_date") || null,
+              opening_due_date: f.get("opening_due_date") || null,
+              opening_account_id: f.get("opening_account_id")
+                ? Number(f.get("opening_account_id"))
+                : null,
+            }
+          : {}),
         status: initial?.status || "active",
       };
     } else if (type === "rep") {
@@ -4140,7 +4356,12 @@ function SalesCreateModal({
         cash_amount:
           poSaleType === "mixed" ? poCashAmount : poSaleType === "cash" ? poGrandTotal : 0,
         opening_balance: newCustomer ? Number(f.get("opening_balance") || 0) : 0,
-        opening_type: f.get("opening_type"), opening_date: f.get("opening_date") || null, opening_due_date: f.get("opening_due_date") || null, opening_account_id: f.get("opening_account_id") ? Number(f.get("opening_account_id")) : null,
+        opening_type: f.get("opening_type"),
+        opening_date: f.get("opening_date") || null,
+        opening_due_date: f.get("opening_due_date") || null,
+        opening_account_id: f.get("opening_account_id")
+          ? Number(f.get("opening_account_id"))
+          : null,
         lines: poLines.flatMap((line: any) =>
           line.order_mode === "custom"
             ? Object.entries(line.custom_sizes || {})
@@ -4171,7 +4392,14 @@ function SalesCreateModal({
                   colour,
                   selected_colours: undefined,
                 }))
-              : [{ ...line, rate: line.custom_rate ?? null, colour: null, selected_colours: undefined }],
+              : [
+                  {
+                    ...line,
+                    rate: line.custom_rate ?? null,
+                    colour: null,
+                    selected_colours: undefined,
+                  },
+                ],
         ),
       };
       if (
@@ -5164,10 +5392,23 @@ function SalesCreateModal({
                             />
                           )}
                         </label>
-                          <RateFields items={selectableItems} rate={line.custom_rate} change={rate => setPoLines(lines => lines.map((value,i) => i === index ? {...value,custom_rate:rate} : value))} />
+                        <RateFields
+                          items={selectableItems.map((item: any) => ({
+                            ...item,
+                            fixed_rate: fixedItemRate(line, item),
+                          }))}
+                          rate={line.custom_rate}
+                          change={(rate) =>
+                            setPoLines((lines) =>
+                              lines.map((value, i) =>
+                                i === index ? { ...value, custom_rate: rate } : value,
+                              ),
+                            )
+                          }
+                        />
                         <label>
                           {line.order_mode === "badge" ? "Set template" : "Selected sizes"}
-                      {line.order_mode === "badge" ? (
+                          {line.order_mode === "badge" ? (
                             <select
                               value={line.set_template_id}
                               onChange={(e) =>
@@ -5694,14 +5935,24 @@ function SalesCreateModal({
                         0,
                       ),
                   );
-                  const setPrice = line.custom_rate != null ? Number(line.custom_rate)*piecesPerSet : Number(
-                    set?.set_price ||
-                      (set?.items || []).reduce(
-                        (sum: number, item: any) =>
-                          sum + Number(item.quantity || 0) * Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price ?? 0),
-                        0,
-                      ),
-                  );
+                  const setPrice =
+                    line.custom_rate != null
+                      ? Number(line.custom_rate) * piecesPerSet
+                      : Number(
+                          set?.set_price ||
+                            (set?.items || []).reduce(
+                              (sum: number, item: any) =>
+                                sum +
+                                Number(item.quantity || 0) *
+                                  Number(
+                                    line.custom_rate ??
+                                      line.given_rates?.[item.id] ??
+                                      item.unit_price ??
+                                      0,
+                                  ),
+                              0,
+                            ),
+                        );
                   const customPieces = (set?.items || []).reduce(
                     (sum: number, item: any) =>
                       sum +
@@ -5828,7 +6079,20 @@ function SalesCreateModal({
                           <Trash2 />
                         </button>
                       </div>
-                      <RateFields items={set?.items || []} rate={line.custom_rate} change={rate => setInvoiceLines(lines => lines.map((value,i) => i === index ? {...value,custom_rate:rate} : value))} />
+                      <RateFields
+                        items={(set?.items || []).map((item: any) => ({
+                          ...item,
+                          fixed_rate: line.fixed_rates?.[item.id] ?? item.unit_price,
+                        }))}
+                        rate={line.custom_rate}
+                        change={(rate) =>
+                          setInvoiceLines((lines) =>
+                            lines.map((value, i) =>
+                              i === index ? { ...value, custom_rate: rate } : value,
+                            ),
+                          )
+                        }
+                      />
                       {line.order_mode !== "custom" ? (
                         <div className="invoice-complete-controls">
                           <label>
@@ -6617,6 +6881,7 @@ function Records({
   view,
   edit,
   remove,
+  receive,
 }: {
   page: string;
   rows: RecordRow[];
@@ -6624,6 +6889,7 @@ function Records({
   view: (row: RecordRow) => void;
   edit: (row: RecordRow) => void;
   remove: (row: RecordRow) => void;
+  receive?: (id: number) => void;
 }) {
   if (!rows.length)
     return (
@@ -6719,6 +6985,13 @@ function Records({
                       <Check /> Approve
                     </button>
                   )}
+                  {page === "Purchase Orders" &&
+                    ["approved", "part_received"].includes(row.status) &&
+                    receive && (
+                      <button className="approve" onClick={() => receive(row.id)}>
+                        Receive goods →
+                      </button>
+                    )}
                   {page === "Receive Goods" &&
                     (row.status === "approved" || row.status === "part_received") && (
                       <span className="ready">Ready</span>
@@ -6853,6 +7126,9 @@ function CreateModal({
   submit: (url: string, body: any) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [purchaseLines, setPurchaseLines] = useState<PurchaseDraftLine[]>([
+    { material_id: 0, quantity: "", unit_cost: "" },
+  ]);
   const approved = data.purchase_orders.filter(
     (x) => x.status === "approved" || x.status === "part_received",
   );
@@ -6873,13 +7149,11 @@ function CreateModal({
           supplier_id: Number(f.get("supplier_id")),
           order_date: f.get("order_date"),
           expected_date: f.get("expected_date") || null,
-          lines: [
-            {
-              material_id: Number(f.get("material_id")),
-              quantity: Number(f.get("quantity")),
-              unit_cost: Number(f.get("unit_cost")),
-            },
-          ],
+          lines: purchaseLines.map((line) => ({
+            material_id: line.material_id,
+            quantity: Number(line.quantity),
+            unit_cost: Number(line.unit_cost),
+          })),
         });
       if (type === "grn") {
         const order = data.purchase_orders.find(
@@ -6982,27 +7256,11 @@ function CreateModal({
               <input name="expected_date" type="date" />
             </label>
           </div>
-          <label>
-            Material
-            <select name="material_id" required>
-              <option value="">Select material</option>
-              {data.materials.map((x) => (
-                <option value={x.id} key={x.id}>
-                  {x.code} — {x.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="form-row">
-            <label>
-              Quantity
-              <input name="quantity" required type="number" min="0.0001" step="0.0001" />
-            </label>
-            <label>
-              Unit cost (LKR)
-              <input name="unit_cost" required type="number" min="0" step="0.01" />
-            </label>
-          </div>
+          <PurchaseOrderLines
+            materials={data.materials}
+            lines={purchaseLines}
+            change={setPurchaseLines}
+          />
         </>
       ) : type === "grn" ? (
         <GrnFields orders={approved} />
@@ -7291,12 +7549,17 @@ function EditModal({
           <label>
             Status
             <select name="status" defaultValue={row.status}>
-              <option value="draft">Draft</option>
-              <option value="approved">Approved</option>
-              <option value="part_received">Part received</option>
-              <option value="received">Received</option>
-              <option value="cancelled">Cancelled</option>
+              {["part_received", "received"].includes(row.status) ? (
+                <option value={row.status}>{row.status.replace("_", " ")}</option>
+              ) : (
+                <>
+                  <option value="draft">Draft</option>
+                  <option value="approved">Approved</option>
+                  <option value="cancelled">Cancelled</option>
+                </>
+              )}
             </select>
+            <small>Partially received and received statuses come from posted GRNs.</small>
           </label>
         </>
       )}
@@ -7304,7 +7567,15 @@ function EditModal({
   );
 }
 
-function AccessPage({ token, currentUserId, search = "" }: { token: string; currentUserId: number; search?: string }) {
+function AccessPage({
+  token,
+  currentUserId,
+  search = "",
+}: {
+  token: string;
+  currentUserId: number;
+  search?: string;
+}) {
   const [data, setData] = useState<any>({ users: [], roles: [], permissions: [] });
   const [tab, setTab] = useState<"users" | "roles">("users");
   const [editing, setEditing] = useState<any>(null);
@@ -7423,56 +7694,58 @@ function AccessPage({ token, currentUserId, search = "" }: { token: string; curr
             </tr>
           </thead>
           <tbody>
-            {(tab === "users" ? data.users : data.roles).filter((row: any) => matchesSearch(row, search)).map((row: any) => (
-              <tr key={row.id}>
-                {tab === "users" ? (
-                  <>
-                    <td>
-                      <b>{row.name}</b>
-                      {row.id === currentUserId && (
-                        <small>
-                          <br />
-                          Current user
-                        </small>
-                      )}
-                    </td>
-                    <td>{row.email}</td>
-                    <td>{row.role_name}</td>
-                    <td>{row.sales_rep_name || "Not linked"}</td>
-                    <td>{status(row.active ? "active" : "inactive")}</td>
-                  </>
-                ) : (
-                  <>
-                    <td>
-                      <b>{row.name}</b>
-                    </td>
-                    <td>{row.code}</td>
-                    <td>{row.permission_ids.length} permissions</td>
-                    <td>{data.users.filter((u: any) => u.role_id === row.id).length}</td>
-                  </>
-                )}
-                <td>
-                  <div className="row-actions">
-                    <button
-                      className="icon-action edit"
-                      onClick={() => {
-                        setCreating(false);
-                        setEditing(row);
-                      }}
-                    >
-                      <Pencil />
-                    </button>
-                    <button
-                      className="icon-action delete"
-                      disabled={tab === "users" && row.id === currentUserId}
-                      onClick={() => remove(row)}
-                    >
-                      <Trash2 />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {(tab === "users" ? data.users : data.roles)
+              .filter((row: any) => matchesSearch(row, search))
+              .map((row: any) => (
+                <tr key={row.id}>
+                  {tab === "users" ? (
+                    <>
+                      <td>
+                        <b>{row.name}</b>
+                        {row.id === currentUserId && (
+                          <small>
+                            <br />
+                            Current user
+                          </small>
+                        )}
+                      </td>
+                      <td>{row.email}</td>
+                      <td>{row.role_name}</td>
+                      <td>{row.sales_rep_name || "Not linked"}</td>
+                      <td>{status(row.active ? "active" : "inactive")}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td>
+                        <b>{row.name}</b>
+                      </td>
+                      <td>{row.code}</td>
+                      <td>{row.permission_ids.length} permissions</td>
+                      <td>{data.users.filter((u: any) => u.role_id === row.id).length}</td>
+                    </>
+                  )}
+                  <td>
+                    <div className="row-actions">
+                      <button
+                        className="icon-action edit"
+                        onClick={() => {
+                          setCreating(false);
+                          setEditing(row);
+                        }}
+                      >
+                        <Pencil />
+                      </button>
+                      <button
+                        className="icon-action delete"
+                        disabled={tab === "users" && row.id === currentUserId}
+                        onClick={() => remove(row)}
+                      >
+                        <Trash2 />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
@@ -7921,67 +8194,69 @@ function EmployeesPage({ token, search = "" }: { token: string; search?: string 
                 </tr>
               </thead>
               <tbody>
-                {data.employees.filter((employee: any) => matchesSearch(employee, search)).map((employee: any) => (
-                  <tr key={employee.id}>
-                    <td>
-                      <b>{employee.employee_no}</b>
-                      <br />
-                      {employee.name}
-                    </td>
-                    <td>{employee.department}</td>
-                    <td>{employee.designation}</td>
-                    <td>{money(employee.basic_salary)}</td>
-                    <td>
-                      {money(
-                        Number(employee.basic_salary) +
-                          Number(employee.fixed_allowance || 0) +
-                          Number(employee.fixed_incentive || 0),
-                      )}
-                    </td>
-                    <td>{historyFor(employee).length} payroll records</td>
-                    <td>{status(employee.status)}</td>
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          className="icon-action view"
-                          title="View employee and salary history"
-                          onClick={() =>
-                            setViewing({
-                              employee,
-                              history: historyFor(employee),
-                            })
-                          }
-                        >
-                          <Eye />
-                        </button>
-                        <button
-                          className="icon-action download"
-                          title="Payroll settings"
-                          onClick={() => {
-                            setEditing(employee);
-                            setSettingsOpen(true);
-                          }}
-                        >
-                          <Settings />
-                        </button>
-                        <button
-                          className="icon-action edit"
-                          title="Edit employee"
-                          onClick={() => setEditing(employee)}
-                        >
-                          <Pencil />
-                        </button>
-                        <button
-                          className="icon-action delete"
-                          title="Delete employee"
-                          onClick={() => remove(employee)}
-                        >
-                          <Trash2 />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {data.employees
+                  .filter((employee: any) => matchesSearch(employee, search))
+                  .map((employee: any) => (
+                    <tr key={employee.id}>
+                      <td>
+                        <b>{employee.employee_no}</b>
+                        <br />
+                        {employee.name}
+                      </td>
+                      <td>{employee.department}</td>
+                      <td>{employee.designation}</td>
+                      <td>{money(employee.basic_salary)}</td>
+                      <td>
+                        {money(
+                          Number(employee.basic_salary) +
+                            Number(employee.fixed_allowance || 0) +
+                            Number(employee.fixed_incentive || 0),
+                        )}
+                      </td>
+                      <td>{historyFor(employee).length} payroll records</td>
+                      <td>{status(employee.status)}</td>
+                      <td>
+                        <div className="row-actions">
+                          <button
+                            className="icon-action view"
+                            title="View employee and salary history"
+                            onClick={() =>
+                              setViewing({
+                                employee,
+                                history: historyFor(employee),
+                              })
+                            }
+                          >
+                            <Eye />
+                          </button>
+                          <button
+                            className="icon-action download"
+                            title="Payroll settings"
+                            onClick={() => {
+                              setEditing(employee);
+                              setSettingsOpen(true);
+                            }}
+                          >
+                            <Settings />
+                          </button>
+                          <button
+                            className="icon-action edit"
+                            title="Edit employee"
+                            onClick={() => setEditing(employee)}
+                          >
+                            <Pencil />
+                          </button>
+                          <button
+                            className="icon-action delete"
+                            title="Delete employee"
+                            onClick={() => remove(employee)}
+                          >
+                            <Trash2 />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -8144,7 +8419,15 @@ function EmployeeProfileModal({
     </div>
   );
 }
-function PayrollPage({ token, go, search = "" }: { token: string; go: (page: string) => void; search?: string }) {
+function PayrollPage({
+  token,
+  go,
+  search = "",
+}: {
+  token: string;
+  go: (page: string) => void;
+  search?: string;
+}) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
     [viewing, setViewing] = useState<any>(null),
@@ -8377,160 +8660,162 @@ function PayrollPage({ token, go, search = "" }: { token: string; go: (page: str
                   </tr>
                 </thead>
                 <tbody>
-                  {data.runs.filter((run: any) => matchesSearch(run, search)).map((r: any) => (
-                    <Fragment key={r.id}>
-                      <tr>
-                        <td>
-                          <button
-                            className="payroll-expand"
-                            onClick={() => togglePayrollRun(r.id)}
-                            aria-expanded={expandedPayrollRuns.has(r.id)}
-                            title="Show employee pay details"
-                          >
-                            {expandedPayrollRuns.has(r.id) ? <ChevronDown /> : <ChevronRight />}
-                            <b>{r.number}</b>
-                          </button>
-                        </td>
-                        <td>
-                          {r.period_start} to {r.period_end}
-                        </td>
-                        <td>{money(r.gross_total)}</td>
-                        <td>{money(r.deduction_total)}</td>
-                        <td>{money(r.net_total)}</td>
-                        <td>{status(r.status)}</td>
-                        <td>
-                          <div className="row-actions">
+                  {data.runs
+                    .filter((run: any) => matchesSearch(run, search))
+                    .map((r: any) => (
+                      <Fragment key={r.id}>
+                        <tr>
+                          <td>
                             <button
-                              className="icon-action view"
+                              className="payroll-expand"
                               onClick={() => togglePayrollRun(r.id)}
+                              aria-expanded={expandedPayrollRuns.has(r.id)}
                               title="Show employee pay details"
                             >
-                              <Eye />
+                              {expandedPayrollRuns.has(r.id) ? <ChevronDown /> : <ChevronRight />}
+                              <b>{r.number}</b>
                             </button>
-                            <button
-                              className="icon-action download"
-                              onClick={() =>
-                                downloadPayrollReport(
-                                  `payroll-runs/${r.id}/excel`,
-                                  `Payroll_${r.number}.xls`,
-                                )
-                              }
-                              title="Download payroll register"
-                            >
-                              <FileText />
-                            </button>
-                            <button
-                              className="icon-action edit"
-                              onClick={() => {
-                                setEditing(r);
-                                setEditType("payroll");
-                              }}
-                              title="Edit"
-                            >
-                              <Pencil />
-                            </button>
-                            <button
-                              className="icon-action delete"
-                              onClick={() => remove("payroll", r)}
-                              title="Delete"
-                            >
-                              <Trash2 />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {expandedPayrollRuns.has(r.id) && (
-                        <tr className="payroll-detail-row">
-                          <td colSpan={7}>
-                            <div className="payroll-breakdown">
-                              <div className="payroll-breakdown-head">
-                                <span>Employee</span>
-                                <span>Basic salary</span>
-                                <span>Allowance</span>
-                                <span>Incentive</span>
-                                <span>Commission</span>
-                                <span>OT</span>
-                                <span>Deductions</span>
-                                <span>Net pay</span>
-                                <span>Payment</span>
-                                <span>Actions</span>
-                              </div>
-                              {(r.items || []).map((item: any) => {
-                                const deductions =
-                                  Number(item.epf_employee || 0) +
-                                  Number(item.other_deductions || 0) +
-                                  Number(item.no_pay_amount || 0);
-                                return (
-                                  <div className="payroll-breakdown-line" key={item.id}>
-                                    <span>
-                                      <b>{item.employee_no}</b>
-                                      <small>{item.name}</small>
-                                    </span>
-                                    <span>{money(item.basic_salary)}</span>
-                                    <span>{money(item.allowances)}</span>
-                                    <span>{money(item.incentive)}</span>
-                                    <span>{money(item.commission || 0)}</span>
-                                    <span>
-                                      {money(item.overtime)}
-                                      <small>{Number(item.overtime_hours || 0)} hours</small>
-                                    </span>
-                                    <span>
-                                      {money(deductions)}
-                                      <small>
-                                        EPF {money(item.epf_employee)} · No-pay{" "}
-                                        {money(item.no_pay_amount || 0)}
-                                      </small>
-                                    </span>
-                                    <span>
-                                      <b>{money(item.net_salary)}</b>
-                                    </span>
-                                    <span>
-                                      {status(item.payment_status || "unpaid")}
-                                      {item.paid_at && (
-                                        <small>{String(item.paid_at).slice(0, 10)}</small>
-                                      )}
-                                    </span>
-                                    <span className="row-actions">
-                                      <button
-                                        className={`icon-action ${item.payment_status === "paid" ? "view" : "approve"}`}
-                                        title={
-                                          item.payment_status === "paid"
-                                            ? "Review linked salary payment"
-                                            : "Record linked salary payment"
-                                        }
-                                        onClick={changePayrollItemPayment}
-                                      >
-                                        <Check />
-                                      </button>
-                                      <button
-                                        className="icon-action edit"
-                                        title="Edit employee pay"
-                                        onClick={() => setEditingPayrollItem(item)}
-                                      >
-                                        <Pencil />
-                                      </button>
-                                      <button
-                                        className="icon-action delete"
-                                        title="Delete employee pay"
-                                        onClick={() => deletePayrollItem(item)}
-                                      >
-                                        <Trash2 />
-                                      </button>
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                              {!r.items?.length && (
-                                <div className="payroll-empty">
-                                  No employee pay lines are recorded for this payroll run.
-                                </div>
-                              )}
+                          </td>
+                          <td>
+                            {r.period_start} to {r.period_end}
+                          </td>
+                          <td>{money(r.gross_total)}</td>
+                          <td>{money(r.deduction_total)}</td>
+                          <td>{money(r.net_total)}</td>
+                          <td>{status(r.status)}</td>
+                          <td>
+                            <div className="row-actions">
+                              <button
+                                className="icon-action view"
+                                onClick={() => togglePayrollRun(r.id)}
+                                title="Show employee pay details"
+                              >
+                                <Eye />
+                              </button>
+                              <button
+                                className="icon-action download"
+                                onClick={() =>
+                                  downloadPayrollReport(
+                                    `payroll-runs/${r.id}/excel`,
+                                    `Payroll_${r.number}.xls`,
+                                  )
+                                }
+                                title="Download payroll register"
+                              >
+                                <FileText />
+                              </button>
+                              <button
+                                className="icon-action edit"
+                                onClick={() => {
+                                  setEditing(r);
+                                  setEditType("payroll");
+                                }}
+                                title="Edit"
+                              >
+                                <Pencil />
+                              </button>
+                              <button
+                                className="icon-action delete"
+                                onClick={() => remove("payroll", r)}
+                                title="Delete"
+                              >
+                                <Trash2 />
+                              </button>
                             </div>
                           </td>
                         </tr>
-                      )}
-                    </Fragment>
-                  ))}
+                        {expandedPayrollRuns.has(r.id) && (
+                          <tr className="payroll-detail-row">
+                            <td colSpan={7}>
+                              <div className="payroll-breakdown">
+                                <div className="payroll-breakdown-head">
+                                  <span>Employee</span>
+                                  <span>Basic salary</span>
+                                  <span>Allowance</span>
+                                  <span>Incentive</span>
+                                  <span>Commission</span>
+                                  <span>OT</span>
+                                  <span>Deductions</span>
+                                  <span>Net pay</span>
+                                  <span>Payment</span>
+                                  <span>Actions</span>
+                                </div>
+                                {(r.items || []).map((item: any) => {
+                                  const deductions =
+                                    Number(item.epf_employee || 0) +
+                                    Number(item.other_deductions || 0) +
+                                    Number(item.no_pay_amount || 0);
+                                  return (
+                                    <div className="payroll-breakdown-line" key={item.id}>
+                                      <span>
+                                        <b>{item.employee_no}</b>
+                                        <small>{item.name}</small>
+                                      </span>
+                                      <span>{money(item.basic_salary)}</span>
+                                      <span>{money(item.allowances)}</span>
+                                      <span>{money(item.incentive)}</span>
+                                      <span>{money(item.commission || 0)}</span>
+                                      <span>
+                                        {money(item.overtime)}
+                                        <small>{Number(item.overtime_hours || 0)} hours</small>
+                                      </span>
+                                      <span>
+                                        {money(deductions)}
+                                        <small>
+                                          EPF {money(item.epf_employee)} · No-pay{" "}
+                                          {money(item.no_pay_amount || 0)}
+                                        </small>
+                                      </span>
+                                      <span>
+                                        <b>{money(item.net_salary)}</b>
+                                      </span>
+                                      <span>
+                                        {status(item.payment_status || "unpaid")}
+                                        {item.paid_at && (
+                                          <small>{String(item.paid_at).slice(0, 10)}</small>
+                                        )}
+                                      </span>
+                                      <span className="row-actions">
+                                        <button
+                                          className={`icon-action ${item.payment_status === "paid" ? "view" : "approve"}`}
+                                          title={
+                                            item.payment_status === "paid"
+                                              ? "Review linked salary payment"
+                                              : "Record linked salary payment"
+                                          }
+                                          onClick={changePayrollItemPayment}
+                                        >
+                                          <Check />
+                                        </button>
+                                        <button
+                                          className="icon-action edit"
+                                          title="Edit employee pay"
+                                          onClick={() => setEditingPayrollItem(item)}
+                                        >
+                                          <Pencil />
+                                        </button>
+                                        <button
+                                          className="icon-action delete"
+                                          title="Delete employee pay"
+                                          onClick={() => deletePayrollItem(item)}
+                                        >
+                                          <Trash2 />
+                                        </button>
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                                {!r.items?.length && (
+                                  <div className="payroll-empty">
+                                    No employee pay lines are recorded for this payroll run.
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -9376,7 +9661,15 @@ function PayrollItemEditModal({
     </div>
   );
 }
-function ReportsPage({ token, search = "", requestedReport = "" }: { token: string; search?: string; requestedReport?: string }) {
+function ReportsPage({
+  token,
+  search = "",
+  requestedReport = "",
+}: {
+  token: string;
+  search?: string;
+  requestedReport?: string;
+}) {
   const now = new Date(),
     [from, setFrom] = useState(`${now.getFullYear()}-01-01`),
     [to, setTo] = useState(now.toISOString().slice(0, 10));
@@ -9386,7 +9679,9 @@ function ReportsPage({ token, search = "", requestedReport = "" }: { token: stri
     [retail, setRetail] = useState<any>(null),
     [error, setError] = useState(""),
     [selected, setSelected] = useState(requestedReport);
-  useEffect(() => { if (requestedReport) setSelected(requestedReport); }, [requestedReport]);
+  useEffect(() => {
+    if (requestedReport) setSelected(requestedReport);
+  }, [requestedReport]);
   const load = useCallback(() => {
     setError("");
     Promise.all([
@@ -9544,21 +9839,50 @@ function ReportsPage({ token, search = "", requestedReport = "" }: { token: stri
           </div>
         </div>
         <div className="report-catalog">
-          {!reportGroups.some(group => group.reports.some(([key, label]) => matchesSearch([group.title, label, reportSearchCatalog.find(report => report[0] === key)], search))) && <p role="status">No reports match this search. Clear the search to see all reports.</p>}
-          {reportGroups.filter(group => group.reports.some(([key, label]) => matchesSearch([group.title, label, reportSearchCatalog.find(report => report[0] === key)], search))).map((group) => (
-            <section key={group.title}>
-              <h2>{group.title}</h2>
-              <div className="report-menu">
-                {group.reports.filter(([key, label]) => matchesSearch([group.title, label, reportSearchCatalog.find(report => report[0] === key)], search)).map(([key, label]) => (
-                  <button onClick={() => setSelected(key)} key={key}>
-                    <FileText />
-                    <span>{label}</span>
-                    <small>Open report →</small>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
+          {!reportGroups.some((group) =>
+            group.reports.some(([key, label]) =>
+              matchesSearch(
+                [group.title, label, reportSearchCatalog.find((report) => report[0] === key)],
+                search,
+              ),
+            ),
+          ) && (
+            <p role="status">No reports match this search. Clear the search to see all reports.</p>
+          )}
+          {reportGroups
+            .filter((group) =>
+              group.reports.some(([key, label]) =>
+                matchesSearch(
+                  [group.title, label, reportSearchCatalog.find((report) => report[0] === key)],
+                  search,
+                ),
+              ),
+            )
+            .map((group) => (
+              <section key={group.title}>
+                <h2>{group.title}</h2>
+                <div className="report-menu">
+                  {group.reports
+                    .filter(([key, label]) =>
+                      matchesSearch(
+                        [
+                          group.title,
+                          label,
+                          reportSearchCatalog.find((report) => report[0] === key),
+                        ],
+                        search,
+                      ),
+                    )
+                    .map(([key, label]) => (
+                      <button onClick={() => setSelected(key)} key={key}>
+                        <FileText />
+                        <span>{label}</span>
+                        <small>Open report →</small>
+                      </button>
+                    ))}
+                </div>
+              </section>
+            ))}
         </div>
         <section className="report-roadmap">
           <div>
@@ -9570,12 +9894,14 @@ function ReportsPage({ token, search = "", requestedReport = "" }: { token: stri
             </p>
           </div>
           <div className="pending-report-list">
-            {pendingReports.filter(name => matchesSearch(name, search)).map((name) => (
-              <span key={name}>
-                {name}
-                <small>Requires module</small>
-              </span>
-            ))}
+            {pendingReports
+              .filter((name) => matchesSearch(name, search))
+              .map((name) => (
+                <span key={name}>
+                  {name}
+                  <small>Requires module</small>
+                </span>
+              ))}
           </div>
         </section>
       </>

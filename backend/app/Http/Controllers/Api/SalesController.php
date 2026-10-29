@@ -154,7 +154,11 @@ class SalesController
             ->latest("a.id")
             ->get();
         return response()->json([
-            "opening_accounts" => DB::table("accounts")->where("type","equity")->where("is_postable",true)->where("is_active",true)->get(),
+            "opening_accounts" => DB::table("accounts")
+                ->where("type", "equity")
+                ->where("is_postable", true)
+                ->where("is_active", true)
+                ->get(),
             "payment_accounts" => DB::table("accounts")
                 ->where("is_postable", true)
                 ->orderBy("code")
@@ -191,9 +195,20 @@ class SalesController
             "opening_account_id" => "nullable|exists:accounts,id",
         ]);
         $id = DB::transaction(function () use ($d) {
-            $fields = array_diff_key($d, array_flip(['opening_balance','opening_type','opening_date','opening_due_date','opening_account_id']));
-            $id = DB::table("customers")->insertGetId($fields + ["status"=>"active","created_at"=>now(),"updated_at"=>now()]);
-            app(\App\Services\Accounting\CustomerOpeningService::class)->create($id,$d);
+            $fields = array_diff_key(
+                $d,
+                array_flip([
+                    "opening_balance",
+                    "opening_type",
+                    "opening_date",
+                    "opening_due_date",
+                    "opening_account_id",
+                ]),
+            );
+            $id = DB::table("customers")->insertGetId(
+                $fields + ["status" => "active", "created_at" => now(), "updated_at" => now()],
+            );
+            app(\App\Services\Accounting\CustomerOpeningService::class)->create($id, $d);
             return $id;
         });
         return response()->json(DB::table("customers")->find($id), 201);
@@ -440,8 +455,11 @@ class SalesController
             "sales_rep_id" => "required|exists:sales_representatives,id",
             "customer_po_reference" => "nullable|max:80",
             "po_date" => "required|date",
-            "opening_balance"=>"nullable|numeric|min:0", "opening_type"=>"nullable|in:receivable,credit",
-            "opening_date"=>"nullable|date_format:Y-m-d", "opening_due_date"=>"nullable|date_format:Y-m-d", "opening_account_id"=>"nullable|exists:accounts,id",
+            "opening_balance" => "nullable|numeric|min:0",
+            "opening_type" => "nullable|in:receivable,credit",
+            "opening_date" => "nullable|date_format:Y-m-d",
+            "opening_due_date" => "nullable|date_format:Y-m-d",
+            "opening_account_id" => "nullable|exists:accounts,id",
             "sale_type" => "required|in:cash,credit,mixed",
             "cash_amount" => "nullable|required_if:sale_type,mixed|numeric|min:0",
             "lines" => "required|array|min:1",
@@ -468,7 +486,12 @@ class SalesController
                     "updated_at" => now(),
                 ]);
             }
-            if (!($d['customer_id'] ?? null)) app(\App\Services\Accounting\CustomerOpeningService::class)->create($customerId,$d);
+            if (!($d["customer_id"] ?? null)) {
+                app(\App\Services\Accounting\CustomerOpeningService::class)->create(
+                    $customerId,
+                    $d,
+                );
+            }
             $num =
                 "CPO-" .
                 now()->format("ym") .
@@ -514,10 +537,14 @@ class SalesController
                     $itemId = $item->id;
                     $setId = $item->set_template_id;
                 }
-                $fixedRate = $value / max(1,$pieces);
-                $fixedRates = ($line["order_mode"] === "badge" ? $items : collect([$item]))->pluck('unit_price','id')->all();
-                $customRate = isset($line['rate']) ? round((float)$line['rate'],2) : null;
-                if ($customRate !== null) $value = round($pieces * $customRate,2);
+                $fixedRate = $value / max(1, $pieces);
+                $fixedRates = ($line["order_mode"] === "badge" ? $items : collect([$item]))
+                    ->pluck("unit_price", "id")
+                    ->all();
+                $customRate = isset($line["rate"]) ? round((float) $line["rate"], 2) : null;
+                if ($customRate !== null) {
+                    $value = round($pieces * $customRate, 2);
+                }
                 $total += $value;
                 DB::table("customer_po_lines")->insert([
                     "customer_po_id" => $id,
@@ -529,7 +556,9 @@ class SalesController
                     "sets" => $line["order_mode"] === "badge" ? $units : 0,
                     "pieces" => $pieces,
                     "rate" => $value / max(1, $pieces),
-                    "fixed_rate" => $fixedRate, "custom_rate" => $customRate, "fixed_rates" => json_encode($fixedRates),
+                    "fixed_rate" => $fixedRate,
+                    "custom_rate" => $customRate,
+                    "fixed_rates" => json_encode($fixedRates),
                     "line_total" => $value,
                     "created_at" => now(),
                     "updated_at" => now(),
@@ -595,7 +624,7 @@ class SalesController
                     "sale_type" => $d["sale_type"],
                     "updated_at" => now(),
                 ]);
-            $oldLines = DB::table("customer_po_lines")->where("customer_po_id",$id)->get();
+            $oldLines = DB::table("customer_po_lines")->where("customer_po_id", $id)->get();
             DB::table("customer_po_lines")->where("customer_po_id", $id)->delete();
             $total = 0;
             foreach ($d["lines"] as $line) {
@@ -625,17 +654,29 @@ class SalesController
                     $itemId = $item->id;
                     $setId = $item->set_template_id;
                 }
-                $fixedRate = $value / max(1,$pieces);
-                $fixedRates = ($line["order_mode"] === "badge" ? $items : collect([$item]))->pluck('unit_price','id')->all();
-                $old = $oldLines->first(fn($old)=>(int)$old->set_template_id===(int)$setId && (int)$old->set_item_id===(int)$itemId && $old->order_mode===$line['order_mode']);
+                $fixedRate = $value / max(1, $pieces);
+                $fixedRates = ($line["order_mode"] === "badge" ? $items : collect([$item]))
+                    ->pluck("unit_price", "id")
+                    ->all();
+                $old = $oldLines->first(
+                    fn($old) => (int) $old->set_template_id === (int) $setId &&
+                        (int) $old->set_item_id === (int) $itemId &&
+                        $old->order_mode === $line["order_mode"],
+                );
                 if ($old && $old->fixed_rates) {
-                    $fixedRates = json_decode($old->fixed_rates,true);
-                    $priceItems = $line['order_mode']==='badge' ? $items : collect([$item]);
-                    $value = $priceItems->sum(fn($i)=>(float)($fixedRates[$i->id] ?? $i->unit_price)*($line['order_mode']==='badge'?(float)$i->quantity:1))*$units;
-                    $fixedRate = $value/max(1,$pieces);
+                    $fixedRates = json_decode($old->fixed_rates, true);
+                    $priceItems = $line["order_mode"] === "badge" ? $items : collect([$item]);
+                    $value =
+                        $priceItems->sum(
+                            fn($i) => (float) ($fixedRates[$i->id] ?? $i->unit_price) *
+                                ($line["order_mode"] === "badge" ? (float) $i->quantity : 1),
+                        ) * $units;
+                    $fixedRate = $value / max(1, $pieces);
                 }
-                $customRate = isset($line['rate']) ? round((float)$line['rate'],2) : null;
-                if ($customRate !== null) $value = round($pieces * $customRate,2);
+                $customRate = isset($line["rate"]) ? round((float) $line["rate"], 2) : null;
+                if ($customRate !== null) {
+                    $value = round($pieces * $customRate, 2);
+                }
                 $total += $value;
                 DB::table("customer_po_lines")->insert([
                     "customer_po_id" => $id,
@@ -646,7 +687,9 @@ class SalesController
                     "sets" => $line["order_mode"] === "badge" ? $units : 0,
                     "pieces" => $pieces,
                     "rate" => $value / max(1, $pieces),
-                    "fixed_rate" => $fixedRate, "custom_rate" => $customRate, "fixed_rates" => json_encode($fixedRates),
+                    "fixed_rate" => $fixedRate,
+                    "custom_rate" => $customRate,
+                    "fixed_rates" => json_encode($fixedRates),
                     "line_total" => $value,
                     "created_at" => now(),
                     "updated_at" => now(),
@@ -785,7 +828,10 @@ class SalesController
                 }
                 if ($qty > 0) {
                     $prepared[] = [$line, $item, $qty];
-                    $total += round($qty * \App\Services\Accounting\FixedRateService::poRate($line,$item), 2);
+                    $total += round(
+                        $qty * \App\Services\Accounting\FixedRateService::poRate($line, $item),
+                        2,
+                    );
                 }
             }
             abort_if(
@@ -822,8 +868,11 @@ class SalesController
                     "colour" => $line->colour,
                     "quantity" => $qty,
                     "invoiced_quantity" => 0,
-                    "rate" => \App\Services\Accounting\FixedRateService::poRate($line,$item),
-                    "fixed_rate" => \App\Services\Accounting\FixedRateService::poFixed($line,$item),
+                    "rate" => \App\Services\Accounting\FixedRateService::poRate($line, $item),
+                    "fixed_rate" => \App\Services\Accounting\FixedRateService::poFixed(
+                        $line,
+                        $item,
+                    ),
                     "created_at" => now(),
                     "updated_at" => now(),
                 ]);
@@ -878,7 +927,9 @@ class SalesController
                     422,
                     "Dispatched quantity for size {$line->size_label} exceeds the remaining quantity.",
                 );
-                if (isset($input['rate'])) $line->rate = (float)$input['rate'];
+                if (isset($input["rate"])) {
+                    $line->rate = (float) $input["rate"];
+                }
                 $prepared[] = [$line, $qty];
                 $total += round($qty * (float) $line->rate, 2);
             }
@@ -1007,8 +1058,10 @@ class SalesController
             422,
             "Choose an active cash or bank account for the collection.",
         );
-        $opening = (bool)($invoice->is_opening_balance ?? false);
-        if ($opening) $d['commission_decision'] = 'cancel';
+        $opening = (bool) ($invoice->is_opening_balance ?? false);
+        if ($opening) {
+            $d["commission_decision"] = "cancel";
+        }
         $payeeId =
             $d["commission_decision"] === "collector"
                 ? (int) $d["collector_sales_rep_id"]

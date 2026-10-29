@@ -174,23 +174,53 @@ final class ProcurementController extends Controller
 
     public function updatePurchaseOrder(Request $request, int $purchaseOrder): JsonResponse
     {
-        $order = DB::table("purchase_orders")->find($purchaseOrder);
-        abort_unless($order, 404, "Purchase order not found.");
-        $data = $request->validate([
-            "supplier_id" => ["required", "integer", "exists:suppliers,id"],
-            "order_date" => ["required", "date"],
-            "expected_date" => ["nullable", "date", "after_or_equal:order_date"],
-            "status" => [
-                "required",
-                Rule::in(["draft", "approved", "part_received", "received", "cancelled"]),
-            ],
-        ]);
-        $data["approved_at"] = $data["status"] === "draft" ? null : ($order->approved_at ?: now());
-        DB::table("purchase_orders")
-            ->where("id", $purchaseOrder)
-            ->update($data + ["updated_at" => now()]);
-        $this->audit("purchase_order.updated", "purchase_order", $purchaseOrder, $data);
-        return response()->json(DB::table("purchase_orders")->find($purchaseOrder));
+        return DB::transaction(function () use ($request, $purchaseOrder) {
+            $order = DB::table("purchase_orders")->lockForUpdate()->find($purchaseOrder);
+            abort_unless($order, 404, "Purchase order not found.");
+            $data = $request->validate([
+                "supplier_id" => ["required", "integer", "exists:suppliers,id"],
+                "order_date" => ["required", "date"],
+                "expected_date" => ["nullable", "date", "after_or_equal:order_date"],
+                "status" => [
+                    "required",
+                    Rule::in(["draft", "approved", "part_received", "received", "cancelled"]),
+                ],
+            ]);
+            $receivedOn = DB::table("goods_receipts")
+                ->where("purchase_order_id", $purchaseOrder)
+                ->where("status", "posted")
+                ->min("received_on");
+            if ($receivedOn) {
+                abort_if(
+                    (int) $data["supplier_id"] !== (int) $order->supplier_id,
+                    422,
+                    "A received order must keep the supplier linked to its GRNs and invoices.",
+                );
+                abort_if(
+                    $data["status"] !== $order->status,
+                    422,
+                    "Receipt progress is calculated from posted GRNs, not manual status edits.",
+                );
+                abort_if(
+                    $data["order_date"] > $receivedOn,
+                    422,
+                    "The order date cannot be after its received goods.",
+                );
+            } else {
+                abort_if(
+                    in_array($data["status"], ["part_received", "received"]),
+                    422,
+                    "Receive the goods to update this order to partially or fully received.",
+                );
+            }
+            $data["approved_at"] =
+                $data["status"] === "draft" ? null : ($order->approved_at ?: now());
+            DB::table("purchase_orders")
+                ->where("id", $purchaseOrder)
+                ->update($data + ["updated_at" => now()]);
+            $this->audit("purchase_order.updated", "purchase_order", $purchaseOrder, $data);
+            return response()->json(DB::table("purchase_orders")->find($purchaseOrder));
+        });
     }
 
     public function deletePurchaseOrder(int $purchaseOrder): JsonResponse
@@ -253,6 +283,7 @@ final class ProcurementController extends Controller
 
     public function updateJournal(Request $request, int $journal): JsonResponse
     {
+        $this->guardOpeningJournal($journal);
         abort_unless(
             DB::table("journal_entries")->where("id", $journal)->exists(),
             404,
@@ -278,6 +309,7 @@ final class ProcurementController extends Controller
     public function deleteJournal(int $journal): JsonResponse
     {
         DB::transaction(function () use ($journal): void {
+            $this->guardOpeningJournal($journal);
             DB::table("journal_lines")->where("journal_entry_id", $journal)->delete();
             abort_unless(
                 DB::table("journal_entries")->where("id", $journal)->delete() === 1,
@@ -287,6 +319,22 @@ final class ProcurementController extends Controller
             $this->audit("journal.deleted", "journal", $journal, []);
         });
         return response()->json(["message" => "Journal deleted."]);
+    }
+    private function guardOpeningJournal(int $journal): void
+    {
+        $opening =
+            DB::table("journal_entries")->where("id", $journal)->value("source_type") ===
+            "account_opening";
+        if (\Illuminate\Support\Facades\Schema::hasTable("customer_opening_balances")) {
+            $opening =
+                $opening ||
+                DB::table("customer_opening_balances")->where("journal_id", $journal)->exists();
+        }
+        abort_if(
+            $opening,
+            422,
+            "Opening-balance journals are linked to account and customer history. Post a reasoned correcting journal instead of editing, voiding or deleting them.",
+        );
     }
 
     public function approvePurchaseOrder(int $purchaseOrder): JsonResponse

@@ -943,6 +943,10 @@ $checkout = [
 ];
 $result = $pos->checkout(req($checkout), $accounting, $salesController, $posting)->getData(true);
 check(
+    (float)DB::table('sales_invoice_lines')->where('sales_invoice_id',$result['invoice_id'])->value('fixed_rate') === 120.0,
+    'New invoice saves the fixed price independently from its entered rate',
+);
+check(
     DB::table("sales_invoices")->where("id", $result["invoice_id"])->value("status") === "paid" &&
         (float) DB::table("sales_invoices")
             ->where("id", $result["invoice_id"])

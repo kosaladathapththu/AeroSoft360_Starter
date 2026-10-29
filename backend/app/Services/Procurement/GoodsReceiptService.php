@@ -19,6 +19,11 @@ final class GoodsReceiptService
                     "purchase_order" => "Purchase order must be approved before receipt.",
                 ]);
             }
+            if ($data["received_on"] < $order->order_date) {
+                throw ValidationException::withMessages([
+                    "received_on" => "Goods cannot be received before the purchase-order date.",
+                ]);
+            }
             $number =
                 "GRN-" .
                 now()->format("ym") .

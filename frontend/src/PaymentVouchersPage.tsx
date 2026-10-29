@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { WorkflowContext } from "./workflow";
 import { createPortal } from "react-dom";
 import {
   Check,
@@ -27,12 +28,14 @@ export default function PaymentVouchersPage({
   canManage,
   search,
   onChanged,
+  context,
 }: {
   api: string;
   token: string;
   canManage: boolean;
   search: string;
   onChanged: () => void;
+  context?: WorkflowContext;
 }) {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
@@ -53,6 +56,23 @@ export default function PaymentVouchersPage({
   useEffect(() => {
     load().catch((err) => setError(err.message));
   }, [load]);
+  const consumedContext = useRef<number>();
+  const [prefillReceipt, setPrefillReceipt] = useState<number>();
+  useEffect(() => {
+    if (
+      data &&
+      canManage &&
+      context?.action === "payment" &&
+      context.version !== consumedContext.current
+    ) {
+      consumedContext.current = context.version;
+      const receipt = data.receipts.find((r: any) => Number(r.id) === Number(context.receiptId));
+      if (receipt && Number(receipt.outstanding) > 0) {
+        setPrefillReceipt(receipt.id);
+        setEditor(null);
+      } else setError("This supplier bill has no outstanding balance to pay.");
+    }
+  }, [data, canManage, context]);
   const mutate = async (path: string, body: any, method = "POST") => {
     const response = await fetch(`${api}/payment-vouchers${path}`, {
       method,
@@ -133,6 +153,7 @@ export default function PaymentVouchersPage({
             onClick={() => {
               setError("");
               setEditor(null);
+              setPrefillReceipt(undefined);
             }}
           >
             <Plus /> New payment voucher
@@ -284,6 +305,7 @@ export default function PaymentVouchersPage({
         <VoucherEditor
           data={data}
           voucher={editor}
+          initialReceiptId={editor ? undefined : prefillReceipt}
           close={() => setEditor(undefined)}
           save={async (body) => {
             const voucher = await mutate(
@@ -332,18 +354,31 @@ function VoucherEditor({
   voucher,
   close,
   save,
+  initialReceiptId,
 }: {
   data: any;
   voucher: any;
   close: () => void;
   save: (body: any) => Promise<void>;
+  initialReceiptId?: number;
 }) {
-  const [kind, setKind] = useState(voucher?.kind || "expense");
-  const [receiptId, setReceiptId] = useState(voucher?.goods_receipt_id || "");
+  const [kind, setKind] = useState(voucher?.kind || (initialReceiptId ? "supplier" : "expense"));
+  const [receiptId, setReceiptId] = useState(voucher?.goods_receipt_id || initialReceiptId || "");
   const [lines, setLines] = useState<any[]>(
     voucher?.lines?.length
       ? voucher.lines.map((line: any) => ({ ...line }))
-      : [{ account_id: data.expense_accounts[0]?.id || "", description: "", amount: "" }],
+      : [
+          {
+            account_id: data.expense_accounts[0]?.id || "",
+            description: "",
+            amount: initialReceiptId
+              ? String(
+                  data.receipts.find((r: any) => Number(r.id) === Number(initialReceiptId))
+                    ?.outstanding || "",
+                )
+              : "",
+          },
+        ],
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

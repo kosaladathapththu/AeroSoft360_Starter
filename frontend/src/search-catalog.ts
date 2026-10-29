@@ -18,6 +18,7 @@ export const reportSearchCatalog = [
 ] as const;
 
 export const pageSearchKeywords: Record<string, string> = {
+  "Purchasing Overview": "purchasing procurement workflow steps purchase order grn goods receipt supplier invoice bill payment",
   "Point of Sale": "pos checkout counter cash sale bill receipt",
   "Customer POs": "customer purchase order cpo booking",
   "Sales Orders": "confirmed order dispatch delivery",
@@ -35,7 +36,7 @@ export const pageSearchKeywords: Record<string, string> = {
   "General Ledger": "gl journal accounting debit credit entry entries",
   "Serials & Warranty": "serial warranty warranties claim repair service guarantee",
   "Receive Goods": "grn goods received receiving delivery receipt stock",
-  "Supplier Invoices": "supplier bill billing invoice payable",
+  "Supplier Invoices": "purchase invoice supplier bill billing invoice payable",
   "Raw Material Stock": "raw materials stock inventory quantity batch",
   "Finished Goods Stock": "finished product footwear stock inventory size colour",
   "Bulk Inventory Import": "upload csv spreadsheet bulk stock import",

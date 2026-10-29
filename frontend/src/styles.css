@@ -13,7 +13,8 @@ body {
 }
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 button {
@@ -23,7 +24,7 @@ button {
   display: flex;
   min-height: 100vh;
 }
-aside {
+.shell > aside {
   width: 310px;
   background: #102230;
   color: #aebdca;
@@ -83,18 +84,18 @@ aside {
   color: white;
   font-size: 14px;
 }
-nav {
+.shell > aside nav {
   padding: 14px;
   overflow: auto;
 }
-nav label {
+.shell > aside nav label {
   font-size: 11px;
   letter-spacing: 1.5px;
   color: #6f8494;
   padding: 0 12px 10px;
   display: block;
 }
-nav button {
+.shell > aside nav button {
   border: 0;
   background: transparent;
   color: #b3c0cb;
@@ -108,11 +109,11 @@ nav button {
   font-size: 15px;
   margin: 2px 0;
 }
-nav button svg {
+.shell > aside nav button svg {
   width: 20px;
 }
-nav button.active,
-nav button:hover {
+.shell > aside nav button.active,
+.shell > aside nav button:hover {
   background: #174752;
   color: white;
   box-shadow: inset 3px 0 #40cabc;
@@ -149,7 +150,7 @@ main {
   flex: 1;
   min-width: 0;
 }
-header {
+.shell > main > header {
   height: 82px;
   background: white;
   border-bottom: 1px solid #e2e7eb;
@@ -160,12 +161,12 @@ header {
   top: 0;
   z-index: 10;
 }
-header > div:first-of-type span {
+.shell > main > header > div:first-of-type span {
   display: block;
   font-size: 12px;
   color: #86929e;
 }
-header > div:first-of-type b {
+.shell > main > header > div:first-of-type b {
   font-size: 15px;
 }
 .search {
@@ -437,7 +438,7 @@ header > div:first-of-type b {
 }
 .table-card {
   padding: 0;
-  overflow: hidden;
+  overflow: auto;
 }
 .table-card .empty {
   margin: 0;
@@ -445,7 +446,7 @@ header > div:first-of-type b {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 900px;
+  min-width: 100%;
 }
 th,
 td {
@@ -535,7 +536,7 @@ th {
 }
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 13px;
 }
 .actions {
@@ -554,7 +555,7 @@ th {
   display: none;
 }
 @media (max-width: 1050px) {
-  aside {
+  .shell > aside {
     width: 260px;
   }
   .kpis {
@@ -568,7 +569,7 @@ th {
   }
 }
 @media (max-width: 720px) {
-  aside {
+  .shell > aside {
     position: fixed;
     left: 0;
     transform: translateX(-100%);
@@ -576,7 +577,7 @@ th {
     width: min(310px, 90vw);
     z-index: 30;
   }
-  aside.open {
+  .shell > aside.open {
     transform: none;
   }
   .scrim {
@@ -601,7 +602,7 @@ th {
   .search {
     display: none;
   }
-  header {
+  .shell > main > header {
     padding: 0 16px;
   }
   .content {
@@ -635,7 +636,7 @@ th {
 }
 
 /* Compact workspace layout used across every page. */
-header {
+.shell > main > header {
   height: 64px;
   padding: 0 28px;
 }
@@ -680,7 +681,7 @@ header {
   margin-top: 10px;
 }
 @media (max-width: 720px) {
-  header {
+  .shell > main > header {
     height: 60px;
     padding: 0 14px;
   }

@@ -245,6 +245,11 @@ final class RetailReportService
                 "a.category",
                 "l.size_label",
                 "l.quantity",
+                DB::raw(
+                    Schema::hasColumn("sales_invoice_lines", "fixed_rate")
+                        ? "COALESCE(l.fixed_rate, 'Not recorded') as fixed_rate"
+                        : "'Not recorded' as fixed_rate",
+                ),
                 "l.rate",
                 "l.line_total",
             )

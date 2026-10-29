@@ -346,3 +346,36 @@ check(
         $p["summary"]["ledger_difference"] == 0,
     "A normal collection settles the opening balance and keeps aging and ledger reconciled",
 );
+$reports = new App\Services\Reporting\RetailReportService();
+$salesMethod = new ReflectionMethod($reports, "sales");
+$receiptMethod = new ReflectionMethod($reports, "receipts");
+$customersMethod = new ReflectionMethod($reports, "customers");
+$salesMethod->setAccessible(true);
+$receiptMethod->setAccessible(true);
+$customersMethod->setAccessible(true);
+check(
+    count($salesMethod->invoke($reports, "2026-01-01", "2026-10-29")) === 0,
+    "Sales report excludes opening receivables",
+);
+$receiptRows = $receiptMethod->invoke($reports, "2026-01-01", "2026-10-29");
+check(
+    count($receiptRows) === 1 && (float) $receiptRows[0]->amount === 200.0,
+    "Receipt report includes real collections and excludes opening customer credit",
+);
+$customerRows = $customersMethod->invoke($reports, "2026-01-01", "2026-10-29");
+$customerReport = collect($customerRows)->firstWhere("code", "C1");
+check(
+    (float) $customerReport->sales === 0.0 &&
+        (float) $customerReport->opening_receivable === 500.0 &&
+        (float) $customerReport->outstanding === 300.0,
+    "Customer report separates opening balances from sales",
+);
+$journalController = new App\Http\Controllers\Api\ProcurementController();
+foreach (DB::table("customer_opening_balances")->pluck("journal_id") as $journalId) {
+    try {
+        $journalController->deleteJournal($journalId);
+        check(false, "Opening journal deletion must fail");
+    } catch (Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        check($e->getStatusCode() === 422, "Linked customer opening journal cannot be deleted");
+    }
+}

@@ -9,6 +9,7 @@ import {
 import { printReport } from "./report-print";
 import "./business-workflows.css";
 import { parseStockCsv } from "./stock-import";
+import { WorkflowContext, WorkflowGo, pageLabel } from "./workflow";
 
 export const workflowPages = [
   "Head Office Salaries",
@@ -34,7 +35,8 @@ type Props = {
   page: string;
   permissions: string[];
   search: string;
-  go: (page: string) => void;
+  go: WorkflowGo;
+  context?: WorkflowContext;
   onChanged: () => void;
   user: any;
 };
@@ -49,6 +51,7 @@ export default function BusinessWorkflowsPage({
   go,
   onChanged,
   user,
+  context,
 }: Props) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
@@ -56,6 +59,7 @@ export default function BusinessWorkflowsPage({
   const [busy, setBusy] = useState(false),
     [modal, setModal] = useState<any>(null);
   const [asOf, setAsOf] = useState(today());
+  const [nextReceipt, setNextReceipt] = useState<number>();
   const [department, setDepartment] = useState("");
   const output = useRef<HTMLDivElement>(null);
   const quotes = page === "Quotations";
@@ -74,11 +78,30 @@ export default function BusinessWorkflowsPage({
     setModal(null);
     load().catch((e) => setError(e.message));
   }, [load, page]);
+  const consumedContext = useRef<number>();
+  useEffect(() => {
+    if (
+      data &&
+      page === "Supplier Invoices" &&
+      context?.action === "invoice" &&
+      context.version !== consumedContext.current &&
+      can("purchases.manage")
+    ) {
+      consumedContext.current = context.version;
+      const receipt = data.receipts.find((r: any) => Number(r.id) === Number(context.receiptId));
+      if (
+        receipt &&
+        !data.supplier_invoices.some((i: any) => Number(i.goods_receipt_id) === Number(receipt.id))
+      )
+        setModal({ kind: "invoice", row: receipt });
+    }
+  }, [data, page, context]);
   const mutate = async (path: string, body: any, method = "POST") => {
     setBusy(true);
     setError("");
     try {
       const result = await request(path, body, method);
+      if (path === "supplier-invoices") setNextReceipt(Number(body.goods_receipt_id));
       await load();
       onChanged();
       setModal(null);
@@ -161,7 +184,7 @@ export default function BusinessWorkflowsPage({
       <div className="heading">
         <div>
           <span>CONNECTED BUSINESS WORKFLOWS</span>
-          <h1>{page}</h1>
+          <h1>{pageLabel(page)}</h1>
           <p>
             {quotes
               ? "Offer product sizes and prices, then convert once into a linked customer PO and sales order."
@@ -183,6 +206,13 @@ export default function BusinessWorkflowsPage({
       {notice && (
         <div className="workflow-success" role="status">
           {notice}
+          {page === "Supplier Invoices" && nextReceipt && (
+            <button
+              onClick={() => go("Payment Vouchers", { receiptId: nextReceipt, action: "payment" })}
+            >
+              Next: prepare supplier payment →
+            </button>
+          )}
         </div>
       )}
       <div className="workflow-links">
@@ -282,9 +312,8 @@ export default function BusinessWorkflowsPage({
             {page === "Supplier Invoices" && (
               <>
                 <p className="report-note">
-                  Register the supplier document against a posted GRN. Stock and account 2100 were
-                  posted at receipt; registration does not duplicate that liability. The registered
-                  due date feeds supplier aging.
+                  Step 3: select the received goods, check the supplier bill and register its
+                  invoice number and due date. Next, prepare a supplier payment.
                 </p>
                 <WorkflowTable
                   values={rows(data.supplier_invoices)}
@@ -296,8 +325,17 @@ export default function BusinessWorkflowsPage({
                     ["due_date", "Due date"],
                     ["total", "GRN amount", "money"],
                   ]}
-                  actions={() => (
-                    <button onClick={() => go("Payment Vouchers")}>Pay through voucher</button>
+                  actions={(invoice) => (
+                    <button
+                      onClick={() =>
+                        go("Payment Vouchers", {
+                          receiptId: invoice.goods_receipt_id,
+                          action: "payment",
+                        })
+                      }
+                    >
+                      Prepare supplier payment →
+                    </button>
                   )}
                 />
               </>
@@ -586,7 +624,9 @@ export default function BusinessWorkflowsPage({
               ? modal.row
                 ? `Edit ${modal.row.number}`
                 : "New quotation"
-              : modal.kind.replace(/-/g, " ")
+              : modal.kind === "invoice"
+                ? "Register purchase invoice"
+                : modal.kind.replace(/-/g, " ")
           }
           busy={busy}
           close={() => setModal(null)}
@@ -751,6 +791,8 @@ export default function BusinessWorkflowsPage({
           )}
           {modal.kind === "invoice" && (
             <SupplierInvoiceForm
+              key={modal.row?.id || "new"}
+              initialReceiptId={modal.row?.id}
               data={data}
               busy={busy}
               save={(body: any) => mutate("supplier-invoices", body)}
@@ -1172,8 +1214,8 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
   );
 }
 
-function SupplierInvoiceForm({ data, busy, save }: any) {
-  const [id, setId] = useState("");
+function SupplierInvoiceForm({ data, busy, save, initialReceiptId }: any) {
+  const [id, setId] = useState(String(initialReceiptId || ""));
   const receipt = data.receipts.find((r: any) => r.id === Number(id));
   return (
     <SimpleForm
