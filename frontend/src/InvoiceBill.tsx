@@ -175,6 +175,7 @@ export function BillDocument({ invoice }: { invoice: any }) {
           </div>
         </dl>
       </div>
+      {Number(invoice.returned_amount) > 0 && <section className="bill-warranty"><h2>Posted return credits</h2><p>Return credits: {money(invoice.returned_amount)}. The original invoice and sold quantities above are retained for traceability.</p><p>Customer credit held: {money(Math.max(0, Number(invoice.received_amount) + Number(invoice.returned_amount) - Number(invoice.total)))}</p>{(invoice.returns || []).map((r: any) => <p key={r.id}>{r.number} | {date(r.return_date)} | {money(r.total)} | {r.reason}</p>)}</section>}
       {!!invoice.serials?.length && (
         <section className="bill-warranty">
           <h2>Serial numbers &amp; warranty</h2>

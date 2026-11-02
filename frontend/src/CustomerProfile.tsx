@@ -15,6 +15,7 @@ const invoiceColumns: Column[] = [
   ["due_date", "Due date"],
   ["total", "Total", "money"],
   ["received_as_of", "Paid", "money"],
+  ["credited_as_of", "Return credits", "money"],
   ["outstanding_as_of", "Outstanding", "money"],
   ["days_overdue", "Days overdue"],
   ["status_as_of", "Status"],
@@ -53,6 +54,7 @@ const tabs = [
   "Aging",
   "Invoices",
   "Payments",
+  "Returns",
   "Orders",
   "Quotations",
   "Account ledger",
@@ -163,6 +165,7 @@ export default function CustomerProfile({
               ["Opening receivable", money(s.opening_receivable)],
               ["Opening customer credit", money(s.opening_customer_credit)],
               ["Payments received", money(s.total_received)],
+              ["Sales return credits", money(s.sales_returns)],
               ["Net amount due", money(s.net_balance)],
               ["Customer credit / unapplied payments", money(s.customer_credit)],
               [
@@ -227,6 +230,7 @@ export default function CustomerProfile({
               ))}
           </section>
         )}
+        {show("Returns") && <section><h3>Sales returns and credit notes</h3>{table((data.sales_returns || []).flatMap((r: any) => r.lines.map((l: any) => ({ ...l, return_number: r.number, return_date: r.return_date, invoice_number: r.invoice_number, reason: r.reason }))), [["return_number", "Return"], ["return_date", "Date"], ["invoice_number", "Invoice"], ["article_code", "Article"], ["article_name", "Name"], ["size_label", "Size"], ["colour", "Colour"], ["quantity", "Pieces"], ["condition", "Condition"], ["total", "Credit", "money"], ["reason", "Reason"]])}</section>}
         {show("Payments") && (
           <section>
             <h3>Posted payments ({data.payments.length})</h3>

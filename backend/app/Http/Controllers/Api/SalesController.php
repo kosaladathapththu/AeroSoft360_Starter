@@ -1163,7 +1163,7 @@ class SalesController
             "updated_at" => now(),
         ]);
         $received = $invoice->received_amount + $d["amount"];
-        $outstanding = max(0, $invoice->total - $received);
+        $outstanding = max(0, $invoice->total - $received - (float) ($invoice->returned_amount ?? 0));
         DB::table("sales_invoices")
             ->where("id", $invoice->id)
             ->update([

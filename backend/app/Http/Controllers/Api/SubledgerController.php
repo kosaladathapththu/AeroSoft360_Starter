@@ -52,7 +52,7 @@ final class SubledgerController
                 ->get()
                 ->keyBy("id");
         $returns = $customer
-            ? collect()
+            ? (\Illuminate\Support\Facades\Schema::hasTable("sales_returns") ? DB::table("sales_returns")->where("customer_id", $party->id)->get()->keyBy("id") : collect())
             : DB::table("purchase_returns")
                 ->whereIn("goods_receipt_id", $receipts->keys())
                 ->get()
@@ -89,6 +89,10 @@ final class SubledgerController
                 $source = $returns->get($line->source_id);
                 $page = "Purchase Returns";
             }
+            if ($customer && $line->source_type === 'sales_return') {
+                $source = $returns->get($line->source_id);
+                $page = 'Sales Returns';
+            }
             if (!$source) {
                 continue;
             }
@@ -118,7 +122,7 @@ final class SubledgerController
             "closing" => $running,
             "rows" => $rows,
             "note" => $customer
-                ? "Positive balance is receivable from this customer. Includes posted invoices and collections. Unassigned manual control-account journals are available in General Ledger."
+                ? "Positive balance is receivable from this customer. Includes posted invoices, sales return credits and collections. Unassigned manual control-account journals are available in General Ledger."
                 : "Positive balance is payable to this supplier. Goods receipts create the liability; registered invoices add references, not another liability. Returns, payments and payment reversals are included. Unassigned manual control-account journals are available in General Ledger.",
         ]);
     }

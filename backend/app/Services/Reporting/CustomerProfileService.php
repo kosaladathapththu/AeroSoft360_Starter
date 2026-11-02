@@ -75,6 +75,13 @@ final class CustomerProfileService
             ->get()
             ->groupBy("sales_invoice_id");
 
+        $salesReturns = Schema::hasTable('sales_returns') ? DB::table('sales_returns as r')
+            ->join('sales_invoices as i', 'i.id', '=', 'r.sales_invoice_id')
+            ->where('r.customer_id', $id)->whereDate('r.return_date', '<=', $asOf)
+            ->select('r.*', 'i.number as invoice_number')->get() : collect();
+        $returnCredit = $salesReturns->groupBy('sales_invoice_id')->map(fn($rows) => $rows->sum('total'));
+        $returnLines = Schema::hasTable('sales_return_lines') ? DB::table('sales_return_lines')->whereIn('sales_return_id', $salesReturns->pluck('id'))->get() : collect();
+        foreach ($salesReturns as $return) $return->lines = $returnLines->where('sales_return_id', $return->id)->values();
         $aging = array_fill_keys(
             ["current", "days_1_30", "days_31_60", "days_61_90", "days_90_plus", "terms_not_set"],
             0,
@@ -91,7 +98,9 @@ final class CustomerProfileService
         foreach ($invoices as $invoice) {
             $amount = (int) round((float) $invoice->total * 100);
             $paid = (int) round((float) $paidByInvoice->get($invoice->id, 0) * 100);
-            $balance = max(0, $amount - $paid);
+            $credited = (int) round((float) $returnCredit->get($invoice->id, 0) * 100);
+            $balance = max(0, $amount - $paid - $credited);
+            $invoice->credited_as_of = $credited / 100;
             $due = $invoice->due_date;
             $days =
                 $due && $due < $asOf
@@ -159,7 +168,7 @@ final class CustomerProfileService
                 ->unique()
                 ->join(", ");
         }
-        $net = $openingDebit + $invoiced - $received - $openingCredit;
+        $net = $openingDebit + $invoiced - $received - $openingCredit - (int) round($salesReturns->sum("total") * 100);
         $credit = max(0, $outstanding - $net);
         $limit = (int) round((float) $customer->credit_limit * 100);
         $exposure = max(0, $net);
@@ -257,6 +266,7 @@ final class CustomerProfileService
                 "opening_receivable" => $openingDebit / 100,
                 "opening_customer_credit" => $openingCredit / 100,
                 "total_received" => $received / 100,
+                "sales_returns" => (float) $salesReturns->sum("total"),
                 "outstanding" => $outstanding / 100,
                 "overdue" => $overdue / 100,
                 "current" => ($outstanding - $overdue - $aging["terms_not_set"]) / 100,
@@ -278,6 +288,7 @@ final class CustomerProfileService
             ],
             "aging" => array_map(fn($cents) => $cents / 100, $aging),
             "invoices" => $invoices,
+            "sales_returns" => $salesReturns,
             "payments" => $payments,
             "customer_pos" => $pos,
             "sales_orders" => $orders,

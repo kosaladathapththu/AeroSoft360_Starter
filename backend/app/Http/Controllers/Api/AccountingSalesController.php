@@ -51,6 +51,7 @@ final class AccountingSalesController extends Controller
                 ->select("p.*", "a.code as article_code")
                 ->get()
             : [];
+        $invoice->returns = Schema::hasTable('sales_returns') ? DB::table('sales_returns')->where('sales_invoice_id', $id)->orderBy('return_date')->get() : [];
         return response()->json($invoice);
     }
 
@@ -635,6 +636,7 @@ final class AccountingSalesController extends Controller
         return DB::transaction(function () use ($data, $id) {
             $invoice = DB::table("sales_invoices")->lockForUpdate()->find($id);
             abort_unless($invoice, 404, "Invoice not found.");
+            abort_if((float) ($invoice->returned_amount ?? 0) > 0 || (Schema::hasTable("sales_returns") && DB::table("sales_returns")->where("sales_invoice_id", $id)->exists()), 422, "This invoice has posted returns and must retain its original item and accounting history.");
             abort_if(
                 (bool) ($invoice->is_opening_balance ?? false),
                 422,
@@ -910,6 +912,7 @@ final class AccountingSalesController extends Controller
         return DB::transaction(function () use ($id) {
             $invoice = DB::table("sales_invoices")->find($id);
             abort_unless($invoice, 404, "Invoice not found.");
+            abort_if((float) ($invoice->returned_amount ?? 0) > 0 || (Schema::hasTable("sales_returns") && DB::table("sales_returns")->where("sales_invoice_id", $id)->exists()), 422, "This invoice has posted returns and must retain its original item and accounting history.");
             abort_if(
                 (bool) ($invoice->is_opening_balance ?? false),
                 422,
@@ -1073,13 +1076,13 @@ final class AccountingSalesController extends Controller
                         0,
                         (float) $invoice->received_amount - (float) $allocation->amount,
                     );
-                    $outstanding = max(0, (float) $invoice->total - $received);
+                    $outstanding = max(0, (float) $invoice->total - $received - (float) ($invoice->returned_amount ?? 0));
                     DB::table("sales_invoices")
                         ->where("id", $invoice->id)
                         ->update([
                             "received_amount" => $received,
                             "outstanding" => $outstanding,
-                            "status" => $received > 0 ? "part_paid" : "unpaid",
+                            "status" => $outstanding < 0.01 ? "paid" : ($received > 0 ? "part_paid" : "unpaid"),
                             "updated_at" => now(),
                         ]);
                 }
