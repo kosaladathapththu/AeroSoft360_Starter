@@ -840,6 +840,11 @@ function SalesPage({
     [viewing, setViewing] = useState<any>(null),
     [priceImporting, setPriceImporting] = useState(false),
     [priceImportMessage, setPriceImportMessage] = useState(""),
+    [orderSuccess, setOrderSuccess] = useState<{
+      title: string;
+      number: string;
+      target: string;
+    } | null>(null),
     [pendingPriceFile, setPendingPriceFile] = useState<File | null>(null),
     [pricePreview, setPricePreview] = useState<any>(null),
     [collectionView, setCollectionView] = useState<"due" | "history">("due"),
@@ -918,6 +923,22 @@ function SalesPage({
           "Request failed.",
       );
     await loadSales();
+    if (
+      method === "POST" &&
+      (path === "sales-orders/manual" ||
+        path === "customer-pos" ||
+        /^customer-pos\/\d+\/convert$/.test(path))
+    ) {
+      setOrderSuccess({
+        title:
+          path === "customer-pos"
+            ? "Customer PO created successfully"
+            : "Sales order created successfully",
+        number: json.number || json.sales_order?.number || json.order?.number || "",
+        target: path === "customer-pos" ? "Customer POs" : "Sales Orders",
+      });
+      if (page === "Dashboard") loadDashboard();
+    }
     if (
       method === "POST" &&
       (path === "sales-invoices/manual" ||
@@ -1033,6 +1054,35 @@ function SalesPage({
         <button onClick={loadSales}>Try again</button>
       </div>
     );
+  const orderConfirmation = orderSuccess && (
+    <div className="order-created-notice" role="status" aria-live="polite" aria-atomic="true">
+      <Check aria-hidden="true" />
+      <div>
+        <strong>{orderSuccess.title}</strong>
+        <span>
+          {orderSuccess.number ? "Reference: " + orderSuccess.number + ". " : ""}Your order has been
+          saved.
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          go(orderSuccess.target);
+          setOrderSuccess(null);
+        }}
+      >
+        View {orderSuccess.target === "Customer POs" ? "POs" : "orders"}
+      </button>
+      <button
+        type="button"
+        className="order-notice-dismiss"
+        aria-label="Dismiss order confirmation"
+        onClick={() => setOrderSuccess(null)}
+      >
+        <X />
+      </button>
+    </div>
+  );
   if (page === "Dashboard" && !dashboard)
     return (
       <div className="loading">
@@ -1048,6 +1098,7 @@ function SalesPage({
   if (page === "Dashboard")
     return (
       <>
+        {orderConfirmation}
         <div className="heading">
           <div>
             <span>SALES AND RECEIVABLES ERP</span>
@@ -1166,6 +1217,7 @@ function SalesPage({
                 setModal("");
               } catch (e) {
                 setError((e as Error).message);
+                throw e;
               }
             }}
           />
@@ -1467,6 +1519,7 @@ function SalesPage({
         )}
       </div>
       {error && <div className="error">{error}</div>}
+      {orderConfirmation}
       {priceImportMessage && page === "Pricing List" && (
         <div className="success-message">{priceImportMessage}</div>
       )}
@@ -3165,6 +3218,8 @@ function ArticleSearchPicker({
     `${article.code} — ${article.name}${article.category ? ` · ${article.category}` : ""}`;
   const [query, setQuery] = useState(selected ? labelFor(selected) : "");
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  useEffect(() => setActiveIndex(0), [query]);
   useEffect(() => {
     setQuery(selected ? labelFor(selected) : "");
   }, [selectedId]);
@@ -3193,6 +3248,33 @@ function ArticleSearchPicker({
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-label="Search articles by code, name or category"
+        aria-activedescendant={
+          open && results[activeIndex] ? `${listId}-${results[activeIndex].id}` : undefined
+        }
+        title={selectedLabel}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+            setQuery(selectedLabel);
+          }
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((current) =>
+              Math.max(
+                0,
+                Math.min(results.length - 1, current + (event.key === "ArrowDown" ? 1 : -1)),
+              ),
+            );
+          }
+          if (event.key === "Enter" && open) {
+            event.preventDefault();
+            if (results[activeIndex]) choose(results[activeIndex]);
+          }
+        }}
         value={query}
         placeholder="Search code, name or category"
         onFocus={(event) => {
@@ -3214,19 +3296,30 @@ function ArticleSearchPicker({
         autoComplete="off"
       />
       <ChevronDown className="picker-chevron" aria-hidden="true" />
+      {selected && (
+        <div className="selected-article-name">
+          <small>Selected article: {selected.code}</small>
+          <strong>{selected.name}</strong>
+          {selected.category && <span>{selected.category}</span>}
+        </div>
+      )}
       {open && (
         <div className="article-picker-menu" id={listId} role="listbox">
           {results.length ? (
-            results.map((article: any) => (
+            results.map((article: any, index: number) => (
               <button
                 type="button"
                 role="option"
+                id={`${listId}-${article.id}`}
+                tabIndex={-1}
                 aria-selected={Number(article.id) === Number(selectedId)}
-                className={Number(article.id) === Number(selectedId) ? "selected" : ""}
+                className={`${Number(article.id) === Number(selectedId) ? "selected" : ""} ${index === activeIndex ? "keyboard-active" : ""}`}
                 key={article.id}
+                onClick={() => choose(article)}
+                onMouseEnter={() => setActiveIndex(index)}
+                title={labelFor(article)}
                 onMouseDown={(event) => {
                   event.preventDefault();
-                  choose(article);
                 }}
               >
                 <b>{article.code}</b>
@@ -5258,8 +5351,8 @@ function SalesCreateModal({
                     ).length;
                     return (
                       <div className="po-line" key={index}>
-                        <label>
-                          Article
+                        <label className="po-article-field">
+                          Search article
                           <div className="article-picker-control">
                             <ArticleSearchPicker
                               articles={data.articles}
@@ -6754,21 +6847,25 @@ function SalesCreateModal({
                 }
               >
                 {busy ? <Loader2 /> : <Check />}{" "}
-                {type === "invoice"
-                  ? initial
-                    ? "Save invoice"
-                    : "Create invoice"
-                  : type === "sales_order"
-                    ? "Create sales order"
-                    : type === "po"
-                      ? initial
-                        ? "Save PO changes"
-                        : "Create customer PO"
-                      : type === "commission"
-                        ? "Post commission"
-                        : type === "receipt"
-                          ? "Record payment"
-                          : "Save"}
+                {busy
+                  ? isEasyOrder
+                    ? "Creating order..."
+                    : "Saving..."
+                  : type === "invoice"
+                    ? initial
+                      ? "Save invoice"
+                      : "Create invoice"
+                    : type === "sales_order"
+                      ? "Create sales order"
+                      : type === "po"
+                        ? initial
+                          ? "Save PO changes"
+                          : "Create customer PO"
+                        : type === "commission"
+                          ? "Post commission"
+                          : type === "receipt"
+                            ? "Record payment"
+                            : "Save"}
               </button>
             )}
           </div>
