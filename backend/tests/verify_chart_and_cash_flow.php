@@ -67,6 +67,7 @@ check(
     !DB::table("accounts")->where("code", "5500")->value("is_cash_account"),
     "bank charges are not a bank balance",
 );
+$hierarchyMigration = require __DIR__.'/../database/migrations/2026_11_02_000003_add_account_hierarchy.php'; $hierarchyMigration->up();
 $controller = new AccountController();
 $bank = [
     "code" => "BANK-B",

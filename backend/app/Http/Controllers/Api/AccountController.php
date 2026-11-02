@@ -42,7 +42,10 @@ final class AccountController
                 );
                 return $a;
             });
-        return response()->json(["as_of" => $date, "accounts" => $rows]);
+        return response()->json([
+            "as_of" => $date,
+            "accounts" => app(\App\Services\Accounting\AccountHierarchy::class)->tree($rows),
+        ]);
     }
     public function store(Request $r)
     {
@@ -69,9 +72,12 @@ final class AccountController
             "is_cash_account" => "required|boolean",
             "cash_flow_activity" => "required|in:operating,investing,financing,unclassified",
             "description" => "nullable|string|max:500",
+            "parent_id" => "nullable|integer|exists:accounts,id",
             "reason" => ($id ? "required" : "nullable") . "|string|max:500",
         ]);
         $id = DB::transaction(function () use ($id, $data, $r) {
+            // Serialize structural edits so two concurrent moves cannot form a cycle.
+            DB::table("accounts")->orderBy("id")->lockForUpdate()->get();
             $old = $id ? DB::table("accounts")->lockForUpdate()->find($id) : null;
             abort_if($id && !$old, 404, "Account not found.");
             if ($id) {
@@ -99,6 +105,40 @@ final class AccountController
                     "System accounts must stay active because transactions depend on them.",
                 );
             }
+            $parentId = array_key_exists("parent_id", $data)
+                ? ($data["parent_id"]
+                    ? (int) $data["parent_id"]
+                    : null)
+                : $old->parent_id ?? null;
+            if ($parentId) {
+                $parent = DB::table("accounts")->find($parentId);
+                abort_unless(
+                    $parent &&
+                        $parent->is_active &&
+                        !$parent->is_postable &&
+                        $parent->type === $data["type"],
+                    422,
+                    "Choose an active group account with the same account type. Posting accounts cannot contain subaccounts.",
+                );
+                abort_if(
+                    $id &&
+                        in_array(
+                            $parentId,
+                            app(\App\Services\Accounting\AccountHierarchy::class)->descendants($id),
+                            true,
+                        ),
+                    422,
+                    "An account cannot be placed inside itself or one of its subaccounts.",
+                );
+            }
+            if ($id && DB::table("accounts")->where("parent_id", $id)->exists()) {
+                abort_if(
+                    $data["is_postable"] || !$data["is_active"] || $old->type !== $data["type"],
+                    422,
+                    "An account with subaccounts must remain an active group with its original type.",
+                );
+            }
+            $data["parent_id"] = $parentId;
             abort_if(
                 (bool) $data["is_cash_account"] &&
                     ($data["type"] !== "asset" || !$data["is_postable"]),
@@ -143,8 +183,12 @@ final class AccountController
         abort_unless($a, 404, "Account not found.");
         $query = DB::table("journal_lines as l")
             ->join("journal_entries as j", "j.id", "=", "l.journal_entry_id")
-            ->where("l.account_id", $id)
+            ->whereIn(
+                "l.account_id",
+                app(\App\Services\Accounting\AccountHierarchy::class)->descendants($id),
+            )
             ->where("j.status", "posted");
+        $query->join("accounts as a", "a.id", "=", "l.account_id");
         $opening = (float) (clone $query)
             ->whereDate("j.posting_date", "<", $dates["from"])
             ->selectRaw("COALESCE(SUM(l.debit-l.credit),0) as amount")
@@ -154,6 +198,8 @@ final class AccountController
             ->whereBetween("j.posting_date", [$dates["from"], $dates["to"]])
             ->select(
                 "l.*",
+                "a.code as account_code",
+                "a.name as account_name",
                 "j.number",
                 "j.posting_date",
                 "j.source_type",
@@ -174,7 +220,8 @@ final class AccountController
             "opening" => round($opening, 2),
             "closing" => round($running, 2),
             "lines" => $rows,
-            "balance_basis" => "Debit minus credit; credit balances are negative.",
+            "balance_basis" =>
+                "Debit minus credit; credit balances are negative. Group ledgers include all descendant accounts.",
         ]);
     }
     public function cashFlow(Request $r, CashFlowService $service)

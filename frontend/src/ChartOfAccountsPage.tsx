@@ -30,6 +30,8 @@ export default function ChartOfAccountsPage({
   const [editor, setEditor] = useState<any>(undefined);
   const [ledger, setLedger] = useState<any>(null);
   const [opening, setOpening] = useState(false);
+  const [newParentId, setNewParentId] = useState<number | null>(null);
+  const [newGroup, setNewGroup] = useState(false);
   const load = useCallback(async () => {
     const result = await financeRequest(api, token, `accounts?as_of=${date}`);
     setData(result);
@@ -56,7 +58,23 @@ export default function ChartOfAccountsPage({
             <button onClick={() => setOpening(true)} disabled={!data}>
               Opening balances
             </button>
-            <button className="primary" onClick={() => setEditor(null)}>
+            <button
+              onClick={() => {
+                setNewParentId(null);
+                setNewGroup(true);
+                setEditor(null);
+              }}
+            >
+              New group
+            </button>
+            <button
+              className="primary"
+              onClick={() => {
+                setNewParentId(null);
+                setNewGroup(false);
+                setEditor(null);
+              }}
+            >
               <Plus /> New account
             </button>
           </div>
@@ -105,6 +123,7 @@ export default function ChartOfAccountsPage({
               [
                 "Code",
                 "Account",
+                "Parent path",
                 "Type",
                 "Cash / bank",
                 "Cash flow",
@@ -116,6 +135,7 @@ export default function ChartOfAccountsPage({
               ...rows.map((a: any) => [
                 a.code,
                 a.name,
+                a.parent_path,
                 a.type,
                 a.is_cash_account ? "Yes" : "No",
                 a.cash_flow_activity,
@@ -156,9 +176,10 @@ export default function ChartOfAccountsPage({
               ) : (
                 rows.map((a: any) => (
                   <tr key={a.id}>
-                    <td>
+                    <td style={{ paddingInlineStart: 18 + Number(a.depth || 0) * 22 }}>
                       <b>{a.code}</b>
                       <small>{a.name}</small>
+                      {a.parent_path && <small>Inside: {a.parent_path}</small>}
                     </td>
                     <td className="finance-capitalize">{a.type}</td>
                     <td>
@@ -174,6 +195,7 @@ export default function ChartOfAccountsPage({
                     </td>
                     <td>
                       <b>{money(a.balance)}</b>
+                      {a.child_count > 0 && <small>Includes subaccounts</small>}
                       <small>
                         {["liability", "equity", "income"].includes(a.type) ? "Credit" : "Debit"}{" "}
                         normal side
@@ -194,6 +216,19 @@ export default function ChartOfAccountsPage({
                         >
                           <Eye />
                         </button>
+                        {canManage && !a.is_postable && a.is_active && (
+                          <button
+                            className="icon-action"
+                            title="Create subaccount"
+                            onClick={() => {
+                              setNewParentId(Number(a.id));
+                              setNewGroup(false);
+                              setEditor(null);
+                            }}
+                          >
+                            <Plus />
+                          </button>
+                        )}
                         {canManage && (
                           <button
                             className="icon-action edit"
@@ -215,11 +250,15 @@ export default function ChartOfAccountsPage({
       <p className="report-note">
         Balances come from posted journals through the selected date. Positive balances follow each
         account’s normal debit or credit side. Existing transactions are preserved when an account
-        is made inactive.
+        is made inactive. Group balances include their subaccounts; do not add group subtotals to
+        child balances.
       </p>
       {editor !== undefined && (
         <AccountEditor
           account={editor}
+          accounts={data?.accounts || []}
+          defaultParentId={newParentId}
+          defaultGroup={newGroup}
           close={() => setEditor(undefined)}
           save={async (body) => {
             await financeRequest(
@@ -268,21 +307,41 @@ export default function ChartOfAccountsPage({
 
 function AccountEditor({
   account: a,
+  accounts,
+  defaultParentId,
+  defaultGroup,
   close,
   save,
 }: {
   account: any;
+  accounts: any[];
+  defaultParentId: number | null;
+  defaultGroup: boolean;
   close: () => void;
   save: (body: any) => Promise<void>;
 }) {
-  const [type, setType] = useState(a?.type || "expense");
+  const [type, setType] = useState(
+    a?.type || accounts.find((p) => Number(p.id) === defaultParentId)?.type || "expense",
+  );
   const [cash, setCash] = useState(Boolean(a?.is_cash_account));
-  const [postable, setPostable] = useState(a ? Boolean(a.is_postable) : true);
+  const [postable, setPostable] = useState(a ? Boolean(a.is_postable) : !defaultGroup);
   const [active, setActive] = useState(a ? Boolean(a.is_active) : true);
   const [activity, setActivity] = useState(a?.cash_flow_activity || "operating");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const locked = Boolean(a?.is_system || a?.has_transactions);
+  const locked = Boolean(a?.is_system || a?.has_transactions || a?.child_count);
+  const [parentId, setParentId] = useState(a ? a.parent_id || "" : defaultParentId || "");
+  const validParents = accounts.filter((p) => {
+    if (p.is_postable || !p.is_active || p.type !== type) return false;
+    const seen = new Set();
+    let current = p;
+    while (current && !seen.has(current.id)) {
+      if (current.id === a?.id) return false;
+      seen.add(current.id);
+      current = accounts.find((row) => Number(row.id) === Number(current.parent_id));
+    }
+    return true;
+  });
   return (
     <div
       className="backdrop"
@@ -305,6 +364,7 @@ function AccountEditor({
               code: locked ? a.code : form.get("code"),
               name: form.get("name"),
               type,
+              parent_id: parentId ? Number(parentId) : null,
               is_cash_account: cash,
               is_postable: postable,
               is_active: active,
@@ -330,7 +390,15 @@ function AccountEditor({
             <X />
           </button>
           <span>CHART OF ACCOUNTS</span>
-          <h2 id="account-editor-title">{a ? `Edit ${a.code}` : "New account"}</h2>
+          <h2 id="account-editor-title">
+            {a
+              ? `Edit ${a.code}`
+              : defaultGroup
+                ? "New account group"
+                : defaultParentId
+                  ? "New subaccount"
+                  : "New account"}
+          </h2>
         </div>
         <div className="popup-body">
           {error && (
@@ -359,6 +427,7 @@ function AccountEditor({
                   disabled={locked}
                   onChange={(event) => {
                     setType(event.target.value);
+                    setParentId("");
                     setCash(false);
                     setActivity(
                       ["income", "expense"].includes(event.target.value)
@@ -384,6 +453,22 @@ function AccountEditor({
                 required
                 placeholder="e.g. Main bank account or Office rent"
               />
+            </label>
+            <label>
+              Parent account (optional)
+              <select value={parentId} onChange={(event) => setParentId(event.target.value)}>
+                <option value="">Top-level account</option>
+                {validParents.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.parent_path ? p.parent_path + " / " : ""}
+                    {p.code} - {p.name}
+                  </option>
+                ))}
+              </select>
+              <small>
+                Choose an active group of the same type. To create a parent group, turn off Allow
+                journal posting.
+              </small>
             </label>
             <div className="finance-checks">
               <label>
