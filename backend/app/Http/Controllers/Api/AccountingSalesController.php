@@ -1256,6 +1256,13 @@ final class AccountingSalesController extends Controller
                             " days",
                     ),
                 );
+            if (
+                $data["sale_type"] !== "cash" &&
+                $customer->credit_days === null &&
+                empty($data["due_date"])
+            ) {
+                $dueDate = null;
+            }
             $invoiceId = DB::table("sales_invoices")->insertGetId([
                 "number" => $number,
                 "sales_order_id" => $orderId,

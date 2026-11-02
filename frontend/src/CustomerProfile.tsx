@@ -59,6 +59,7 @@ const tabs = [
   "Serials & warranties",
 ];
 const agingNames: Record<string, string> = {
+  terms_not_set: "Terms not set",
   current: "Not overdue",
   days_1_30: "1–30 days overdue",
   days_31_60: "31–60 days overdue",
@@ -140,7 +141,7 @@ export default function CustomerProfile({
                 ["Address", c.address],
                 ["Tax identification", c.tin],
                 ["Status", c.status],
-                ["Credit terms", `${c.credit_days} days`],
+                ["Credit terms", c.credit_days == null ? "Not set" : `${c.credit_days} days`],
                 [
                   "Credit limit",
                   s.credit_limit_configured ? money(c.credit_limit) : "Not configured",
@@ -184,7 +185,7 @@ export default function CustomerProfile({
             <p>Aging is measured from the invoice due date. Invoices due today are not overdue.</p>
             {cards(
               Object.entries(agingNames).map(
-                ([key, label]) => [label, money(data.aging[key])] as [string, string],
+                ([key, label]) => [label, money(data.aging[key] ?? 0)] as [string, string],
               ),
             )}
             {cards([

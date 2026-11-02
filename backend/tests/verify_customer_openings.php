@@ -379,3 +379,21 @@ foreach (DB::table("customer_opening_balances")->pluck("journal_id") as $journal
         check($e->getStatusCode() === 422, "Linked customer opening journal cannot be deleted");
     }
 }
+
+// Imported debts may have known invoice dates but no agreed credit terms yet.
+$unknownCustomer = createCustomer('UNKNOWN', ['credit_days' => null]);
+$unknownInvoice = (array) DB::table('sales_invoices')->first();
+unset($unknownInvoice['id']);
+$unknownInvoice = array_merge($unknownInvoice, ['number' => 'AR-UNKNOWN', 'customer_id' => $unknownCustomer['id'], 'invoice_date' => '2026-09-01', 'due_date' => null, 'total' => 125, 'outstanding' => 125, 'received_amount' => 0, 'is_opening_balance' => 1]);
+DB::table('sales_invoices')->insert($unknownInvoice);
+$unknownProfile = app(App\Services\Reporting\CustomerProfileService::class)->profile($unknownCustomer['id'], '2026-10-29');
+check((float) $unknownProfile['aging']['terms_not_set'] === 125.0 && (float) $unknownProfile['summary']['overdue'] === 0.0, 'Unknown terms stay visible without invented overdue amounts');
+check($unknownProfile['invoices'][0]->due_date === null && $unknownProfile['invoices'][0]->days_overdue === null, 'Profile preserves blank due dates and days overdue');
+
+if (!Schema::hasTable('audit_logs')) Schema::create('audit_logs', function ($t) { $t->id(); $t->string('event'); $t->string('entity_type'); $t->integer('entity_id'); $t->text('payload'); $t->timestamp('created_at')->nullable(); });
+$customerValues = (array) DB::table('customers')->find($unknownCustomer['id']);
+$customerValues['credit_days'] = 45;
+(new App\Http\Controllers\Api\SalesController())->updateCustomer(Illuminate\Http\Request::create('/', 'PUT', $customerValues), $unknownCustomer['id']);
+check(DB::table('sales_invoices')->where('number', 'AR-UNKNOWN')->value('due_date') === '2026-10-16', 'Filling customer credit days resolves previously blank invoice due dates');
+$resolvedProfile = app(App\Services\Reporting\CustomerProfileService::class)->profile($unknownCustomer['id'], '2026-10-29');
+check((float) $resolvedProfile['aging']['terms_not_set'] === 0.0 && (float) $resolvedProfile['summary']['overdue'] === 125.0, 'Resolved terms move the debt into the correct overdue bucket');

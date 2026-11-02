@@ -186,7 +186,7 @@ class SalesController
             "tin" => "nullable|max:40",
             "phone" => "nullable|max:30",
             "address" => "nullable|max:255",
-            "credit_days" => "required|integer|min:0|max:365",
+            "credit_days" => "nullable|integer|min:0|max:365",
             "credit_limit" => "required|numeric|min:0",
             "opening_balance" => "nullable|numeric|min:0",
             "opening_type" => "nullable|in:receivable,credit",
@@ -221,13 +221,49 @@ class SalesController
             "tin" => "nullable|max:40",
             "phone" => "nullable|max:30",
             "address" => "nullable|max:255",
-            "credit_days" => "required|integer|min:0|max:365",
+            "credit_days" => "nullable|integer|min:0|max:365",
             "credit_limit" => "required|numeric|min:0",
             "status" => "required|in:active,inactive",
         ]);
-        DB::table("customers")
-            ->where("id", $id)
-            ->update($d + ["updated_at" => now()]);
+        DB::transaction(function () use ($id, $d) {
+            DB::table("customers")->where("id", $id)->lockForUpdate()->first();
+            DB::table("customers")
+                ->where("id", $id)
+                ->update($d + ["updated_at" => now()]);
+            // Resolve only previously unknown due dates; preserve all agreed invoice terms.
+            if (isset($d["credit_days"])) {
+                foreach (
+                    DB::table("sales_invoices")
+                        ->where("customer_id", $id)
+                        ->where("is_opening_balance", true)
+                        ->whereNull("due_date")
+                        ->get()
+                    as $invoice
+                ) {
+                    $due = \Carbon\Carbon::parse($invoice->invoice_date)
+                        ->addDays((int) $d["credit_days"])
+                        ->toDateString();
+                    DB::table("sales_invoices")
+                        ->where("id", $invoice->id)
+                        ->update(["due_date" => $due, "updated_at" => now()]);
+                    DB::table("customer_opening_balances")
+                        ->where("invoice_id", $invoice->id)
+                        ->update(["due_date" => $due, "updated_at" => now()]);
+                    DB::table("audit_logs")->insert([
+                        "event" => "receivable.terms_set",
+                        "entity_type" => "sales_invoice",
+                        "entity_id" => $invoice->id,
+                        "payload" => json_encode([
+                            "credit_days" => $d["credit_days"],
+                            "due_date" => $due,
+                            "reason" =>
+                                "Customer credit terms supplied for a previously unknown opening debt",
+                        ]),
+                        "created_at" => now(),
+                    ]);
+                }
+            }
+        });
         return response()->json(DB::table("customers")->find($id));
     }
     public function storeRep(Request $r): JsonResponse
@@ -949,6 +985,9 @@ class SalesController
                         " days",
                 ),
             );
+            if ($po->sale_type !== "cash" && $customer->credit_days === null) {
+                $due = null;
+            }
             $iid = DB::table("sales_invoices")->insertGetId([
                 "number" => $num,
                 "sales_order_id" => $id,
@@ -1151,6 +1190,12 @@ class SalesController
             ->leftJoin("sales_representatives as rep", "rep.id", "=", "i.sales_rep_id")
             ->where("i.outstanding", ">", 0)
             ->whereDate("i.invoice_date", "<=", $asOf)
+            ->whereNotExists(function ($q) use ($asOf) {
+                $q->selectRaw("1")
+                    ->from("customer_opening_balances as opening")
+                    ->whereColumn("opening.invoice_id", "i.id")
+                    ->whereDate("opening.balance_date", ">", $asOf);
+            })
             ->select(
                 "i.*",
                 "c.code as customer_code",
@@ -1160,7 +1205,7 @@ class SalesController
             ->get()
             ->map(function ($x) use ($asOf) {
                 $days = max(0, (int) floor((strtotime($asOf) - strtotime($x->due_date)) / 86400));
-                $x->days_overdue = $days;
+                $x->days_overdue = $x->due_date ? $days : null;
                 $x->bucket =
                     $days === 0
                         ? "current"
@@ -1171,6 +1216,7 @@ class SalesController
                                 : ($days <= 90
                                     ? "61_90"
                                     : "90_plus")));
+                $x->bucket = $x->due_date ? $x->bucket : "terms_not_set";
                 $last = DB::table("receipt_allocations as a")
                     ->join("customer_receipts as r", "r.id", "=", "a.receipt_id")
                     ->leftJoin(

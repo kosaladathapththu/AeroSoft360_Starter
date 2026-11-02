@@ -157,7 +157,7 @@ const empty: Workspace = {
 };
 const money = (n: number | string) =>
   new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR" }).format(Number(n));
-const status = (s: string) => <span className={`status ${s}`}>{s.replace("_", " ")}</span>;
+const status = (s: string) => <span className={`status ${s}`}>{s.replace(/_/g, " ")}</span>;
 
 export default function App() {
   const [data, setData] = useState<Workspace>(empty),
@@ -2624,7 +2624,7 @@ function salesCells(page: string, r: any) {
           {r.name}
         </td>
         <td>{r.phone || "—"}</td>
-        <td>{r.credit_days} days</td>
+        <td>{r.credit_days == null ? "Not set" : `${r.credit_days} days`}</td>
         <td>{money(r.credit_limit)}</td>
         <td>{status(r.status)}</td>
       </>
@@ -2745,7 +2745,7 @@ function salesCells(page: string, r: any) {
         <td>
           {r.invoice_date}
           <br />
-          <small>Due {r.due_date}</small>
+          <small>{r.due_date ? `Due ${r.due_date}` : "Terms not set"}</small>
         </td>
         <td>{r.sale_type}</td>
         <td>{money(r.total)}</td>
@@ -2777,7 +2777,7 @@ function salesCells(page: string, r: any) {
         </td>
         <td>{r.customer_name}</td>
         <td>{r.rep_name}</td>
-        <td>{r.due_date}</td>
+        <td>{r.due_date || "Terms not set"}</td>
         <td>{money(r.total)}</td>
         <td>{money(r.received_amount)}</td>
         <td>
@@ -2794,8 +2794,8 @@ function salesCells(page: string, r: any) {
         </td>
         <td>{r.customer_name}</td>
         <td>{r.rep_name}</td>
-        <td>{r.due_date}</td>
-        <td>{r.days_overdue}</td>
+        <td>{r.due_date || "Terms not set"}</td>
+        <td>{r.days_overdue ?? "?"}</td>
         <td>{status(r.bucket)}</td>
         <td>
           {r.last_collection_date ? (
@@ -4309,7 +4309,7 @@ function SalesCreateModal({
         tin: f.get("tin"),
         phone: f.get("phone"),
         address: f.get("address"),
-        credit_days: Number(f.get("credit_days")),
+        credit_days: f.get("credit_days") === "" ? null : Number(f.get("credit_days")),
         credit_limit: Number(f.get("credit_limit")),
         ...(!initial
           ? {
@@ -4642,8 +4642,8 @@ function SalesCreateModal({
                   <input
                     name="credit_days"
                     type="number"
-                    defaultValue={initial?.credit_days ?? 30}
-                    required
+                    defaultValue={initial ? (initial.credit_days ?? "") : 30}
+                    placeholder="Not set"
                   />
                 </label>
                 <label>

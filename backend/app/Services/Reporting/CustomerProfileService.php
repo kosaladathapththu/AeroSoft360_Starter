@@ -19,6 +19,12 @@ final class CustomerProfileService
             ->leftJoin("sales_representatives as r", "r.id", "=", "i.sales_rep_id")
             ->where("i.customer_id", $id)
             ->whereDate("i.invoice_date", "<=", $asOf)
+            ->whereNotExists(function ($q) use ($asOf) {
+                $q->selectRaw("1")
+                    ->from("customer_opening_balances as opening")
+                    ->whereColumn("opening.invoice_id", "i.id")
+                    ->whereDate("opening.balance_date", ">", $asOf);
+            })
             ->whereNotIn("i.status", ["void", "cancelled"])
             ->select("i.*", "r.name as salesperson")
             ->orderByDesc("i.invoice_date")
@@ -70,7 +76,7 @@ final class CustomerProfileService
             ->groupBy("sales_invoice_id");
 
         $aging = array_fill_keys(
-            ["current", "days_1_30", "days_31_60", "days_61_90", "days_90_plus"],
+            ["current", "days_1_30", "days_31_60", "days_61_90", "days_90_plus", "terms_not_set"],
             0,
         );
         $invoiced = 0;
@@ -86,12 +92,11 @@ final class CustomerProfileService
             $amount = (int) round((float) $invoice->total * 100);
             $paid = (int) round((float) $paidByInvoice->get($invoice->id, 0) * 100);
             $balance = max(0, $amount - $paid);
-            $due =
-                $invoice->due_date ?:
-                Carbon::parse($invoice->invoice_date)
-                    ->addDays((int) $customer->credit_days)
-                    ->toDateString();
-            $days = $due < $asOf ? (int) Carbon::parse($due)->diffInDays(Carbon::parse($asOf)) : 0;
+            $due = $invoice->due_date;
+            $days =
+                $due && $due < $asOf
+                    ? (int) Carbon::parse($due)->diffInDays(Carbon::parse($asOf))
+                    : 0;
             $bucket =
                 $days === 0
                     ? "current"
@@ -110,6 +115,7 @@ final class CustomerProfileService
             $invoice->document_kind =
                 $invoice->is_opening_balance ?? false ? "Opening receivable" : "Sales invoice";
             $outstanding += $balance;
+            $bucket = $due ? $bucket : "terms_not_set";
             $aging[$bucket] += $balance;
             if ($balance > 0) {
                 $open++;
@@ -124,7 +130,7 @@ final class CustomerProfileService
             $invoice->due_date = $due;
             $invoice->received_as_of = $paid / 100;
             $invoice->outstanding_as_of = $balance / 100;
-            $invoice->days_overdue = $balance > 0 ? $days : 0;
+            $invoice->days_overdue = $due ? ($balance > 0 ? $days : 0) : null;
             $invoice->aging_bucket = $balance > 0 ? $bucket : "settled";
             $invoice->status_as_of =
                 $balance === 0
@@ -253,7 +259,7 @@ final class CustomerProfileService
                 "total_received" => $received / 100,
                 "outstanding" => $outstanding / 100,
                 "overdue" => $overdue / 100,
-                "current" => ($outstanding - $overdue) / 100,
+                "current" => ($outstanding - $overdue - $aging["terms_not_set"]) / 100,
                 "due_today" => $dueToday / 100,
                 "open_invoices" => $open,
                 "invoice_count" => $invoices->count(),
