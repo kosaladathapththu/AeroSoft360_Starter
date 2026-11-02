@@ -101,12 +101,17 @@ final class AccountingSalesController extends Controller
         $manualCommission = (float) DB::table("manual_commissions")
             ->where("status", "eligible")
             ->sum("commission_amount");
+        $receivables = DB::table("sales_invoices")->whereNotIn("status", ["void", "cancelled"]);
         return response()->json([
             "customers_count" => DB::table("customers")->where("status", "active")->count(),
-            "open_invoices_count" => DB::table("sales_invoices")
-                ->where("outstanding", ">", 0)
-                ->count(),
-            "outstanding_total" => (float) DB::table("sales_invoices")->sum("outstanding"),
+            "open_invoices_count" => (clone $receivables)->where("outstanding", ">", 0)->count(),
+            "outstanding_total" => (float) (clone $receivables)->sum("outstanding"),
+            "opening_receivables_total" => (float) (clone $receivables)
+                ->where("is_opening_balance", true)
+                ->sum("outstanding"),
+            "sales_receivables_total" => (float) (clone $receivables)
+                ->where("is_opening_balance", false)
+                ->sum("outstanding"),
             "collections_total" => (float) DB::table("customer_receipts")
                 ->when(
                     Schema::hasColumn("customer_receipts", "is_opening_balance"),

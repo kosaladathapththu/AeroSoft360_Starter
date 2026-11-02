@@ -1128,10 +1128,21 @@ function SalesPage({
             <b>{dashboard.customers_count}</b>
             <small>Active customer accounts</small>
           </article>
-          <article>
-            <span>Open credit invoices</span>
-            <b>{dashboard.open_invoices_count}</b>
-            <small>{money(dashboard.outstanding_total)} outstanding</small>
+          <article className="receivables-kpi">
+            <span>Accounts receivable</span>
+            <b>{money(dashboard.outstanding_total)}</b>
+            <small>{dashboard.open_invoices_count} open customer balances</small>
+            <div className="receivables-breakdown">
+              <small>
+                Opening balances: <strong>{money(dashboard.opening_receivables_total)}</strong>
+              </small>
+              <small>
+                Sales invoices: <strong>{money(dashboard.sales_receivables_total)}</strong>
+              </small>
+            </div>
+            <button type="button" onClick={() => go("Debtors Aging")}>
+              View receivables
+            </button>
           </article>
           <article>
             <span>Collections received</span>
@@ -1145,7 +1156,7 @@ function SalesPage({
           </article>
         </div>
         <div className="flow-card dashboard-workflow-card">
-          <h2>Sales ? step by step</h2>
+          <h2>Sales - step by step</h2>
           <p>
             Start with a sales order, or use a quotation / customer PO first when needed. Confirm
             prices and quantities before dispatching goods and issuing the invoice.
@@ -1169,7 +1180,7 @@ function SalesPage({
           </div>
         </div>
         <div className="flow-card dashboard-workflow-card">
-          <h2>Purchasing ? order to payment</h2>
+          <h2>Purchasing - order to payment</h2>
           <WorkflowSteps page="Purchasing Overview" go={go} />
           <div className="workflow-shortcuts">
             <button onClick={() => go("Purchasing Overview")}>Open purchasing workspace ?</button>

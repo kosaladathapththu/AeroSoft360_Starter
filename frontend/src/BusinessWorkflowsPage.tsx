@@ -923,7 +923,20 @@ export function WorkflowTable({
         <thead>
           <tr>
             {columns.map(([key, name, type]) => (
-              <th key={key} className={type === "money" ? "report-number" : undefined}>
+              <th
+                key={key}
+                className={
+                  type === "money"
+                    ? "report-number"
+                    : /description|name|reason|note|address|issue|resolution|customer|supplier/.test(
+                          key,
+                        )
+                      ? "workflow-cell-text"
+                      : /reference|number|journal|code/.test(key)
+                        ? "workflow-cell-reference"
+                        : undefined
+                }
+              >
                 {name}
               </th>
             ))}
@@ -1855,7 +1868,7 @@ function Subledger({
           </p>
         </div>
       </div>
-      <div className="finance-toolbar">
+      <div className="finance-toolbar subledger-toolbar">
         {page === "Stock Ledgers" && (
           <label>
             Stock type
@@ -1872,7 +1885,7 @@ function Subledger({
             </select>
           </label>
         )}
-        <label>
+        <label className="ledger-party-field">
           {stock ? "Product" : "Party"}
           <select
             value={id}
@@ -1908,6 +1921,7 @@ function Subledger({
           <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
         </label>
         <button
+          className="secondary-action"
           disabled={!data}
           onClick={() => {
             if (output.current)
@@ -1944,7 +1958,7 @@ function Subledger({
         <p>Choose a {stock ? "product" : "customer/supplier"} to view its linked movements.</p>
       )}
       {data && (
-        <div ref={output}>
+        <div ref={output} className="subledger-output">
           <h2>
             {data.party.code} · {data.party.name}
           </h2>

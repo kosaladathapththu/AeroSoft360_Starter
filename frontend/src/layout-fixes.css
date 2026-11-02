@@ -540,3 +540,156 @@
     }
   }
 }
+
+@media screen {
+  .kpis .receivables-kpi > b {
+    font-size: clamp(18px, 1.5vw, 26px);
+    overflow-wrap: anywhere;
+  }
+  .receivables-breakdown {
+    display: grid;
+    gap: 5px;
+    border-top: 1px solid #dce9eb;
+    padding-top: 10px;
+    margin-top: 10px;
+  }
+  .kpis .receivables-breakdown small {
+    display: block;
+    line-height: 1.5;
+    color: #5b7582;
+  }
+  .receivables-breakdown strong {
+    font-weight: 600;
+    color: #244f59;
+  }
+  .receivables-kpi > button {
+    align-self: flex-start;
+    margin-top: 12px;
+    padding: 8px 12px;
+    border: 1px solid #b0d8d3;
+    border-radius: 8px;
+    background: #edf8f5;
+    color: #087d72;
+    font-weight: 600;
+    cursor: pointer;
+  }
+}
+
+/* Shared screen controls; printed reports keep their own document styling. */
+@media screen {
+  :is(.finance-toolbar, .report-downloads) > button:not(.primary),
+  .heading .actions > button:not([class]),
+  .popup-footer > button:not([class]),
+  .popup-footer .actions > button:not([class]) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 42px;
+    padding: 10px 15px;
+    border: 1px solid #bed6dc;
+    border-radius: 9px;
+    background: #fff;
+    color: #285b66;
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  :is(.finance-toolbar, .report-downloads) > button:not(.primary):hover:not(:disabled),
+  .popup-footer button:not([class]):hover:not(:disabled) {
+    background: #edf7f5;
+    border-color: #078f83;
+    color: #087b70;
+  }
+  :is(.finance-toolbar, .report-downloads, .popup-footer) button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  :is(.finance-toolbar, .report-downloads, .popup-footer) button > svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+  .finance-toolbar label {
+    min-width: 0;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+  .finance-toolbar :is(input, select) {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+  }
+  .subledger-toolbar {
+    padding: 18px;
+    background: #fff;
+    border: 1px solid #d8e5e9;
+    border-radius: 12px;
+    gap: 12px;
+  }
+  .subledger-toolbar > label {
+    flex: 0 1 155px;
+  }
+  .subledger-toolbar > .ledger-party-field {
+    flex: 1 1 280px;
+  }
+  .subledger-toolbar > button {
+    flex: 0 0 auto;
+  }
+  .subledger-output > h2 {
+    font-size: 22px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    margin: 22px 0 14px;
+  }
+  .workflow-table {
+    max-width: 100%;
+  }
+  .workflow-table :is(th, td) {
+    padding: 12px 14px;
+  }
+  .workflow-table td {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .workflow-table :is(th, td).workflow-cell-text {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    min-width: 160px;
+    max-width: 340px;
+  }
+  .workflow-table :is(th, td).workflow-cell-reference {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    min-width: 105px;
+    max-width: 180px;
+  }
+  .workflow-table .workflow-actions-cell {
+    min-width: 125px;
+  }
+  .workflow-table .workflow-actions button {
+    white-space: normal;
+    line-height: 1.4;
+    cursor: pointer;
+  }
+  .workflow-table .report-number {
+    font-variant-numeric: tabular-nums;
+  }
+  @media (max-width: 720px) {
+    .finance-toolbar > label {
+      flex: 1 1 150px;
+    }
+    .subledger-toolbar > .ledger-party-field {
+      flex-basis: 100%;
+    }
+    .subledger-toolbar > button {
+      flex: 1 1 150px;
+    }
+    .subledger-output > h2 {
+      font-size: 18px;
+    }
+  }
+}
