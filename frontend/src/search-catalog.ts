@@ -1,5 +1,9 @@
 export const reportSearchCatalog = [
-  ["sales_returns", "Sales returns / credit notes", "returned pieces credit damaged restock customer return"],
+  [
+    "sales_returns",
+    "Sales returns / credit notes",
+    "returned pieces credit damaged restock customer return",
+  ],
   ["sales_report", "Sales report", "sales invoices revenue turnover credit cash"],
   ["product_sales", "Product sales report", "article item footwear sold quantities"],
   ["receipt_report", "Receipt report", "payment collection received money customer"],
@@ -19,8 +23,10 @@ export const reportSearchCatalog = [
 ] as const;
 
 export const pageSearchKeywords: Record<string, string> = {
-  "Sales Returns": "customer return credit note partial pieces restock damaged refund returned goods",
-  "Purchasing Overview": "purchasing procurement workflow steps purchase order grn goods receipt supplier invoice bill payment",
+  "Sales Returns":
+    "customer return credit note partial pieces restock damaged refund returned goods",
+  "Purchasing Overview":
+    "purchasing procurement workflow steps purchase order grn goods receipt supplier invoice bill payment",
   "Point of Sale": "pos checkout counter cash sale bill receipt",
   "Customer POs": "customer purchase order cpo booking",
   "Sales Orders": "confirmed order dispatch delivery",

@@ -232,10 +232,31 @@ final class RetailReportService
 
     private function salesReturns(string $from, string $to): array
     {
-        if (!Schema::hasTable('sales_returns')) return [];
-        return DB::table('sales_return_lines as l')->join('sales_returns as r', 'r.id', '=', 'l.sales_return_id')
-            ->join('sales_invoices as i', 'i.id', '=', 'r.sales_invoice_id')->join('customers as c', 'c.id', '=', 'r.customer_id')
-            ->whereBetween('r.return_date', [$from, $to])->select('r.number', 'r.return_date', 'i.number as invoice', 'c.name as customer', 'l.article_code', 'l.article_name', 'l.size_label', 'l.colour', 'l.quantity', 'l.condition', 'l.total as credit', 'r.reason')->orderByDesc('r.return_date')->get()->all();
+        if (!Schema::hasTable("sales_returns")) {
+            return [];
+        }
+        return DB::table("sales_return_lines as l")
+            ->join("sales_returns as r", "r.id", "=", "l.sales_return_id")
+            ->join("sales_invoices as i", "i.id", "=", "r.sales_invoice_id")
+            ->join("customers as c", "c.id", "=", "r.customer_id")
+            ->whereBetween("r.return_date", [$from, $to])
+            ->select(
+                "r.number",
+                "r.return_date",
+                "i.number as invoice",
+                "c.name as customer",
+                "l.article_code",
+                "l.article_name",
+                "l.size_label",
+                "l.colour",
+                "l.quantity",
+                "l.condition",
+                "l.total as credit",
+                "r.reason",
+            )
+            ->orderByDesc("r.return_date")
+            ->get()
+            ->all();
     }
 
     private function productSales(string $from, string $to): array

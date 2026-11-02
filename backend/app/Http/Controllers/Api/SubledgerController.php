@@ -52,7 +52,9 @@ final class SubledgerController
                 ->get()
                 ->keyBy("id");
         $returns = $customer
-            ? (\Illuminate\Support\Facades\Schema::hasTable("sales_returns") ? DB::table("sales_returns")->where("customer_id", $party->id)->get()->keyBy("id") : collect())
+            ? (\Illuminate\Support\Facades\Schema::hasTable("sales_returns")
+                ? DB::table("sales_returns")->where("customer_id", $party->id)->get()->keyBy("id")
+                : collect())
             : DB::table("purchase_returns")
                 ->whereIn("goods_receipt_id", $receipts->keys())
                 ->get()
@@ -89,9 +91,9 @@ final class SubledgerController
                 $source = $returns->get($line->source_id);
                 $page = "Purchase Returns";
             }
-            if ($customer && $line->source_type === 'sales_return') {
+            if ($customer && $line->source_type === "sales_return") {
                 $source = $returns->get($line->source_id);
-                $page = 'Sales Returns';
+                $page = "Sales Returns";
             }
             if (!$source) {
                 continue;
@@ -161,6 +163,7 @@ final class SubledgerController
                     "goods_receipt" => "Receive Goods",
                     "purchase_return", "purchase_return_reversal" => "Purchase Returns",
                     "sales_invoice" => "Invoices",
+                    "sales_return" => "Sales Returns",
                     default => $raw ? "Raw Material Stock" : "Finished Goods Stock",
                 },
             ];

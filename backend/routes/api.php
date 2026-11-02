@@ -152,7 +152,10 @@ Route::prefix("v1")->group(function (): void {
             \App\Http\Controllers\Api\PointOfSaleController::class,
             "checkout",
         ])->middleware("permission:accounting.manage");
-        Route::get('/search', [\App\Http\Controllers\Api\GlobalSearchController::class, 'index'])->middleware('permission:workspace.view');
+        Route::get("/search", [
+            \App\Http\Controllers\Api\GlobalSearchController::class,
+            "index",
+        ])->middleware("permission:workspace.view");
         Route::get("/workspace", [ProcurementController::class, "workspace"])->middleware(
             "permission:workspace.view",
         );
@@ -162,7 +165,10 @@ Route::prefix("v1")->group(function (): void {
         Route::get("/sales/dashboard", [AccountingSalesController::class, "dashboard"])->middleware(
             "permission:workspace.view",
         );
-        Route::get('/customers/{id}/profile', [\App\Http\Controllers\Api\CustomerProfileController::class, 'show'])->middleware('permission:workspace.view');
+        Route::get("/customers/{id}/profile", [
+            \App\Http\Controllers\Api\CustomerProfileController::class,
+            "show",
+        ])->middleware("permission:workspace.view");
         Route::post("/customers", [SalesController::class, "storeCustomer"])->middleware(
             "permission:accounting.manage",
         );
@@ -225,8 +231,14 @@ Route::prefix("v1")->group(function (): void {
             AccountingSalesController::class,
             "invoiceCustomerPo",
         ])->middleware("permission:accounting.manage");
-        Route::get('/sales-returns', [\App\Http\Controllers\Api\SalesReturnController::class, 'index'])->middleware('permission:workspace.view');
-        Route::post('/sales-returns', [\App\Http\Controllers\Api\SalesReturnController::class, 'store'])->middleware('permission:accounting.manage');
+        Route::get("/sales-returns", [
+            \App\Http\Controllers\Api\SalesReturnController::class,
+            "index",
+        ])->middleware("permission:workspace.view");
+        Route::post("/sales-returns", [
+            \App\Http\Controllers\Api\SalesReturnController::class,
+            "store",
+        ])->middleware("permission:accounting.manage");
         Route::post("/sales-orders/manual", [
             AccountingSalesController::class,
             "manualSalesOrder",
@@ -363,7 +375,10 @@ Route::prefix("v1")->group(function (): void {
         Route::get("/accounts", [AccountController::class, "index"])->middleware(
             "permission:workspace.view",
         );
-        Route::post('/accounts/{id}/opening-balance', [\App\Http\Controllers\Api\AccountOpeningController::class, 'store'])->middleware('permission:accounting.manage');
+        Route::post("/accounts/{id}/opening-balance", [
+            \App\Http\Controllers\Api\AccountOpeningController::class,
+            "store",
+        ])->middleware("permission:accounting.manage");
         Route::post("/accounts", [AccountController::class, "store"])->middleware(
             "permission:accounting.manage",
         );

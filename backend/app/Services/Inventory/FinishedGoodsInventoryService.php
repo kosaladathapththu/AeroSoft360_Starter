@@ -86,11 +86,26 @@ final class FinishedGoodsInventoryService
         );
     }
 
-    public function receiveReturn(int $articleId, string $size, int $quantity, int $returnId, int $lineId, string $date): void
-    {
-        DB::table('articles')->where('id', $articleId)->lockForUpdate()->first();
-        $this->move($articleId, $size, $quantity, 'sales_return', 'sales_return', $returnId,
-            "sales-return:$returnId:line:$lineId", $date, false);
+    public function receiveReturn(
+        int $articleId,
+        string $size,
+        int $quantity,
+        int $returnId,
+        int $lineId,
+        string $date,
+    ): void {
+        DB::table("articles")->where("id", $articleId)->lockForUpdate()->first();
+        $this->move(
+            $articleId,
+            $size,
+            $quantity,
+            "sales_return",
+            "sales_return",
+            $returnId,
+            "sales-return:$returnId:line:$lineId",
+            $date,
+            false,
+        );
     }
 
     private function move(

@@ -626,7 +626,12 @@ export default function App() {
                   go={goToPage}
                 />
               ) : page === "Sales Returns" ? (
-                <SalesReturnsPage api={API} token={token() || ""} permissions={profile.permissions} search={search} />
+                <SalesReturnsPage
+                  api={API}
+                  token={token() || ""}
+                  permissions={profile.permissions}
+                  search={search}
+                />
               ) : page === "Serials & Warranty" ? (
                 <SerialWarrantyPage
                   api={API}
@@ -1979,7 +1984,15 @@ function SalesPage({
                                     <Printer />
                                   </button>
                                 )}
-                                {page === "Invoices" && !r.is_opening_balance && <button className="return-secondary" title="Return individual pieces from an invoice" onClick={() => go("Sales Returns")}>Return pieces</button>}
+                                {page === "Invoices" && !r.is_opening_balance && (
+                                  <button
+                                    className="return-secondary"
+                                    title="Return individual pieces from an invoice"
+                                    onClick={() => go("Sales Returns")}
+                                  >
+                                    Return pieces
+                                  </button>
+                                )}
                                 <button
                                   className="icon-action edit"
                                   title={`Edit ${page}`}

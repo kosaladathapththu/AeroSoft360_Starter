@@ -1163,7 +1163,10 @@ class SalesController
             "updated_at" => now(),
         ]);
         $received = $invoice->received_amount + $d["amount"];
-        $outstanding = max(0, $invoice->total - $received - (float) ($invoice->returned_amount ?? 0));
+        $outstanding = max(
+            0,
+            $invoice->total - $received - (float) ($invoice->returned_amount ?? 0),
+        );
         DB::table("sales_invoices")
             ->where("id", $invoice->id)
             ->update([
@@ -1188,7 +1191,7 @@ class SalesController
         $rows = DB::table("sales_invoices as i")
             ->join("customers as c", "c.id", "=", "i.customer_id")
             ->leftJoin("sales_representatives as rep", "rep.id", "=", "i.sales_rep_id")
-            ->where("i.outstanding", ">", 0)
+            ->whereNotIn("i.status", ["void", "cancelled"])
             ->whereDate("i.invoice_date", "<=", $asOf)
             ->whereNotExists(function ($q) use ($asOf) {
                 $q->selectRaw("1")
@@ -1204,6 +1207,21 @@ class SalesController
             )
             ->get()
             ->map(function ($x) use ($asOf) {
+                $paid = DB::table("receipt_allocations as a")
+                    ->join("customer_receipts as p", "p.id", "=", "a.receipt_id")
+                    ->where("a.invoice_id", $x->id)
+                    ->where("p.status", "posted")
+                    ->whereDate("p.receipt_date", "<=", $asOf)
+                    ->sum("a.amount");
+                $credit = \Illuminate\Support\Facades\Schema::hasTable("sales_returns")
+                    ? DB::table("sales_returns")
+                        ->where("sales_invoice_id", $x->id)
+                        ->whereDate("return_date", "<=", $asOf)
+                        ->sum("total")
+                    : 0;
+                $x->received_amount = (float) $paid;
+                $x->returned_amount = (float) $credit;
+                $x->outstanding = max(0, round((float) $x->total - $paid - $credit, 2));
                 $days = max(0, (int) floor((strtotime($asOf) - strtotime($x->due_date)) / 86400));
                 $x->days_overdue = $x->due_date ? $days : null;
                 $x->bucket =
@@ -1226,6 +1244,8 @@ class SalesController
                         "r.collector_sales_rep_id",
                     )
                     ->where("a.invoice_id", $x->id)
+                    ->where("r.status", "posted")
+                    ->whereDate("r.receipt_date", "<=", $asOf)
                     ->orderByDesc("r.receipt_date")
                     ->select(
                         "r.receipt_date",
@@ -1237,7 +1257,9 @@ class SalesController
                 $x->last_collection_type = $last->collection_type ?? null;
                 $x->last_collector = $last->collector_name ?? null;
                 return $x;
-            });
+            })
+            ->filter(fn($row) => $row->outstanding > 0)
+            ->values();
         return response()->json([
             "as_of" => $asOf,
             "rows" => $rows,

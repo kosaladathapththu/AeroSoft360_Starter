@@ -75,13 +75,25 @@ final class CustomerProfileService
             ->get()
             ->groupBy("sales_invoice_id");
 
-        $salesReturns = Schema::hasTable('sales_returns') ? DB::table('sales_returns as r')
-            ->join('sales_invoices as i', 'i.id', '=', 'r.sales_invoice_id')
-            ->where('r.customer_id', $id)->whereDate('r.return_date', '<=', $asOf)
-            ->select('r.*', 'i.number as invoice_number')->get() : collect();
-        $returnCredit = $salesReturns->groupBy('sales_invoice_id')->map(fn($rows) => $rows->sum('total'));
-        $returnLines = Schema::hasTable('sales_return_lines') ? DB::table('sales_return_lines')->whereIn('sales_return_id', $salesReturns->pluck('id'))->get() : collect();
-        foreach ($salesReturns as $return) $return->lines = $returnLines->where('sales_return_id', $return->id)->values();
+        $salesReturns = Schema::hasTable("sales_returns")
+            ? DB::table("sales_returns as r")
+                ->join("sales_invoices as i", "i.id", "=", "r.sales_invoice_id")
+                ->where("r.customer_id", $id)
+                ->whereDate("r.return_date", "<=", $asOf)
+                ->select("r.*", "i.number as invoice_number")
+                ->get()
+            : collect();
+        $returnCredit = $salesReturns
+            ->groupBy("sales_invoice_id")
+            ->map(fn($rows) => $rows->sum("total"));
+        $returnLines = Schema::hasTable("sales_return_lines")
+            ? DB::table("sales_return_lines")
+                ->whereIn("sales_return_id", $salesReturns->pluck("id"))
+                ->get()
+            : collect();
+        foreach ($salesReturns as $return) {
+            $return->lines = $returnLines->where("sales_return_id", $return->id)->values();
+        }
         $aging = array_fill_keys(
             ["current", "days_1_30", "days_31_60", "days_61_90", "days_90_plus", "terms_not_set"],
             0,
@@ -168,7 +180,12 @@ final class CustomerProfileService
                 ->unique()
                 ->join(", ");
         }
-        $net = $openingDebit + $invoiced - $received - $openingCredit - (int) round($salesReturns->sum("total") * 100);
+        $net =
+            $openingDebit +
+            $invoiced -
+            $received -
+            $openingCredit -
+            (int) round($salesReturns->sum("total") * 100);
         $credit = max(0, $outstanding - $net);
         $limit = (int) round((float) $customer->credit_limit * 100);
         $exposure = max(0, $net);
@@ -297,7 +314,7 @@ final class CustomerProfileService
             "serials" => $serials,
             "warranty_claims" => $claims,
             "basis" =>
-                "Amounts and aging include invoices and posted customer receipts dated on or before the selected date. Aging uses invoice due dates and dated payment allocations. Document statuses, credit terms and contact details reflect current records. Customer credit is shown separately from unpaid invoices; it does not silently settle them. Supplier payables are not part of a customer account.",
+                "Amounts and aging include invoices, sales return credits and posted customer receipts dated on or before the selected date. Aging uses invoice due dates and dated payment allocations. Document statuses, credit terms and contact details reflect current records. Customer credit is shown separately from unpaid invoices; it does not silently settle them. Supplier payables are not part of a customer account.",
         ];
     }
 }
