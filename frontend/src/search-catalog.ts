@@ -18,6 +18,7 @@ export const reportSearchCatalog = [
 ] as const;
 
 export const pageSearchKeywords: Record<string, string> = {
+  "Sales Returns": "customer return credit note partial pieces restock damaged refund returned goods",
   "Purchasing Overview": "purchasing procurement workflow steps purchase order grn goods receipt supplier invoice bill payment",
   "Point of Sale": "pos checkout counter cash sale bill receipt",
   "Customer POs": "customer purchase order cpo booking",

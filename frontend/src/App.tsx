@@ -58,6 +58,7 @@ import CollectionFields from "./CollectionFields";
 import PaymentVouchersPage from "./PaymentVouchersPage";
 import ChartOfAccountsPage from "./ChartOfAccountsPage";
 import CashFlowPage from "./CashFlowPage";
+import SalesReturnsPage from "./SalesReturnsPage";
 import "./layout-fixes.css";
 
 const API =
@@ -255,6 +256,7 @@ export default function App() {
         ["Customer POs", ClipboardCheck],
         ["Sales Orders", FileText],
         ["Invoices", FileText],
+        ["Sales Returns", FileText],
         ["Collections", Check],
         ["Point of Sale", Check],
         ["Debtors Aging", ShieldCheck],
@@ -623,6 +625,8 @@ export default function App() {
                   search={search}
                   go={goToPage}
                 />
+              ) : page === "Sales Returns" ? (
+                <SalesReturnsPage api={API} token={token() || ""} permissions={profile.permissions} search={search} />
               ) : page === "Serials & Warranty" ? (
                 <SerialWarrantyPage
                   api={API}

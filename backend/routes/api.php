@@ -225,6 +225,8 @@ Route::prefix("v1")->group(function (): void {
             AccountingSalesController::class,
             "invoiceCustomerPo",
         ])->middleware("permission:accounting.manage");
+        Route::get('/sales-returns', [\App\Http\Controllers\Api\SalesReturnController::class, 'index'])->middleware('permission:workspace.view');
+        Route::post('/sales-returns', [\App\Http\Controllers\Api\SalesReturnController::class, 'store'])->middleware('permission:accounting.manage');
         Route::post("/sales-orders/manual", [
             AccountingSalesController::class,
             "manualSalesOrder",
