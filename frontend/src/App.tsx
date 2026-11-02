@@ -631,6 +631,7 @@ export default function App() {
                   token={token() || ""}
                   permissions={profile.permissions}
                   search={search}
+                  initialInvoiceId={workflowContext.invoiceId}
                 />
               ) : page === "Serials & Warranty" ? (
                 <SerialWarrantyPage
@@ -827,7 +828,7 @@ function SalesPage({
 }: {
   token: string;
   page: string;
-  go: (page: string) => void;
+  go: (page: string, context?: WorkflowContext) => void;
   currentUser: Profile["user"];
   rawStock?: Stock[];
   search?: string;
@@ -1988,7 +1989,7 @@ function SalesPage({
                                   <button
                                     className="return-secondary"
                                     title="Return individual pieces from an invoice"
-                                    onClick={() => go("Sales Returns")}
+                                    onClick={() => go("Sales Returns", { invoiceId: Number(r.id) })}
                                   >
                                     Return pieces
                                   </button>

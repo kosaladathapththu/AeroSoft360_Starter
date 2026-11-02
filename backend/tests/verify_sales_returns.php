@@ -314,6 +314,29 @@ ok(
     "Failed posting rolls back the return and stock atomically",
 );
 DB::table("accounting_periods")->update(["status" => "open"]);
+DB::table("accounts")
+    ->where("code", "4050")
+    ->update(["is_active" => 0]);
+rejectReturn(
+    fn() => $service->post(
+        array_merge($base, [
+            "sales_invoice_id" => 2,
+            "request_key" => "inactive-account",
+            "lines" => [["sales_invoice_line_id" => 3, "quantity" => 1, "condition" => "sellable"]],
+        ]),
+        1,
+    ),
+    "Unavailable posting account rejects the return after stock preparation",
+);
+ok(
+    DB::table("sales_returns")->count() === $beforeCount &&
+        DB::table("finished_goods_stock")->value("quantity") === $beforeStock,
+    "Accounting failure rolls back prepared stock movements and return lines",
+);
+DB::table("accounts")
+    ->where("code", "4050")
+    ->update(["is_active" => 1]);
+
 DB::table("articles")
     ->where("id", 1)
     ->update(["track_serials" => 1]);

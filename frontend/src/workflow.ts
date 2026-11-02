@@ -1,4 +1,5 @@
 export type WorkflowContext = {
+  invoiceId?: number;
   orderId?: number;
   receiptId?: number;
   action?: "invoice" | "payment";

@@ -89,6 +89,15 @@ final class SalesReturnService
                 422,
                 "Return date cannot precede a previously posted return for this invoice.",
             );
+            abort_unless(
+                DB::table("journal_entries")
+                    ->where("source_type", "sales_invoice")
+                    ->where("source_id", $invoice->id)
+                    ->where("status", "posted")
+                    ->exists(),
+                422,
+                "The original invoice must have a posted accounting entry before a credit note can be issued.",
+            );
             $lines = DB::table("sales_invoice_lines as l")
                 ->join("articles as a", "a.id", "=", "l.article_id")
                 ->where("l.sales_invoice_id", $invoice->id)
@@ -101,6 +110,11 @@ final class SalesReturnService
                 ->orderBy("l.id")
                 ->get();
             abort_if($lines->isEmpty(), 422, "This invoice has no identifiable items to return.");
+            DB::table("articles")
+                ->whereIn("id", $lines->pluck("article_id"))
+                ->orderBy("id")
+                ->lockForUpdate()
+                ->get();
             $grossShares = $this->shares((int) round($invoice->total * 100), $lines);
             $taxShares = $this->shares((int) round(($invoice->tax ?? 0) * 100), $lines);
             $prepared = [];
