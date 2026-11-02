@@ -38,6 +38,53 @@
   display: grid;
   gap: 5px;
 }
+.workflow-step-strip b {
+  font-size: 14px;
+  line-height: 1.4;
+}
+.dashboard-workflow-card .workflow-step-strip {
+  margin-bottom: 16px;
+}
+.workflow-shortcut-section {
+  border-top: 1px solid #e3ecef;
+  padding-top: 16px;
+}
+.workflow-shortcut-section p {
+  margin: 0 0 12px;
+}
+.workflow-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.workflow-shortcuts button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid #b9d9d7;
+  border-radius: 8px;
+  background: #f0f8f7;
+  color: #087c72;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.workflow-shortcuts button:hover {
+  background: #dff2ee;
+  border-color: #078f83;
+}
+.workflow-setup {
+  margin: 16px 0;
+}
+.workflow-setup > span {
+  margin-right: 4px;
+  color: #607d88;
+  font-size: 13px;
+}
 .workflow-step-strip small {
   color: #6a828c;
   font-size: 11px;

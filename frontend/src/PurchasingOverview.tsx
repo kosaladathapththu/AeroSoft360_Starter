@@ -83,12 +83,12 @@ export default function PurchasingOverview({
           </article>
         ))}
       </div>
-      <p className="report-note">
-        Setup: <button onClick={() => go("Suppliers")}>Suppliers</button> ·{" "}
-        <button onClick={() => go("Raw Material Stock")}>Materials and stock</button>. Use{" "}
-        <button onClick={() => go("Purchase Returns")}>Purchase Returns</button> for goods sent
-        back.
-      </p>
+      <div className="workflow-shortcuts workflow-setup" aria-label="Purchasing shortcuts">
+        <span>Setup and returns</span>
+        <button onClick={() => go("Suppliers")}>Suppliers</button>
+        <button onClick={() => go("Raw Material Stock")}>Materials and stock</button>
+        <button onClick={() => go("Purchase Returns")}>Purchase Returns</button>
+      </div>
       {data && (
         <>
           <h2>Deliveries waiting for a purchase invoice</h2>

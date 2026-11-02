@@ -1083,29 +1083,36 @@ function SalesPage({
             <small>Collection-based eligible commission</small>
           </article>
         </div>
-        <div className="flow-card">
-          <h2>Sales — step by step</h2>
+        <div className="flow-card dashboard-workflow-card">
+          <h2>Sales ? step by step</h2>
           <p>
             Start with a sales order, or use a quotation / customer PO first when needed. Confirm
             prices and quantities before dispatching goods and issuing the invoice.
           </p>
           <WorkflowSteps page="Dashboard" go={go} />
-          <p>
-            For an immediate counter sale,{" "}
-            <button onClick={() => go("Point of Sale")}>Point of Sale</button> combines the invoice
-            and payment. <button onClick={() => go("Debtors Aging")}>Aging</button> tracks unpaid
-            balances; <button onClick={() => go("Commissions")}>commissions</button> follow eligible
-            collections.
-          </p>
-          <p>
-            Before you start: <button onClick={() => go("Customers")}>Customers</button> ·{" "}
+          <div className="workflow-shortcut-section">
+            <p>
+              Point of Sale combines the invoice and payment for counter sales. Aging tracks unpaid
+              balances; commissions follow eligible collections.
+            </p>
+            <div className="workflow-shortcuts" aria-label="Sales shortcuts">
+              <button onClick={() => go("Point of Sale")}>Point of Sale</button>
+              <button onClick={() => go("Debtors Aging")}>Aging</button>
+              <button onClick={() => go("Commissions")}>Commissions</button>
+            </div>
+          </div>
+          <div className="workflow-shortcuts workflow-setup" aria-label="Sales setup">
+            <span>Before you start</span>
+            <button onClick={() => go("Customers")}>Customers</button>
             <button onClick={() => go("Pricing List")}>Pricing List</button>
-          </p>
+          </div>
         </div>
-        <div className="flow-card">
-          <h2>Purchasing — order to payment</h2>
+        <div className="flow-card dashboard-workflow-card">
+          <h2>Purchasing ? order to payment</h2>
           <WorkflowSteps page="Purchasing Overview" go={go} />
-          <button onClick={() => go("Purchasing Overview")}>Open purchasing workspace →</button>
+          <div className="workflow-shortcuts">
+            <button onClick={() => go("Purchasing Overview")}>Open purchasing workspace ?</button>
+          </div>
         </div>
         <div className="panels">
           <section>
