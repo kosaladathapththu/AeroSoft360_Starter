@@ -1979,6 +1979,7 @@ function SalesPage({
                                     <Printer />
                                   </button>
                                 )}
+                                {page === "Invoices" && !r.is_opening_balance && <button className="return-secondary" title="Return individual pieces from an invoice" onClick={() => go("Sales Returns")}>Return pieces</button>}
                                 <button
                                   className="icon-action edit"
                                   title={`Edit ${page}`}
@@ -9841,6 +9842,7 @@ function ReportsPage({
       title: "Retail operations",
       reports: [
         ["sales_report", "Sales report"],
+        ["sales_returns", "Sales returns / credit notes"],
         ["product_sales", "Product sales report"],
         ["receipt_report", "Receipt report"],
         ["customer_report", "Customer report"],

@@ -1,4 +1,5 @@
 export const reportSearchCatalog = [
+  ["sales_returns", "Sales returns / credit notes", "returned pieces credit damaged restock customer return"],
   ["sales_report", "Sales report", "sales invoices revenue turnover credit cash"],
   ["product_sales", "Product sales report", "article item footwear sold quantities"],
   ["receipt_report", "Receipt report", "payment collection received money customer"],

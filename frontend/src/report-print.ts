@@ -13,6 +13,7 @@ const company = "SUPUN AEROSOFT (PVT) LTD";
 
 // Only additive fields belong in totals. Never add prices, rates or credit limits.
 export const reportTotalColumns: Record<string, string[]> = {
+  sales_returns: ["quantity", "credit"],
   sales_report: ["total", "received_amount", "outstanding"],
   product_sales: ["quantity", "line_total"],
   receipt_report: ["amount"],
