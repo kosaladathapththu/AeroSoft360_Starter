@@ -62,6 +62,7 @@ import ChartOfAccountsPage from "./ChartOfAccountsPage";
 import CashFlowPage from "./CashFlowPage";
 import SalesReturnsPage from "./SalesReturnsPage";
 import "./layout-fixes.css";
+import "./form-defaults.css";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -179,6 +180,9 @@ export default function App() {
   const [requestedReport, setRequestedReport] = useState("");
   const [reportSearchVersion, setReportSearchVersion] = useState(0);
   const [workflowContext, setWorkflowContext] = useState<WorkflowContext>({});
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [page]);
   const token = () => localStorage.getItem("aerosoft_token");
   const load = useCallback(async () => {
     const saved = localStorage.getItem("aerosoft_token");

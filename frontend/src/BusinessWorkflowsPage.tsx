@@ -1619,79 +1619,84 @@ function MasterData({ page, data, canManage, busy, save }: any) {
         ]}
       />
       {canManage && (
-        <>
-          <SimpleForm
-            busy={busy}
-            label={`Add ${kind}`}
-            submit={(f) => save("catalog-terms", { kind, name: f.get("name") })}
-          >
-            <label>
-              New {kind}
-              <input name="name" required maxLength={kind === "unit" ? 20 : 80} />
-            </label>
-          </SimpleForm>
-          <h2>Link classifications to an article</h2>
-          <label>
-            Article
-            <select value={article} onChange={(e) => setArticle(e.target.value)}>
-              <option value="">Select article</option>
-              {data.articles.map((a: any) => (
-                <option key={a.id} value={a.id}>
-                  {a.code} · {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {selected && (
+        <div className="master-data-panels">
+          <section className="master-data-panel">
+            <h2>Add {kind}</h2>
             <SimpleForm
-              key={selected.id}
               busy={busy}
-              label="Save product classification"
-              submit={(f) =>
-                save("product-classification", {
-                  article_id: selected.id,
-                  track_serials: f.get("track_serials") === "on",
-                  category: f.get("category"),
-                  brand: f.get("brand"),
-                  unit: f.get("unit"),
-                  reason: f.get("reason"),
-                })
-              }
+              label={`Add ${kind}`}
+              submit={(f) => save("catalog-terms", { kind, name: f.get("name") })}
             >
-              {["category", "brand", "unit"].map((type) => (
-                <label key={type}>
-                  {type}
-                  <select
-                    name={type}
-                    required={type !== "brand"}
-                    defaultValue={selected[type] || ""}
-                  >
-                    <option value="">{type === "brand" ? "Not assigned" : "Choose value"}</option>
-                    {data.terms
-                      .filter((t: any) => t.kind === type && t.active)
-                      .map((t: any) => (
-                        <option key={t.id} value={t.name}>
-                          {t.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-              ))}
-              <label className="workflow-inline-check">
-                <input
-                  name="track_serials"
-                  type="checkbox"
-                  defaultChecked={!!selected.track_serials}
-                />{" "}
-                Require serials when invoicing this article
-              </label>
               <label>
-                Reason for change
-                <textarea name="reason" required maxLength={500} />
+                New {kind}
+                <input name="name" required maxLength={kind === "unit" ? 20 : 80} />
               </label>
             </SimpleForm>
-          )}
-        </>
+          </section>
+          <section className="master-data-panel">
+            <h2>Link classifications to an article</h2>
+            <label>
+              Article
+              <select value={article} onChange={(e) => setArticle(e.target.value)}>
+                <option value="">Select article</option>
+                {data.articles.map((a: any) => (
+                  <option key={a.id} value={a.id}>
+                    {a.code} · {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {selected && (
+              <SimpleForm
+                key={selected.id}
+                busy={busy}
+                label="Save product classification"
+                submit={(f) =>
+                  save("product-classification", {
+                    article_id: selected.id,
+                    track_serials: f.get("track_serials") === "on",
+                    category: f.get("category"),
+                    brand: f.get("brand"),
+                    unit: f.get("unit"),
+                    reason: f.get("reason"),
+                  })
+                }
+              >
+                {["category", "brand", "unit"].map((type) => (
+                  <label key={type}>
+                    {type}
+                    <select
+                      name={type}
+                      required={type !== "brand"}
+                      defaultValue={selected[type] || ""}
+                    >
+                      <option value="">{type === "brand" ? "Not assigned" : "Choose value"}</option>
+                      {data.terms
+                        .filter((t: any) => t.kind === type && t.active)
+                        .map((t: any) => (
+                          <option key={t.id} value={t.name}>
+                            {t.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                ))}
+                <label className="workflow-inline-check">
+                  <input
+                    name="track_serials"
+                    type="checkbox"
+                    defaultChecked={!!selected.track_serials}
+                  />{" "}
+                  Require serials when invoicing this article
+                </label>
+                <label>
+                  Reason for change
+                  <textarea name="reason" required maxLength={500} />
+                </label>
+              </SimpleForm>
+            )}
+          </section>
+        </div>
       )}
     </>
   );
