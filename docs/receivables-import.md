@@ -15,3 +15,7 @@ The four existing customers and two existing invoices were preserved. Their LKR 
 The import command is receivables:import. It defaults to preview only; posting requires an explicit posting date and --commit. Source copies, before-images and reconciliation results are stored privately in backend/storage/app/ar-import and are excluded from version control. Only migration 2026_11_02_000001_allow_unknown_receivable_terms was applied for this import.
 
 Validation: every imported customer profile and the AR ledger reconciled to the source total; all 343 imported aging rows retained unknown terms. Original invoice values were checked unchanged. Isolated tests cover repeat imports, unknown terms, journal rollback, later term entry and overdue classification. No browser automation was used.
+
+## Subsequent authorized cleanup
+
+On 2 November 2026, the user requested removing demo/test data and confirmed removing CUS-003 and its orders. The four previously retained non-imported customers and two demo invoices were then removed with their related test transactions after a full backup. The current receivable total is therefore LKR 23,120,293.00, representing only the 343 imported real balances. See production-data-cleanup.md for the cleanup scope and verification.
