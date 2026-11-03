@@ -1,4 +1,5 @@
 import DashboardOverview from "./DashboardOverview";
+import ReceivableActionModal from "./ReceivableActionModal";
 import FilteredRecords from "./FilteredRecords";
 import { Fragment, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -848,6 +849,7 @@ function SalesPage({
     [error, setError] = useState(""),
     [modal, setModal] = useState(""),
     [editingMaster, setEditingMaster] = useState<{ type: string; row: any } | null>(null),
+    [receivableAction, setReceivableAction] = useState<{ row: any; mode: "edit" | "delete" } | null>(null),
     [editingTransaction, setEditingTransaction] = useState<any>(null),
     [editingArticle, setEditingArticle] = useState<any>(null),
     [editingPo, setEditingPo] = useState<any>(null),
@@ -1768,6 +1770,12 @@ function SalesPage({
                                     <Eye />
                                   </button>
                                 )}
+                              {page === "Debtors Aging" && permissions.includes("accounting.manage") && (
+                                <>
+                                  <button className="icon-action edit" title="Edit receivable" aria-label={`Edit ${r.number}`} onClick={() => setReceivableAction({ row: r, mode: "edit" })}><Pencil /></button>
+                                  <button className="icon-action delete" title="Delete receivable" aria-label={`Delete ${r.number}`} onClick={() => setReceivableAction({ row: r, mode: "delete" })}><Trash2 /></button>
+                                </>
+                              )}
                               {page === "Customer POs" && (
                                 <>
                                   <button
@@ -2077,6 +2085,11 @@ function SalesPage({
             }
           }}
         />
+      )}
+      {receivableAction && (
+        <ReceivableActionModal row={receivableAction.row} mode={receivableAction.mode}
+          close={() => setReceivableAction(null)}
+          save={async (body, method) => { await post(`receivables/${receivableAction.row.id}`, body, method); }} />
       )}
       {editingMaster && (
         <SalesCreateModal

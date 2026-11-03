@@ -259,6 +259,8 @@ Route::prefix("v1")->group(function (): void {
             AccountingSalesController::class,
             "manualInvoice",
         ])->middleware("permission:accounting.manage");
+        Route::put('/receivables/{id}', [\App\Http\Controllers\Api\ReceivableController::class, 'update'])->middleware('permission:accounting.manage');
+        Route::delete('/receivables/{id}', [\App\Http\Controllers\Api\ReceivableController::class, 'destroy'])->middleware('permission:accounting.manage');
         Route::get("/sales-invoices/{id}/bill", [
             AccountingSalesController::class,
             "invoiceBill",
