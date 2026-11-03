@@ -76,7 +76,7 @@ export function buildReportDocument(report: PrintReport, generated = new Date())
   const content = report.source.cloneNode(true) as HTMLElement;
   content
     .querySelectorAll(
-      "button, input, select, textarea, svg, label, form, .report-title-row, .workflow-actions-cell",
+      "button, input, select, textarea, svg, label, form, .record-filters, .report-title-row, .workflow-actions-cell",
     )
     .forEach((node) => node.remove());
   const tables = [...content.querySelectorAll("table")];

@@ -1,3 +1,4 @@
+import { matchesSearch } from "./search";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileDown, Plus, Printer, RefreshCw } from "lucide-react";
 import { financeCsv, financeRequest, financeToday as today } from "./finance-utils";
@@ -55,7 +56,7 @@ export default function SerialWarrantyPage({
   const serials = (data?.serials || []).filter(
     (s: any) =>
       (filter === "all" || s.status === filter || coverage(s) === filter) &&
-      JSON.stringify(s).toLowerCase().includes(search.toLowerCase()),
+      matchesSearch(s, search),
   );
   return (
     <>
@@ -198,9 +199,7 @@ export default function SerialWarrantyPage({
               workflow.
             </p>
             <WorkflowTable
-              values={data.claims.filter((c: any) =>
-                JSON.stringify(c).toLowerCase().includes(search.toLowerCase()),
-              )}
+              values={data.claims.filter((c: any) => matchesSearch(c, search))}
               columns={[
                 ["serial_number", "Serial"],
                 ["invoice", "Invoice"],

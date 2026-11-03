@@ -1,3 +1,5 @@
+import DashboardOverview from "./DashboardOverview";
+import FilteredRecords from "./FilteredRecords";
 import { Fragment, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -673,6 +675,7 @@ export default function App() {
                   page={page}
                   go={goToPage}
                   currentUser={profile.user}
+                  permissions={profile.permissions}
                   rawStock={data.stock}
                   search={search}
                 />
@@ -823,6 +826,7 @@ function SalesPage({
   page,
   go,
   currentUser,
+  permissions,
   rawStock = [],
   search = "",
 }: {
@@ -830,6 +834,7 @@ function SalesPage({
   page: string;
   go: (page: string, context?: WorkflowContext) => void;
   currentUser: Profile["user"];
+  permissions: string[];
   rawStock?: Stock[];
   search?: string;
 }) {
@@ -881,15 +886,29 @@ function SalesPage({
   useEffect(() => {
     if (salesTableRef.current) salesTableRef.current.scrollLeft = 0;
   }, [page]);
-  const loadDashboard = useCallback(() => {
+  const [dashboardDays, setDashboardDays] = useState(30);
+  const [dashboardBusy, setDashboardBusy] = useState(false);
+  const dashboardRequest = useRef<AbortController | null>(null);
+  const loadDashboard = useCallback(async () => {
+    dashboardRequest.current?.abort();
+    const controller = new AbortController();
+    dashboardRequest.current = controller;
+    setDashboardBusy(true);
     setError("");
-    fetch(`${API}/sales/dashboard`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (response) => {
-        if (!response.ok) throw new Error();
-        setDashboard(await response.json());
-      })
-      .catch(() => setError("Unable to load sales dashboard."));
-  }, [token]);
+    try {
+      const response = await fetch(`${API}/sales/dashboard?days=${dashboardDays}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error("Unable to load business dashboard.");
+      const result = await response.json();
+      if (!controller.signal.aborted) setDashboard(result);
+    } catch (exception) {
+      if (!controller.signal.aborted) setError((exception as Error).message);
+    } finally {
+      if (!controller.signal.aborted) setDashboardBusy(false);
+    }
+  }, [token, dashboardDays]);
   const loadSales = useCallback(() => {
     setError("");
     Promise.all([
@@ -909,10 +928,13 @@ function SalesPage({
       .catch(() => setError("Unable to load sales workspace."));
   }, [token]);
   useEffect(() => {
-    if (page === "Dashboard") {
-      if (!dashboard) loadDashboard();
-    } else if (!data || !aging) loadSales();
-  }, [page, dashboard, data, aging, loadDashboard, loadSales]);
+    if (page !== "Dashboard") return;
+    loadDashboard();
+    return () => dashboardRequest.current?.abort();
+  }, [page, loadDashboard]);
+  useEffect(() => {
+    if (page !== "Dashboard" && (!data || !aging)) loadSales();
+  }, [page, data, aging, loadSales]);
   const post = async (path: string, body?: any, method = "POST") => {
     const response = await fetch(`${API}/${path}`, {
       method,
@@ -1109,123 +1131,30 @@ function SalesPage({
     return (
       <>
         {orderConfirmation}
-        <div className="heading">
-          <div>
-            <span>SALES AND RECEIVABLES ERP</span>
-            <h1>Sales Dashboard</h1>
-            <p>
-              Customer orders, invoicing, collections, aging and commission in one controlled flow.
-            </p>
+        {error && (
+          <div className="error" role="alert">
+            {error}
           </div>
-          <button className="primary" onClick={() => setModal("sales_order")}>
-            <Plus /> Create sales order
-          </button>
-        </div>
-        {error && <div className="error">{error}</div>}
-        <div className="kpis">
-          <article>
-            <span>Customers</span>
-            <b>{dashboard.customers_count}</b>
-            <small>Active customer accounts</small>
-          </article>
-          <article className="receivables-kpi">
-            <span>Accounts receivable</span>
-            <b>{money(dashboard.outstanding_total)}</b>
-            <small>{dashboard.open_invoices_count} open customer balances</small>
-            <div className="receivables-breakdown">
-              <small>
-                Opening balances: <strong>{money(dashboard.opening_receivables_total)}</strong>
-              </small>
-              <small>
-                Sales invoices: <strong>{money(dashboard.sales_receivables_total)}</strong>
-              </small>
-            </div>
-            <button type="button" onClick={() => go("Debtors Aging")}>
-              View receivables
-            </button>
-          </article>
-          <article>
-            <span>Collections received</span>
-            <b>{money(dashboard.collections_total)}</b>
-            <small>Allocated customer receipts</small>
-          </article>
-          <article>
-            <span>Commission earned</span>
-            <b>{money(dashboard.commission_total)}</b>
-            <small>Collection-based eligible commission</small>
-          </article>
-        </div>
-        <div className="flow-card dashboard-workflow-card">
-          <h2>Sales - step by step</h2>
-          <p>
-            Start with a sales order, or use a quotation / customer PO first when needed. Confirm
-            prices and quantities before dispatching goods and issuing the invoice.
-          </p>
-          <WorkflowSteps page="Dashboard" go={go} />
-          <div className="workflow-shortcut-section">
-            <p>
-              Point of Sale combines the invoice and payment for counter sales. Aging tracks unpaid
-              balances; commissions follow eligible collections.
-            </p>
-            <div className="workflow-shortcuts" aria-label="Sales shortcuts">
-              <button onClick={() => go("Point of Sale")}>Point of Sale</button>
-              <button onClick={() => go("Debtors Aging")}>Aging</button>
-              <button onClick={() => go("Commissions")}>Commissions</button>
-            </div>
-          </div>
-          <div className="workflow-shortcuts workflow-setup" aria-label="Sales setup">
-            <span>Before you start</span>
-            <button onClick={() => go("Customers")}>Customers</button>
-            <button onClick={() => go("Pricing List")}>Pricing List</button>
-          </div>
-        </div>
-        <div className="flow-card dashboard-workflow-card">
-          <h2>Purchasing - order to payment</h2>
-          <WorkflowSteps page="Purchasing Overview" go={go} />
-          <div className="workflow-shortcuts">
-            <button onClick={() => go("Purchasing Overview")}>Open purchasing workspace ?</button>
-          </div>
-        </div>
-        <div className="panels">
-          <section>
-            <div className="panel-head">
-              <h2>Recent invoices</h2>
-              <button onClick={() => go("Invoices")}>View all</button>
-            </div>
-            {dashboard.recent_invoices.map((x: any) => (
-              <div className="list-row" key={x.id}>
-                <FileText />
-                <span>
-                  <b>{x.number}</b>
-                  <small>
-                    {x.customer_name} · {x.rep_name}
-                  </small>
-                </span>
-                <strong>{money(x.outstanding)}</strong>
-                {status(x.status)}
-              </div>
-            ))}
-          </section>
-          <section>
-            <div className="panel-head">
-              <h2>Recent collections</h2>
-              <button onClick={() => go("Collections")}>View all</button>
-            </div>
-            {dashboard.recent_receipts.map((x: any) => (
-              <div className="list-row" key={x.id}>
-                <Check />
-                <span>
-                  <b>{x.number}</b>
-                  <small>
-                    {x.customer_name} · {x.receipt_date}
-                  </small>
-                </span>
-                <strong>{money(x.amount)}</strong>
-              </div>
-            ))}
-          </section>
-        </div>
-        {modal && (
+        )}
+        <DashboardOverview
+          data={dashboard}
+          days={dashboardDays}
+          setDays={setDashboardDays}
+          refresh={loadDashboard}
+          busy={dashboardBusy}
+          go={go}
+          search={search}
+          createOrder={
+            permissions.includes("accounting.manage")
+              ? () => {
+                  if (!data) loadSales();
+                  setModal("sales_order");
+                }
+              : undefined
+          }
+        />
+        {modal && !data && !error && <p role="status">Loading order entry…</p>}
+        {modal && data && (
           <SalesCreateModal
             type={modal}
             data={data}
@@ -1661,320 +1590,68 @@ function SalesPage({
               </select>
             </label>
           </div>
-          <div className="table-card inventory-table-card">
-            <table>
-              <thead>
-                <tr>
-                  {heads[page].map((heading: string) => (
-                    <th key={heading}>{heading}</th>
-                  ))}
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleInventoryRows.length ? (
-                  visibleInventoryRows.map((item: any) => (
-                    <tr key={item.id}>
-                      <td>
-                        <span
-                          className={`inventory-type ${item.type === "Finished goods" ? "finished" : "raw"}`}
-                        >
-                          {item.type}
-                        </span>
-                      </td>
-                      <td>
-                        <b>{item.item}</b>
-                      </td>
-                      <td>{item.category}</td>
-                      <td>{item.variant}</td>
-                      <td>
-                        <b>{item.quantity.toLocaleString()}</b>
-                      </td>
-                      <td>{item.unit}</td>
-                      <td>
-                        <div className="row-actions">
-                          <button
-                            className="icon-action view"
-                            title="View all stock details"
-                            onClick={() => setInventoryRecord({ mode: "view", row: item })}
-                          >
-                            <Eye />
-                          </button>
-                          <button
-                            className="icon-action edit"
-                            title="Edit stock"
-                            onClick={() => setInventoryRecord({ mode: "edit", row: item })}
-                          >
-                            <Pencil />
-                          </button>
-                          <button
-                            className="icon-action delete"
-                            title="Delete stock record"
-                            onClick={async () => {
-                              if (!confirm(`Delete ${item.item}, ${item.variant}?`)) return;
-                              try {
-                                await post(
-                                  item.inventory_kind === "finished"
-                                    ? `finished-stock/${item.record_id}`
-                                    : `stock/${item.record_id}`,
-                                  undefined,
-                                  "DELETE",
-                                );
-                                if (item.inventory_kind === "raw") window.location.reload();
-                              } catch (e) {
-                                setError((e as Error).message);
-                              }
-                            }}
-                          >
-                            <Trash2 />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={heads[page].length + 1}>No matching inventory records.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : (
-        <div
-          ref={salesTableRef}
-          className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
-        >
-          <table>
-            <thead>
-              <tr>
-                {heads[page].map((h: string) => (
-                  <th key={h}>{h}</th>
-                ))}
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={heads[page].length + 1}>No records yet.</td>
-                </tr>
-              ) : (
-                rows.map((r: any) => (
-                  <Fragment key={r.id}>
+          <FilteredRecords records={visibleInventoryRows} title="inventory records">
+            {(filteredRows, filtersActive) => (
+              <div className="table-card inventory-table-card">
+                <table>
+                  <thead>
                     <tr>
-                      {salesCells(
-                        page === "Collections" && collectionView === "due"
-                          ? "Collections Due"
-                          : page,
-                        r,
-                      )}
-                      <td>
-                        <div className="row-actions">
-                          {page === "Collections" && collectionView === "due" && (
-                            <button
-                              className="approve"
-                              onClick={() => {
-                                setCollectionInvoice(r);
-                                setModal("receipt");
-                              }}
+                      {heads[page].map((heading: string) => (
+                        <th key={heading}>{heading}</th>
+                      ))}
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRows.length ? (
+                      filteredRows.map((item: any) => (
+                        <tr key={item.id}>
+                          <td>
+                            <span
+                              className={`inventory-type ${item.type === "Finished goods" ? "finished" : "raw"}`}
                             >
-                              <Check /> Record payment
-                            </button>
-                          )}
-                          {page === "Pricing List" && (
-                            <button
-                              className="icon-action view"
-                              title={
-                                expandedPriceArticles.has(r.article_id)
-                                  ? "Hide sizes"
-                                  : "Show sizes"
-                              }
-                              onClick={() =>
-                                setExpandedPriceArticles((current) => {
-                                  const next = new Set(current);
-                                  if (next.has(r.article_id)) next.delete(r.article_id);
-                                  else next.add(r.article_id);
-                                  return next;
-                                })
-                              }
-                            >
-                              {expandedPriceArticles.has(r.article_id) ? (
-                                <ChevronDown />
-                              ) : (
-                                <ChevronRight />
-                              )}
-                            </button>
-                          )}
-                          {page === "Customer POs" && r.status === "draft" && (
-                            <button className="approve" onClick={() => setConvertingPo(r)}>
-                              <Check /> Review &amp; create
-                            </button>
-                          )}
-                          {page === "Sales Orders" &&
-                            r.lines?.some((line: any) => Number(line.remaining_quantity) > 0) && (
-                              <button className="approve" onClick={() => setDispatchOrder(r)}>
-                                <FileText /> Dispatch &amp; invoice
-                              </button>
-                            )}
-                          {page !== "Pricing List" &&
-                            !(page === "Collections" && collectionView === "due") && (
-                              <button className="icon-action view" onClick={() => setViewing(r)}>
+                              {item.type}
+                            </span>
+                          </td>
+                          <td>
+                            <b>{item.item}</b>
+                          </td>
+                          <td>{item.category}</td>
+                          <td>{item.variant}</td>
+                          <td>
+                            <b>{item.quantity.toLocaleString()}</b>
+                          </td>
+                          <td>{item.unit}</td>
+                          <td>
+                            <div className="row-actions">
+                              <button
+                                className="icon-action view"
+                                title="View all stock details"
+                                onClick={() => setInventoryRecord({ mode: "view", row: item })}
+                              >
                                 <Eye />
                               </button>
-                            )}
-                          {page === "Customer POs" && (
-                            <>
-                              <button
-                                className="icon-action download"
-                                title={`Download ${r.number} (Excel)`}
-                                aria-label={`Download ${r.number} (Excel)`}
-                                disabled={poDownloading !== null}
-                                onClick={() => downloadCustomerPo(r)}
-                              >
-                                {poDownloading === String(r.id) ? <Loader2 /> : <FileDown />}
-                              </button>
                               <button
                                 className="icon-action edit"
-                                title="Edit and update PO"
-                                onClick={() => setEditingPo(r)}
+                                title="Edit stock"
+                                onClick={() => setInventoryRecord({ mode: "edit", row: item })}
                               >
                                 <Pencil />
                               </button>
                               <button
                                 className="icon-action delete"
-                                title="Delete PO and linked records"
+                                title="Delete stock record"
                                 onClick={async () => {
-                                  if (
-                                    !confirm(
-                                      `Delete ${r.number} and all linked sales orders, invoices, collections and journals? This cannot be undone.`,
-                                    )
-                                  )
-                                    return;
-                                  try {
-                                    await post(`customer-pos/${r.id}`, undefined, "DELETE");
-                                  } catch (e) {
-                                    setError((e as Error).message);
-                                  }
-                                }}
-                              >
-                                <Trash2 />
-                              </button>
-                            </>
-                          )}
-                          {page === "Pricing List" && (
-                            <>
-                              <button
-                                className="icon-action edit"
-                                title="Edit article and prices"
-                                onClick={() => setEditingArticle(r.article)}
-                              >
-                                <Pencil />
-                              </button>
-                              <button
-                                className="icon-action delete"
-                                title="Delete article"
-                                onClick={async () => {
-                                  if (
-                                    !confirm(
-                                      `Delete article ${r.article_name} and all its price rows?`,
-                                    )
-                                  )
-                                    return;
-                                  try {
-                                    await post(`articles/${r.article_id}`, undefined, "DELETE");
-                                  } catch (e) {
-                                    setError((e as Error).message);
-                                  }
-                                }}
-                              >
-                                <Trash2 />
-                              </button>
-                            </>
-                          )}
-                          {page === "Customers" && (
-                            <>
-                              <button
-                                className="icon-action edit"
-                                title="Edit customer"
-                                onClick={() => setEditingMaster({ type: "customer", row: r })}
-                              >
-                                <Pencil />
-                              </button>
-                              <button
-                                className="icon-action delete"
-                                title="Delete customer"
-                                onClick={async () => {
-                                  if (!confirm(`Delete ${r.name}?`)) return;
-                                  try {
-                                    await post(`customers/${r.id}`, undefined, "DELETE");
-                                  } catch (e) {
-                                    setError((e as Error).message);
-                                  }
-                                }}
-                              >
-                                <Trash2 />
-                              </button>
-                            </>
-                          )}
-                          {page === "Salespersons" && (
-                            <>
-                              <button
-                                className="icon-action edit"
-                                title="Edit salesperson"
-                                onClick={() => setEditingMaster({ type: "rep", row: r })}
-                              >
-                                <Pencil />
-                              </button>
-                              <button
-                                className="icon-action delete"
-                                title="Delete salesperson"
-                                onClick={async () => {
-                                  if (!confirm(`Delete ${r.name}?`)) return;
-                                  try {
-                                    await post(`sales-reps/${r.id}`, undefined, "DELETE");
-                                  } catch (e) {
-                                    setError((e as Error).message);
-                                  }
-                                }}
-                              >
-                                <Trash2 />
-                              </button>
-                            </>
-                          )}
-                          {page === "Commissions" && (
-                            <>
-                              {r.source_type === "manual" && (
-                                <button
-                                  className="icon-action edit"
-                                  title="Edit management adjustment"
-                                  onClick={() => setEditingMaster({ type: "commission", row: r })}
-                                >
-                                  <Pencil />
-                                </button>
-                              )}
-                              <button
-                                className="icon-action delete"
-                                title="Delete commission"
-                                onClick={async () => {
-                                  const manual = r.source_type === "manual";
-                                  if (
-                                    !confirm(
-                                      manual
-                                        ? "Delete this manual commission and its journal?"
-                                        : "Delete this commission? The customer payment will remain allocated.",
-                                    )
-                                  )
-                                    return;
+                                  if (!confirm(`Delete ${item.item}, ${item.variant}?`)) return;
                                   try {
                                     await post(
-                                      manual
-                                        ? `commissions/manual/${r.manual_id}`
-                                        : `commissions/${r.id}`,
+                                      item.inventory_kind === "finished"
+                                        ? `finished-stock/${item.record_id}`
+                                        : `stock/${item.record_id}`,
                                       undefined,
                                       "DELETE",
                                     );
+                                    if (item.inventory_kind === "raw") window.location.reload();
                                   } catch (e) {
                                     setError((e as Error).message);
                                   }
@@ -1982,108 +1659,379 @@ function SalesPage({
                               >
                                 <Trash2 />
                               </button>
-                            </>
-                          )}
-                          {["Sales Orders", "Invoices", "Collections"].includes(page) &&
-                            !(page === "Collections" && collectionView === "due") && (
-                              <>
-                                {page === "Invoices" && (
-                                  <button
-                                    className="icon-action"
-                                    title="View / print bill"
-                                    onClick={() => setBillInvoiceId(Number(r.id))}
-                                  >
-                                    <Printer />
-                                  </button>
-                                )}
-                                {page === "Invoices" && !r.is_opening_balance && (
-                                  <button
-                                    className="return-secondary"
-                                    title="Return individual pieces from an invoice"
-                                    onClick={() => go("Sales Returns", { invoiceId: Number(r.id) })}
-                                  >
-                                    Return pieces
-                                  </button>
-                                )}
-                                <button
-                                  className="icon-action edit"
-                                  title={`Edit ${page}`}
-                                  onClick={() =>
-                                    page === "Invoices"
-                                      ? setEditingMaster({ type: "invoice", row: r })
-                                      : setEditingTransaction({ page, row: r })
-                                  }
-                                >
-                                  <Pencil />
-                                </button>
-                                <button
-                                  className="icon-action delete"
-                                  title={`Delete ${page}`}
-                                  onClick={async () => {
-                                    if (
-                                      !confirm(
-                                        `Delete ${r.number}? Related posted records will be checked first.`,
-                                      )
-                                    )
-                                      return;
-                                    const base =
-                                      page === "Sales Orders"
-                                        ? "sales-orders"
-                                        : page === "Invoices"
-                                          ? "sales-invoices"
-                                          : "customer-receipts";
-                                    try {
-                                      await post(`${base}/${r.id}`, undefined, "DELETE");
-                                    } catch (e) {
-                                      setError((e as Error).message);
-                                    }
-                                  }}
-                                >
-                                  <Trash2 />
-                                </button>
-                              </>
-                            )}
-                        </div>
-                      </td>
-                    </tr>
-                    {page === "Pricing List" && expandedPriceArticles.has(r.article_id) && (
-                      <tr className="price-detail-row">
-                        <td colSpan={heads[page].length + 1}>
-                          <div className="price-variants">
-                            <div className="price-variant-head">
-                              <b>Variant</b>
-                              <b>Item code</b>
-                              <b>Size</b>
-                              <b>Colours</b>
-                              <b>Production cost</b>
-                              <b>Selling price</b>
                             </div>
-                            {r.variants.map((item: any) => (
-                              <div className="price-variant-line" key={item.id}>
-                                <span>{item.set_name || "Price List"}</span>
-                                <span>
-                                  <b>{item.item_code || "—"}</b>
-                                </span>
-                                <span>{item.size_label}</span>
-                                <span>{item.colours || "—"}</span>
-                                <span>
-                                  {item.production_cost == null ? "—" : money(item.production_cost)}
-                                </span>
-                                <span>
-                                  <b>{money(item.unit_price)}</b>
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </td>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={heads[page].length + 1}>No matching inventory records.</td>
                       </tr>
                     )}
-                  </Fragment>
-                ))
-              )}
-            </tbody>
-          </table>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </FilteredRecords>
         </div>
+      ) : (
+        <FilteredRecords records={rows} title="records" key={page + collectionView}>
+          {(filteredRows, filtersActive) => (
+            <div
+              ref={salesTableRef}
+              className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
+            >
+              <table>
+                <thead>
+                  <tr>
+                    {heads[page].map((h: string) => (
+                      <th key={h}>{h}</th>
+                    ))}
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={heads[page].length + 1}>No records yet.</td>
+                    </tr>
+                  ) : (
+                    filteredRows.map((r: any) => (
+                      <Fragment key={r.id}>
+                        <tr>
+                          {salesCells(
+                            page === "Collections" && collectionView === "due"
+                              ? "Collections Due"
+                              : page,
+                            r,
+                          )}
+                          <td>
+                            <div className="row-actions">
+                              {page === "Collections" && collectionView === "due" && (
+                                <button
+                                  className="approve"
+                                  onClick={() => {
+                                    setCollectionInvoice(r);
+                                    setModal("receipt");
+                                  }}
+                                >
+                                  <Check /> Record payment
+                                </button>
+                              )}
+                              {page === "Pricing List" && (
+                                <button
+                                  className="icon-action view"
+                                  title={
+                                    expandedPriceArticles.has(r.article_id)
+                                      ? "Hide sizes"
+                                      : "Show sizes"
+                                  }
+                                  onClick={() =>
+                                    setExpandedPriceArticles((current) => {
+                                      const next = new Set(current);
+                                      if (next.has(r.article_id)) next.delete(r.article_id);
+                                      else next.add(r.article_id);
+                                      return next;
+                                    })
+                                  }
+                                >
+                                  {expandedPriceArticles.has(r.article_id) ? (
+                                    <ChevronDown />
+                                  ) : (
+                                    <ChevronRight />
+                                  )}
+                                </button>
+                              )}
+                              {page === "Customer POs" && r.status === "draft" && (
+                                <button className="approve" onClick={() => setConvertingPo(r)}>
+                                  <Check /> Review &amp; create
+                                </button>
+                              )}
+                              {page === "Sales Orders" &&
+                                r.lines?.some(
+                                  (line: any) => Number(line.remaining_quantity) > 0,
+                                ) && (
+                                  <button className="approve" onClick={() => setDispatchOrder(r)}>
+                                    <FileText /> Dispatch &amp; invoice
+                                  </button>
+                                )}
+                              {page !== "Pricing List" &&
+                                !(page === "Collections" && collectionView === "due") && (
+                                  <button
+                                    className="icon-action view"
+                                    onClick={() => setViewing(r)}
+                                  >
+                                    <Eye />
+                                  </button>
+                                )}
+                              {page === "Customer POs" && (
+                                <>
+                                  <button
+                                    className="icon-action download"
+                                    title={`Download ${r.number} (Excel)`}
+                                    aria-label={`Download ${r.number} (Excel)`}
+                                    disabled={poDownloading !== null}
+                                    onClick={() => downloadCustomerPo(r)}
+                                  >
+                                    {poDownloading === String(r.id) ? <Loader2 /> : <FileDown />}
+                                  </button>
+                                  <button
+                                    className="icon-action edit"
+                                    title="Edit and update PO"
+                                    onClick={() => setEditingPo(r)}
+                                  >
+                                    <Pencil />
+                                  </button>
+                                  <button
+                                    className="icon-action delete"
+                                    title="Delete PO and linked records"
+                                    onClick={async () => {
+                                      if (
+                                        !confirm(
+                                          `Delete ${r.number} and all linked sales orders, invoices, collections and journals? This cannot be undone.`,
+                                        )
+                                      )
+                                        return;
+                                      try {
+                                        await post(`customer-pos/${r.id}`, undefined, "DELETE");
+                                      } catch (e) {
+                                        setError((e as Error).message);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 />
+                                  </button>
+                                </>
+                              )}
+                              {page === "Pricing List" && (
+                                <>
+                                  <button
+                                    className="icon-action edit"
+                                    title="Edit article and prices"
+                                    onClick={() => setEditingArticle(r.article)}
+                                  >
+                                    <Pencil />
+                                  </button>
+                                  <button
+                                    className="icon-action delete"
+                                    title="Delete article"
+                                    onClick={async () => {
+                                      if (
+                                        !confirm(
+                                          `Delete article ${r.article_name} and all its price rows?`,
+                                        )
+                                      )
+                                        return;
+                                      try {
+                                        await post(`articles/${r.article_id}`, undefined, "DELETE");
+                                      } catch (e) {
+                                        setError((e as Error).message);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 />
+                                  </button>
+                                </>
+                              )}
+                              {page === "Customers" && (
+                                <>
+                                  <button
+                                    className="icon-action edit"
+                                    title="Edit customer"
+                                    onClick={() => setEditingMaster({ type: "customer", row: r })}
+                                  >
+                                    <Pencil />
+                                  </button>
+                                  <button
+                                    className="icon-action delete"
+                                    title="Delete customer"
+                                    onClick={async () => {
+                                      if (!confirm(`Delete ${r.name}?`)) return;
+                                      try {
+                                        await post(`customers/${r.id}`, undefined, "DELETE");
+                                      } catch (e) {
+                                        setError((e as Error).message);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 />
+                                  </button>
+                                </>
+                              )}
+                              {page === "Salespersons" && (
+                                <>
+                                  <button
+                                    className="icon-action edit"
+                                    title="Edit salesperson"
+                                    onClick={() => setEditingMaster({ type: "rep", row: r })}
+                                  >
+                                    <Pencil />
+                                  </button>
+                                  <button
+                                    className="icon-action delete"
+                                    title="Delete salesperson"
+                                    onClick={async () => {
+                                      if (!confirm(`Delete ${r.name}?`)) return;
+                                      try {
+                                        await post(`sales-reps/${r.id}`, undefined, "DELETE");
+                                      } catch (e) {
+                                        setError((e as Error).message);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 />
+                                  </button>
+                                </>
+                              )}
+                              {page === "Commissions" && (
+                                <>
+                                  {r.source_type === "manual" && (
+                                    <button
+                                      className="icon-action edit"
+                                      title="Edit management adjustment"
+                                      onClick={() =>
+                                        setEditingMaster({ type: "commission", row: r })
+                                      }
+                                    >
+                                      <Pencil />
+                                    </button>
+                                  )}
+                                  <button
+                                    className="icon-action delete"
+                                    title="Delete commission"
+                                    onClick={async () => {
+                                      const manual = r.source_type === "manual";
+                                      if (
+                                        !confirm(
+                                          manual
+                                            ? "Delete this manual commission and its journal?"
+                                            : "Delete this commission? The customer payment will remain allocated.",
+                                        )
+                                      )
+                                        return;
+                                      try {
+                                        await post(
+                                          manual
+                                            ? `commissions/manual/${r.manual_id}`
+                                            : `commissions/${r.id}`,
+                                          undefined,
+                                          "DELETE",
+                                        );
+                                      } catch (e) {
+                                        setError((e as Error).message);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 />
+                                  </button>
+                                </>
+                              )}
+                              {["Sales Orders", "Invoices", "Collections"].includes(page) &&
+                                !(page === "Collections" && collectionView === "due") && (
+                                  <>
+                                    {page === "Invoices" && (
+                                      <button
+                                        className="icon-action"
+                                        title="View / print bill"
+                                        onClick={() => setBillInvoiceId(Number(r.id))}
+                                      >
+                                        <Printer />
+                                      </button>
+                                    )}
+                                    {page === "Invoices" && !r.is_opening_balance && (
+                                      <button
+                                        className="return-secondary"
+                                        title="Return individual pieces from an invoice"
+                                        onClick={() =>
+                                          go("Sales Returns", { invoiceId: Number(r.id) })
+                                        }
+                                      >
+                                        Return pieces
+                                      </button>
+                                    )}
+                                    <button
+                                      className="icon-action edit"
+                                      title={`Edit ${page}`}
+                                      onClick={() =>
+                                        page === "Invoices"
+                                          ? setEditingMaster({ type: "invoice", row: r })
+                                          : setEditingTransaction({ page, row: r })
+                                      }
+                                    >
+                                      <Pencil />
+                                    </button>
+                                    <button
+                                      className="icon-action delete"
+                                      title={`Delete ${page}`}
+                                      onClick={async () => {
+                                        if (
+                                          !confirm(
+                                            `Delete ${r.number}? Related posted records will be checked first.`,
+                                          )
+                                        )
+                                          return;
+                                        const base =
+                                          page === "Sales Orders"
+                                            ? "sales-orders"
+                                            : page === "Invoices"
+                                              ? "sales-invoices"
+                                              : "customer-receipts";
+                                        try {
+                                          await post(`${base}/${r.id}`, undefined, "DELETE");
+                                        } catch (e) {
+                                          setError((e as Error).message);
+                                        }
+                                      }}
+                                    >
+                                      <Trash2 />
+                                    </button>
+                                  </>
+                                )}
+                            </div>
+                          </td>
+                        </tr>
+                        {page === "Pricing List" && expandedPriceArticles.has(r.article_id) && (
+                          <tr className="price-detail-row">
+                            <td colSpan={heads[page].length + 1}>
+                              <div className="price-variants">
+                                <div className="price-variant-head">
+                                  <b>Variant</b>
+                                  <b>Item code</b>
+                                  <b>Size</b>
+                                  <b>Colours</b>
+                                  <b>Production cost</b>
+                                  <b>Selling price</b>
+                                </div>
+                                {r.variants.map((item: any) => (
+                                  <div className="price-variant-line" key={item.id}>
+                                    <span>{item.set_name || "Price List"}</span>
+                                    <span>
+                                      <b>{item.item_code || "—"}</b>
+                                    </span>
+                                    <span>{item.size_label}</span>
+                                    <span>{item.colours || "—"}</span>
+                                    <span>
+                                      {item.production_cost == null
+                                        ? "—"
+                                        : money(item.production_cost)}
+                                    </span>
+                                    <span>
+                                      <b>{money(item.unit_price)}</b>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </FilteredRecords>
       )}
       {modal && (
         <SalesCreateModal
@@ -7025,12 +6973,6 @@ function Records({
   remove: (row: RecordRow) => void;
   receive?: (id: number) => void;
 }) {
-  if (!rows.length)
-    return (
-      <div className="table-card">
-        <Empty text={`No ${page.toLowerCase()} found`} />
-      </div>
-    );
   let heads: string[] = [];
   if (page === "Suppliers")
     heads = ["Code", "Supplier", "Phone", "Payment Terms", "Status", "Actions"];
@@ -7049,111 +6991,126 @@ function Records({
     ];
   else heads = ["Journal", "Posting Date", "Description", "Debit", "Credit", "Status", "Actions"];
   return (
-    <div className="table-card">
-      <table>
-        <thead>
-          <tr>
-            {heads.map((h) => (
-              <th key={h}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row: any) => (
-            <tr key={row.id}>
-              {page === "Suppliers" ? (
-                <>
-                  <td>{row.code}</td>
-                  <td>
-                    <b>{row.name}</b>
-                  </td>
-                  <td>{row.phone || "—"}</td>
-                  <td>{row.payment_days} days</td>
-                  <td>{status(row.status)}</td>
-                </>
-              ) : page === "Purchase Orders" || page === "Receive Goods" ? (
-                <>
-                  <td>
-                    <b>{row.number}</b>
-                  </td>
-                  <td>{row.supplier_name}</td>
-                  <td>{row.order_date}</td>
-                  <td>{row.expected_date || "—"}</td>
-                  <td>{money(row.total)}</td>
-                  <td>{status(row.status)}</td>
-                </>
-              ) : page === "Raw Material Stock" ? (
-                <>
-                  <td>
-                    <b>{row.code}</b>
-                  </td>
-                  <td>{row.name}</td>
-                  <td>{row.category.replace("_", " ")}</td>
-                  <td>{row.batch_number}</td>
-                  <td>{Number(row.quantity).toLocaleString()}</td>
-                  <td>{money(row.unit_cost)}</td>
-                  <td>{money(row.quantity * row.unit_cost)}</td>
-                </>
-              ) : (
-                <>
-                  <td>
-                    <b>{row.number}</b>
-                  </td>
-                  <td>{row.posting_date}</td>
-                  <td>{row.description}</td>
-                  <td>
-                    {money(row.lines.reduce((s: number, l: JournalLine) => s + Number(l.debit), 0))}
-                  </td>
-                  <td>
-                    {money(
-                      row.lines.reduce((s: number, l: JournalLine) => s + Number(l.credit), 0),
-                    )}
-                  </td>
-                  <td>{status(row.status)}</td>
-                </>
+    <FilteredRecords records={rows} title="records" key={page}>
+      {(filteredRows, filtersActive) => (
+        <div className="table-card">
+          <table>
+            <thead>
+              <tr>
+                {heads.map((h) => (
+                  <th key={h}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {!filteredRows.length && (
+                <tr>
+                  <td colSpan={heads.length}>No matching records.</td>
+                </tr>
               )}
-              <td>
-                <div className="row-actions">
-                  {page === "Purchase Orders" && row.status === "draft" && (
-                    <button className="approve" onClick={() => approve(row.id)}>
-                      <Check /> Approve
-                    </button>
-                  )}
-                  {page === "Purchase Orders" &&
-                    ["approved", "part_received"].includes(row.status) &&
-                    receive && (
-                      <button className="approve" onClick={() => receive(row.id)}>
-                        Receive goods →
-                      </button>
-                    )}
-                  {page === "Receive Goods" &&
-                    (row.status === "approved" || row.status === "part_received") && (
-                      <span className="ready">Ready</span>
-                    )}
-                  <button className="icon-action view" title="View" onClick={() => view(row)}>
-                    <Eye />
-                  </button>
-                  {(page !== "General Ledger" || row.source_type === "manual_journal") && (
+              {filteredRows.map((row: any) => (
+                <tr key={row.id}>
+                  {page === "Suppliers" ? (
                     <>
-                      <button className="icon-action edit" title="Edit" onClick={() => edit(row)}>
-                        <Pencil />
-                      </button>
-                      <button
-                        className="icon-action delete"
-                        title="Delete"
-                        onClick={() => remove(row)}
-                      >
-                        <Trash2 />
-                      </button>
+                      <td>{row.code}</td>
+                      <td>
+                        <b>{row.name}</b>
+                      </td>
+                      <td>{row.phone || "—"}</td>
+                      <td>{row.payment_days} days</td>
+                      <td>{status(row.status)}</td>
+                    </>
+                  ) : page === "Purchase Orders" || page === "Receive Goods" ? (
+                    <>
+                      <td>
+                        <b>{row.number}</b>
+                      </td>
+                      <td>{row.supplier_name}</td>
+                      <td>{row.order_date}</td>
+                      <td>{row.expected_date || "—"}</td>
+                      <td>{money(row.total)}</td>
+                      <td>{status(row.status)}</td>
+                    </>
+                  ) : page === "Raw Material Stock" ? (
+                    <>
+                      <td>
+                        <b>{row.code}</b>
+                      </td>
+                      <td>{row.name}</td>
+                      <td>{row.category.replace("_", " ")}</td>
+                      <td>{row.batch_number}</td>
+                      <td>{Number(row.quantity).toLocaleString()}</td>
+                      <td>{money(row.unit_cost)}</td>
+                      <td>{money(row.quantity * row.unit_cost)}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td>
+                        <b>{row.number}</b>
+                      </td>
+                      <td>{row.posting_date}</td>
+                      <td>{row.description}</td>
+                      <td>
+                        {money(
+                          row.lines.reduce((s: number, l: JournalLine) => s + Number(l.debit), 0),
+                        )}
+                      </td>
+                      <td>
+                        {money(
+                          row.lines.reduce((s: number, l: JournalLine) => s + Number(l.credit), 0),
+                        )}
+                      </td>
+                      <td>{status(row.status)}</td>
                     </>
                   )}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                  <td>
+                    <div className="row-actions">
+                      {page === "Purchase Orders" && row.status === "draft" && (
+                        <button className="approve" onClick={() => approve(row.id)}>
+                          <Check /> Approve
+                        </button>
+                      )}
+                      {page === "Purchase Orders" &&
+                        ["approved", "part_received"].includes(row.status) &&
+                        receive && (
+                          <button className="approve" onClick={() => receive(row.id)}>
+                            Receive goods →
+                          </button>
+                        )}
+                      {page === "Receive Goods" &&
+                        (row.status === "approved" || row.status === "part_received") && (
+                          <span className="ready">Ready</span>
+                        )}
+                      <button className="icon-action view" title="View" onClick={() => view(row)}>
+                        <Eye />
+                      </button>
+                      {(page !== "General Ledger" || row.source_type === "manual_journal") && (
+                        <>
+                          <button
+                            className="icon-action edit"
+                            title="Edit"
+                            onClick={() => edit(row)}
+                          >
+                            <Pencil />
+                          </button>
+                          <button
+                            className="icon-action delete"
+                            title="Delete"
+                            onClick={() => remove(row)}
+                          >
+                            <Trash2 />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </FilteredRecords>
   );
 }
 
@@ -7814,75 +7771,85 @@ function AccessPage({
           Roles and permissions <small>{data.roles.length}</small>
         </button>
       </div>
-      <div className="table-card">
-        <table>
-          <thead>
-            <tr>
-              {(tab === "users"
-                ? ["User", "Email", "Role", "Linked salesperson", "Status"]
-                : ["Role", "Code", "Permissions", "Assigned users"]
-              ).map((h) => (
-                <th key={h}>{h}</th>
-              ))}
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(tab === "users" ? data.users : data.roles)
-              .filter((row: any) => matchesSearch(row, search))
-              .map((row: any) => (
-                <tr key={row.id}>
-                  {tab === "users" ? (
-                    <>
-                      <td>
-                        <b>{row.name}</b>
-                        {row.id === currentUserId && (
-                          <small>
-                            <br />
-                            Current user
-                          </small>
-                        )}
-                      </td>
-                      <td>{row.email}</td>
-                      <td>{row.role_name}</td>
-                      <td>{row.sales_rep_name || "Not linked"}</td>
-                      <td>{status(row.active ? "active" : "inactive")}</td>
-                    </>
-                  ) : (
-                    <>
-                      <td>
-                        <b>{row.name}</b>
-                      </td>
-                      <td>{row.code}</td>
-                      <td>{row.permission_ids.length} permissions</td>
-                      <td>{data.users.filter((u: any) => u.role_id === row.id).length}</td>
-                    </>
-                  )}
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        className="icon-action edit"
-                        onClick={() => {
-                          setCreating(false);
-                          setEditing(row);
-                        }}
-                      >
-                        <Pencil />
-                      </button>
-                      <button
-                        className="icon-action delete"
-                        disabled={tab === "users" && row.id === currentUserId}
-                        onClick={() => remove(row)}
-                      >
-                        <Trash2 />
-                      </button>
-                    </div>
-                  </td>
+      <FilteredRecords
+        records={(tab === "users" ? data.users : data.roles).filter((row: any) =>
+          matchesSearch(row, search),
+        )}
+        title="access records"
+        key={tab}
+      >
+        {(filteredRows, filtersActive) => (
+          <div className="table-card">
+            <table>
+              <thead>
+                <tr>
+                  {(tab === "users"
+                    ? ["User", "Email", "Role", "Linked salesperson", "Status"]
+                    : ["Role", "Code", "Permissions", "Assigned users"]
+                  ).map((h) => (
+                    <th key={h}>{h}</th>
+                  ))}
+                  <th>Actions</th>
                 </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {filteredRows
+                  .filter((row: any) => matchesSearch(row, search))
+                  .map((row: any) => (
+                    <tr key={row.id}>
+                      {tab === "users" ? (
+                        <>
+                          <td>
+                            <b>{row.name}</b>
+                            {row.id === currentUserId && (
+                              <small>
+                                <br />
+                                Current user
+                              </small>
+                            )}
+                          </td>
+                          <td>{row.email}</td>
+                          <td>{row.role_name}</td>
+                          <td>{row.sales_rep_name || "Not linked"}</td>
+                          <td>{status(row.active ? "active" : "inactive")}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td>
+                            <b>{row.name}</b>
+                          </td>
+                          <td>{row.code}</td>
+                          <td>{row.permission_ids.length} permissions</td>
+                          <td>{data.users.filter((u: any) => u.role_id === row.id).length}</td>
+                        </>
+                      )}
+                      <td>
+                        <div className="row-actions">
+                          <button
+                            className="icon-action edit"
+                            onClick={() => {
+                              setCreating(false);
+                              setEditing(row);
+                            }}
+                          >
+                            <Pencil />
+                          </button>
+                          <button
+                            className="icon-action delete"
+                            disabled={tab === "users" && row.id === currentUserId}
+                            onClick={() => remove(row)}
+                          >
+                            <Trash2 />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </FilteredRecords>
       {(creating || editing) && (
         <div
           className="backdrop"
@@ -8313,87 +8280,94 @@ function EmployeesPage({ token, search = "" }: { token: string; search?: string 
               <small>Recorded payroll periods</small>
             </article>
           </div>
-          <div className="table-card">
-            <table>
-              <thead>
-                <tr>
-                  <th>Employee</th>
-                  <th>Department</th>
-                  <th>Designation</th>
-                  <th>Basic salary</th>
-                  <th>Fixed gross</th>
-                  <th>History</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.employees
-                  .filter((employee: any) => matchesSearch(employee, search))
-                  .map((employee: any) => (
-                    <tr key={employee.id}>
-                      <td>
-                        <b>{employee.employee_no}</b>
-                        <br />
-                        {employee.name}
-                      </td>
-                      <td>{employee.department}</td>
-                      <td>{employee.designation}</td>
-                      <td>{money(employee.basic_salary)}</td>
-                      <td>
-                        {money(
-                          Number(employee.basic_salary) +
-                            Number(employee.fixed_allowance || 0) +
-                            Number(employee.fixed_incentive || 0),
-                        )}
-                      </td>
-                      <td>{historyFor(employee).length} payroll records</td>
-                      <td>{status(employee.status)}</td>
-                      <td>
-                        <div className="row-actions">
-                          <button
-                            className="icon-action view"
-                            title="View employee and salary history"
-                            onClick={() =>
-                              setViewing({
-                                employee,
-                                history: historyFor(employee),
-                              })
-                            }
-                          >
-                            <Eye />
-                          </button>
-                          <button
-                            className="icon-action download"
-                            title="Payroll settings"
-                            onClick={() => {
-                              setEditing(employee);
-                              setSettingsOpen(true);
-                            }}
-                          >
-                            <Settings />
-                          </button>
-                          <button
-                            className="icon-action edit"
-                            title="Edit employee"
-                            onClick={() => setEditing(employee)}
-                          >
-                            <Pencil />
-                          </button>
-                          <button
-                            className="icon-action delete"
-                            title="Delete employee"
-                            onClick={() => remove(employee)}
-                          >
-                            <Trash2 />
-                          </button>
-                        </div>
-                      </td>
+          <FilteredRecords
+            records={(data?.employees || []).filter((row: any) => matchesSearch(row, search))}
+            title="employees"
+          >
+            {(filteredRows, filtersActive) => (
+              <div className="table-card">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th>Department</th>
+                      <th>Designation</th>
+                      <th>Basic salary</th>
+                      <th>Fixed gross</th>
+                      <th>History</th>
+                      <th>Status</th>
+                      <th>Actions</th>
                     </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {filteredRows
+                      .filter((employee: any) => matchesSearch(employee, search))
+                      .map((employee: any) => (
+                        <tr key={employee.id}>
+                          <td>
+                            <b>{employee.employee_no}</b>
+                            <br />
+                            {employee.name}
+                          </td>
+                          <td>{employee.department}</td>
+                          <td>{employee.designation}</td>
+                          <td>{money(employee.basic_salary)}</td>
+                          <td>
+                            {money(
+                              Number(employee.basic_salary) +
+                                Number(employee.fixed_allowance || 0) +
+                                Number(employee.fixed_incentive || 0),
+                            )}
+                          </td>
+                          <td>{historyFor(employee).length} payroll records</td>
+                          <td>{status(employee.status)}</td>
+                          <td>
+                            <div className="row-actions">
+                              <button
+                                className="icon-action view"
+                                title="View employee and salary history"
+                                onClick={() =>
+                                  setViewing({
+                                    employee,
+                                    history: historyFor(employee),
+                                  })
+                                }
+                              >
+                                <Eye />
+                              </button>
+                              <button
+                                className="icon-action download"
+                                title="Payroll settings"
+                                onClick={() => {
+                                  setEditing(employee);
+                                  setSettingsOpen(true);
+                                }}
+                              >
+                                <Settings />
+                              </button>
+                              <button
+                                className="icon-action edit"
+                                title="Edit employee"
+                                onClick={() => setEditing(employee)}
+                              >
+                                <Pencil />
+                              </button>
+                              <button
+                                className="icon-action delete"
+                                title="Delete employee"
+                                onClick={() => remove(employee)}
+                              >
+                                <Trash2 />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </FilteredRecords>
         </>
       )}
       {viewing && (
@@ -8497,52 +8471,56 @@ function EmployeeProfileModal({
             </div>
           </div>
           <h3>Salary history</h3>
-          <div className="table-card employee-history">
-            <table>
-              <thead>
-                <tr>
-                  <th>Payroll</th>
-                  <th>Period</th>
-                  <th>Basic</th>
-                  <th>Allowances</th>
-                  <th>OT</th>
-                  <th>Deductions</th>
-                  <th>Net salary</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.length === 0 ? (
-                  <tr>
-                    <td colSpan={8}>No payroll history yet.</td>
-                  </tr>
-                ) : (
-                  history.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.payroll_number}</td>
-                      <td>
-                        {item.period_start} to {item.period_end}
-                      </td>
-                      <td>{money(item.basic_salary)}</td>
-                      <td>{money(Number(item.allowances) + Number(item.incentive))}</td>
-                      <td>{money(item.overtime)}</td>
-                      <td>
-                        {money(
-                          Number(item.epf_employee) +
-                            Number(item.other_deductions) +
-                            Number(item.no_pay_amount || 0),
-                        )}
-                      </td>
-                      <td>
-                        <b>{money(item.net_salary)}</b>
-                      </td>
-                      <td>{status(item.payroll_status)}</td>
+          <FilteredRecords records={history} title="payroll history">
+            {(filteredRows, filtersActive) => (
+              <div className="table-card employee-history">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Payroll</th>
+                      <th>Period</th>
+                      <th>Basic</th>
+                      <th>Allowances</th>
+                      <th>OT</th>
+                      <th>Deductions</th>
+                      <th>Net salary</th>
+                      <th>Status</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {filteredRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={8}>No payroll history yet.</td>
+                      </tr>
+                    ) : (
+                      filteredRows.map((item) => (
+                        <tr key={item.id}>
+                          <td>{item.payroll_number}</td>
+                          <td>
+                            {item.period_start} to {item.period_end}
+                          </td>
+                          <td>{money(item.basic_salary)}</td>
+                          <td>{money(Number(item.allowances) + Number(item.incentive))}</td>
+                          <td>{money(item.overtime)}</td>
+                          <td>
+                            {money(
+                              Number(item.epf_employee) +
+                                Number(item.other_deductions) +
+                                Number(item.no_pay_amount || 0),
+                            )}
+                          </td>
+                          <td>
+                            <b>{money(item.net_salary)}</b>
+                          </td>
+                          <td>{status(item.payroll_status)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </FilteredRecords>
         </div>
         <div className="popup-footer">
           <div className="actions">
@@ -8721,128 +8699,49 @@ function PayrollPage({
             </button>
           </div>
           {payrollTable === "employees" && (
-            <div className="table-card">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Employee</th>
-                    <th>Department</th>
-                    <th>Designation</th>
-                    <th>Basic salary</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.employees.map((e: any) => (
-                    <tr key={e.id}>
-                      <td>
-                        <b>{e.employee_no}</b>
-                        <br />
-                        {e.name}
-                      </td>
-                      <td>{e.department}</td>
-                      <td>{e.designation}</td>
-                      <td>{money(e.basic_salary)}</td>
-                      <td>{status(e.status)}</td>
-                      <td>
-                        <div className="row-actions">
-                          <button
-                            className="icon-action view"
-                            onClick={() => setViewing(e)}
-                            title="View"
-                          >
-                            <Eye />
-                          </button>
-                          <button
-                            className="icon-action edit"
-                            onClick={() => {
-                              setEditing(e);
-                              setEditType("employee");
-                            }}
-                            title="Edit"
-                          >
-                            <Pencil />
-                          </button>
-                          <button
-                            className="icon-action delete"
-                            onClick={() => remove("employee", e)}
-                            title="Delete"
-                          >
-                            <Trash2 />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {payrollTable === "runs" && (
-            <div className="table-card">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Payroll</th>
-                    <th>Period</th>
-                    <th>Gross</th>
-                    <th>Deductions</th>
-                    <th>Net pay</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.runs
-                    .filter((run: any) => matchesSearch(run, search))
-                    .map((r: any) => (
-                      <Fragment key={r.id}>
-                        <tr>
+            <FilteredRecords
+              records={(data.employees || []).filter((row: any) => matchesSearch(row, search))}
+              title="employees"
+            >
+              {(filteredRows, filtersActive) => (
+                <div className="table-card">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Employee</th>
+                        <th>Department</th>
+                        <th>Designation</th>
+                        <th>Basic salary</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRows.map((e: any) => (
+                        <tr key={e.id}>
                           <td>
-                            <button
-                              className="payroll-expand"
-                              onClick={() => togglePayrollRun(r.id)}
-                              aria-expanded={expandedPayrollRuns.has(r.id)}
-                              title="Show employee pay details"
-                            >
-                              {expandedPayrollRuns.has(r.id) ? <ChevronDown /> : <ChevronRight />}
-                              <b>{r.number}</b>
-                            </button>
+                            <b>{e.employee_no}</b>
+                            <br />
+                            {e.name}
                           </td>
-                          <td>
-                            {r.period_start} to {r.period_end}
-                          </td>
-                          <td>{money(r.gross_total)}</td>
-                          <td>{money(r.deduction_total)}</td>
-                          <td>{money(r.net_total)}</td>
-                          <td>{status(r.status)}</td>
+                          <td>{e.department}</td>
+                          <td>{e.designation}</td>
+                          <td>{money(e.basic_salary)}</td>
+                          <td>{status(e.status)}</td>
                           <td>
                             <div className="row-actions">
                               <button
                                 className="icon-action view"
-                                onClick={() => togglePayrollRun(r.id)}
-                                title="Show employee pay details"
+                                onClick={() => setViewing(e)}
+                                title="View"
                               >
                                 <Eye />
                               </button>
                               <button
-                                className="icon-action download"
-                                onClick={() =>
-                                  downloadPayrollReport(
-                                    `payroll-runs/${r.id}/excel`,
-                                    `Payroll_${r.number}.xls`,
-                                  )
-                                }
-                                title="Download payroll register"
-                              >
-                                <FileText />
-                              </button>
-                              <button
                                 className="icon-action edit"
                                 onClick={() => {
-                                  setEditing(r);
-                                  setEditType("payroll");
+                                  setEditing(e);
+                                  setEditType("employee");
                                 }}
                                 title="Edit"
                               >
@@ -8850,7 +8749,7 @@ function PayrollPage({
                               </button>
                               <button
                                 className="icon-action delete"
-                                onClick={() => remove("payroll", r)}
+                                onClick={() => remove("employee", e)}
                                 title="Delete"
                               >
                                 <Trash2 />
@@ -8858,101 +8757,198 @@ function PayrollPage({
                             </div>
                           </td>
                         </tr>
-                        {expandedPayrollRuns.has(r.id) && (
-                          <tr className="payroll-detail-row">
-                            <td colSpan={7}>
-                              <div className="payroll-breakdown">
-                                <div className="payroll-breakdown-head">
-                                  <span>Employee</span>
-                                  <span>Basic salary</span>
-                                  <span>Allowance</span>
-                                  <span>Incentive</span>
-                                  <span>Commission</span>
-                                  <span>OT</span>
-                                  <span>Deductions</span>
-                                  <span>Net pay</span>
-                                  <span>Payment</span>
-                                  <span>Actions</span>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </FilteredRecords>
+          )}
+          {payrollTable === "runs" && (
+            <FilteredRecords
+              records={(data.runs || []).filter((row: any) => matchesSearch(row, search))}
+              title="payroll runs"
+            >
+              {(filteredRows) => (
+                <div className="table-card">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Payroll</th>
+                        <th>Period</th>
+                        <th>Gross</th>
+                        <th>Deductions</th>
+                        <th>Net pay</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRows
+                        .filter((run: any) => matchesSearch(run, search))
+                        .map((r: any) => (
+                          <Fragment key={r.id}>
+                            <tr>
+                              <td>
+                                <button
+                                  className="payroll-expand"
+                                  onClick={() => togglePayrollRun(r.id)}
+                                  aria-expanded={expandedPayrollRuns.has(r.id)}
+                                  title="Show employee pay details"
+                                >
+                                  {expandedPayrollRuns.has(r.id) ? (
+                                    <ChevronDown />
+                                  ) : (
+                                    <ChevronRight />
+                                  )}
+                                  <b>{r.number}</b>
+                                </button>
+                              </td>
+                              <td>
+                                {r.period_start} to {r.period_end}
+                              </td>
+                              <td>{money(r.gross_total)}</td>
+                              <td>{money(r.deduction_total)}</td>
+                              <td>{money(r.net_total)}</td>
+                              <td>{status(r.status)}</td>
+                              <td>
+                                <div className="row-actions">
+                                  <button
+                                    className="icon-action view"
+                                    onClick={() => togglePayrollRun(r.id)}
+                                    title="Show employee pay details"
+                                  >
+                                    <Eye />
+                                  </button>
+                                  <button
+                                    className="icon-action download"
+                                    onClick={() =>
+                                      downloadPayrollReport(
+                                        `payroll-runs/${r.id}/excel`,
+                                        `Payroll_${r.number}.xls`,
+                                      )
+                                    }
+                                    title="Download payroll register"
+                                  >
+                                    <FileText />
+                                  </button>
+                                  <button
+                                    className="icon-action edit"
+                                    onClick={() => {
+                                      setEditing(r);
+                                      setEditType("payroll");
+                                    }}
+                                    title="Edit"
+                                  >
+                                    <Pencil />
+                                  </button>
+                                  <button
+                                    className="icon-action delete"
+                                    onClick={() => remove("payroll", r)}
+                                    title="Delete"
+                                  >
+                                    <Trash2 />
+                                  </button>
                                 </div>
-                                {(r.items || []).map((item: any) => {
-                                  const deductions =
-                                    Number(item.epf_employee || 0) +
-                                    Number(item.other_deductions || 0) +
-                                    Number(item.no_pay_amount || 0);
-                                  return (
-                                    <div className="payroll-breakdown-line" key={item.id}>
-                                      <span>
-                                        <b>{item.employee_no}</b>
-                                        <small>{item.name}</small>
-                                      </span>
-                                      <span>{money(item.basic_salary)}</span>
-                                      <span>{money(item.allowances)}</span>
-                                      <span>{money(item.incentive)}</span>
-                                      <span>{money(item.commission || 0)}</span>
-                                      <span>
-                                        {money(item.overtime)}
-                                        <small>{Number(item.overtime_hours || 0)} hours</small>
-                                      </span>
-                                      <span>
-                                        {money(deductions)}
-                                        <small>
-                                          EPF {money(item.epf_employee)} · No-pay{" "}
-                                          {money(item.no_pay_amount || 0)}
-                                        </small>
-                                      </span>
-                                      <span>
-                                        <b>{money(item.net_salary)}</b>
-                                      </span>
-                                      <span>
-                                        {status(item.payment_status || "unpaid")}
-                                        {item.paid_at && (
-                                          <small>{String(item.paid_at).slice(0, 10)}</small>
-                                        )}
-                                      </span>
-                                      <span className="row-actions">
-                                        <button
-                                          className={`icon-action ${item.payment_status === "paid" ? "view" : "approve"}`}
-                                          title={
-                                            item.payment_status === "paid"
-                                              ? "Review linked salary payment"
-                                              : "Record linked salary payment"
-                                          }
-                                          onClick={changePayrollItemPayment}
-                                        >
-                                          <Check />
-                                        </button>
-                                        <button
-                                          className="icon-action edit"
-                                          title="Edit employee pay"
-                                          onClick={() => setEditingPayrollItem(item)}
-                                        >
-                                          <Pencil />
-                                        </button>
-                                        <button
-                                          className="icon-action delete"
-                                          title="Delete employee pay"
-                                          onClick={() => deletePayrollItem(item)}
-                                        >
-                                          <Trash2 />
-                                        </button>
-                                      </span>
+                              </td>
+                            </tr>
+                            {expandedPayrollRuns.has(r.id) && (
+                              <tr className="payroll-detail-row">
+                                <td colSpan={7}>
+                                  <div className="payroll-breakdown">
+                                    <div className="payroll-breakdown-head">
+                                      <span>Employee</span>
+                                      <span>Basic salary</span>
+                                      <span>Allowance</span>
+                                      <span>Incentive</span>
+                                      <span>Commission</span>
+                                      <span>OT</span>
+                                      <span>Deductions</span>
+                                      <span>Net pay</span>
+                                      <span>Payment</span>
+                                      <span>Actions</span>
                                     </div>
-                                  );
-                                })}
-                                {!r.items?.length && (
-                                  <div className="payroll-empty">
-                                    No employee pay lines are recorded for this payroll run.
+                                    {(r.items || []).map((item: any) => {
+                                      const deductions =
+                                        Number(item.epf_employee || 0) +
+                                        Number(item.other_deductions || 0) +
+                                        Number(item.no_pay_amount || 0);
+                                      return (
+                                        <div className="payroll-breakdown-line" key={item.id}>
+                                          <span>
+                                            <b>{item.employee_no}</b>
+                                            <small>{item.name}</small>
+                                          </span>
+                                          <span>{money(item.basic_salary)}</span>
+                                          <span>{money(item.allowances)}</span>
+                                          <span>{money(item.incentive)}</span>
+                                          <span>{money(item.commission || 0)}</span>
+                                          <span>
+                                            {money(item.overtime)}
+                                            <small>{Number(item.overtime_hours || 0)} hours</small>
+                                          </span>
+                                          <span>
+                                            {money(deductions)}
+                                            <small>
+                                              EPF {money(item.epf_employee)} · No-pay{" "}
+                                              {money(item.no_pay_amount || 0)}
+                                            </small>
+                                          </span>
+                                          <span>
+                                            <b>{money(item.net_salary)}</b>
+                                          </span>
+                                          <span>
+                                            {status(item.payment_status || "unpaid")}
+                                            {item.paid_at && (
+                                              <small>{String(item.paid_at).slice(0, 10)}</small>
+                                            )}
+                                          </span>
+                                          <span className="row-actions">
+                                            <button
+                                              className={`icon-action ${item.payment_status === "paid" ? "view" : "approve"}`}
+                                              title={
+                                                item.payment_status === "paid"
+                                                  ? "Review linked salary payment"
+                                                  : "Record linked salary payment"
+                                              }
+                                              onClick={changePayrollItemPayment}
+                                            >
+                                              <Check />
+                                            </button>
+                                            <button
+                                              className="icon-action edit"
+                                              title="Edit employee pay"
+                                              onClick={() => setEditingPayrollItem(item)}
+                                            >
+                                              <Pencil />
+                                            </button>
+                                            <button
+                                              className="icon-action delete"
+                                              title="Delete employee pay"
+                                              onClick={() => deletePayrollItem(item)}
+                                            >
+                                              <Trash2 />
+                                            </button>
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                    {!r.items?.length && (
+                                      <div className="payroll-empty">
+                                        No employee pay lines are recorded for this payroll run.
+                                      </div>
+                                    )}
                                   </div>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    ))}
-                </tbody>
-              </table>
-            </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </FilteredRecords>
           )}
         </>
       )}
@@ -9063,79 +9059,84 @@ function AttendanceFilesModal({
           </div>
         </div>
         <div className="popup-body">
-          <div className="table-card">
-            <table>
-              <thead>
-                <tr>
-                  <th>Attendance file</th>
-                  <th>Period</th>
-                  <th>Employees</th>
-                  <th>Paid days</th>
-                  <th>No-pay days</th>
-                  <th>OT hours</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {imports.length === 0 ? (
-                  <tr>
-                    <td colSpan={8}>No attendance sheets uploaded yet.</td>
-                  </tr>
-                ) : (
-                  imports.map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        <b>{item.file_name}</b>
-                        <br />
-                        <small>{item.record_count} valid records</small>
-                      </td>
-                      <td>
-                        {item.period_start} to {item.period_end}
-                      </td>
-                      <td>{item.employees}</td>
-                      <td>{item.paid_days}</td>
-                      <td>{item.no_pay_days}</td>
-                      <td>{item.overtime_hours}</td>
-                      <td>{status(item.status)}</td>
-                      <td>
-                        <div className="row-actions">
-                          <button
-                            className="icon-action view"
-                            onClick={() => view(item)}
-                            title="View validation summary"
-                          >
-                            <Eye />
-                          </button>
-                          <button
-                            className="icon-action download"
-                            onClick={() =>
-                              download(
-                                `attendance/${item.id}/excel`,
-                                `Attendance_${item.period_end}.xls`,
-                              )
-                            }
-                            title="Download attendance report"
-                          >
-                            <FileText />
-                          </button>
-                          {item.status === "validated" && (
-                            <button
-                              className="approve"
-                              disabled={calculating === item.id}
-                              onClick={() => calculate(item.id)}
-                            >
-                              {calculating === item.id ? <Loader2 /> : <Check />} Calculate payroll
-                            </button>
-                          )}
-                        </div>
-                      </td>
+          <FilteredRecords records={imports} title="attendance files">
+            {(filteredRows, filtersActive) => (
+              <div className="table-card">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Attendance file</th>
+                      <th>Period</th>
+                      <th>Employees</th>
+                      <th>Paid days</th>
+                      <th>No-pay days</th>
+                      <th>OT hours</th>
+                      <th>Status</th>
+                      <th>Actions</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {filteredRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={8}>No attendance sheets uploaded yet.</td>
+                      </tr>
+                    ) : (
+                      filteredRows.map((item) => (
+                        <tr key={item.id}>
+                          <td>
+                            <b>{item.file_name}</b>
+                            <br />
+                            <small>{item.record_count} valid records</small>
+                          </td>
+                          <td>
+                            {item.period_start} to {item.period_end}
+                          </td>
+                          <td>{item.employees}</td>
+                          <td>{item.paid_days}</td>
+                          <td>{item.no_pay_days}</td>
+                          <td>{item.overtime_hours}</td>
+                          <td>{status(item.status)}</td>
+                          <td>
+                            <div className="row-actions">
+                              <button
+                                className="icon-action view"
+                                onClick={() => view(item)}
+                                title="View validation summary"
+                              >
+                                <Eye />
+                              </button>
+                              <button
+                                className="icon-action download"
+                                onClick={() =>
+                                  download(
+                                    `attendance/${item.id}/excel`,
+                                    `Attendance_${item.period_end}.xls`,
+                                  )
+                                }
+                                title="Download attendance report"
+                              >
+                                <FileText />
+                              </button>
+                              {item.status === "validated" && (
+                                <button
+                                  className="approve"
+                                  disabled={calculating === item.id}
+                                  onClick={() => calculate(item.id)}
+                                >
+                                  {calculating === item.id ? <Loader2 /> : <Check />} Calculate
+                                  payroll
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </FilteredRecords>
         </div>
         <div className="popup-footer">
           <div className="actions">
@@ -9813,6 +9814,10 @@ function ReportsPage({
     [retail, setRetail] = useState<any>(null),
     [error, setError] = useState(""),
     [selected, setSelected] = useState(requestedReport);
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogGroup, setCatalogGroup] = useState("");
+  const catalogSearch = [search, catalogQuery].filter(Boolean).join(" ");
+
   useEffect(() => {
     if (requestedReport) setSelected(requestedReport);
   }, [requestedReport]);
@@ -9937,15 +9942,15 @@ function ReportsPage({
   };
   const reportReady = Boolean(
     data &&
-      financial &&
-      aging &&
-      retail &&
-      !error &&
-      financial.period?.from === from &&
-      financial.period?.to === to &&
-      retail.period?.from === from &&
-      retail.period?.to === to &&
-      aging.as_of === to,
+    financial &&
+    aging &&
+    retail &&
+    !error &&
+    financial.period?.from === from &&
+    financial.period?.to === to &&
+    retail.period?.from === from &&
+    retail.period?.to === to &&
+    aging.as_of === to,
   );
   const downloadPdf = () => {
     const source = document.querySelector<HTMLElement>(".report-output");
@@ -9963,6 +9968,9 @@ function ReportsPage({
       setError("Allow pop-ups to download this report as PDF.");
     }
   };
+  const catalogGroups = reportGroups.filter(
+    (group) => !catalogGroup || group.title === catalogGroup,
+  );
   if (!selected)
     return (
       <>
@@ -9973,23 +9981,60 @@ function ReportsPage({
             <p>Select a report to open its dedicated page.</p>
           </div>
         </div>
+        <section className="record-filters" aria-label="Search and filter reports">
+          <div className="record-filter-main">
+            <label className="record-search">
+              Search reports
+              <input
+                type="search"
+                value={catalogQuery}
+                onChange={(event) => setCatalogQuery(event.target.value)}
+                placeholder="Search report names or keywords"
+              />
+            </label>
+            <label>
+              Report category
+              <select
+                value={catalogGroup}
+                onChange={(event) => setCatalogGroup(event.target.value)}
+              >
+                <option value="">All categories</option>
+                {reportGroups.map((group) => (
+                  <option key={group.title} value={group.title}>
+                    {group.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={!catalogQuery && !catalogGroup}
+              onClick={() => {
+                setCatalogQuery("");
+                setCatalogGroup("");
+              }}
+            >
+              <RefreshCw /> Reset
+            </button>
+          </div>
+        </section>
         <div className="report-catalog">
-          {!reportGroups.some((group) =>
+          {!catalogGroups.some((group) =>
             group.reports.some(([key, label]) =>
               matchesSearch(
                 [group.title, label, reportSearchCatalog.find((report) => report[0] === key)],
-                search,
+                catalogSearch,
               ),
             ),
           ) && (
             <p role="status">No reports match this search. Clear the search to see all reports.</p>
           )}
-          {reportGroups
+          {catalogGroups
             .filter((group) =>
               group.reports.some(([key, label]) =>
                 matchesSearch(
                   [group.title, label, reportSearchCatalog.find((report) => report[0] === key)],
-                  search,
+                  catalogSearch,
                 ),
               ),
             )
@@ -10005,7 +10050,7 @@ function ReportsPage({
                           label,
                           reportSearchCatalog.find((report) => report[0] === key),
                         ],
-                        search,
+                        catalogSearch,
                       ),
                     )
                     .map(([key, label]) => (
@@ -10030,7 +10075,7 @@ function ReportsPage({
           </div>
           <div className="pending-report-list">
             {pendingReports
-              .filter((name) => matchesSearch(name, search))
+              .filter((name) => matchesSearch(name, catalogSearch))
               .map((name) => (
                 <span key={name}>
                   {name}
@@ -10186,7 +10231,7 @@ function RetailReportView({
           <h2>{title}</h2>
         </div>
         <div className="report-table-actions">
-          <strong>{rows.length} records</strong>
+          <strong>{rows.length} records in period</strong>
           <button
             aria-label="Scroll table left"
             onClick={() => tableRef.current?.scrollBy({ left: -480, behavior: "smooth" })}
@@ -10201,55 +10246,79 @@ function RetailReportView({
           </button>
         </div>
       </div>
-      <div className="table-card scrollable-report-table" ref={tableRef}>
-        <table>
-          <thead>
-            <tr>
-              {columns.map((key) => (
-                <th
-                  key={key}
-                  className={
-                    currencyColumns.includes(key) || key in totals ? "report-number" : undefined
-                  }
-                >
-                  {key.replace(/_/g, " ")}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {!rows.length ? (
-              <tr>
-                <td colSpan={Math.max(1, columns.length)}>No records in the selected period.</td>
-              </tr>
-            ) : (
-              rows.map((row, index) => (
-                <tr key={index}>
-                  {columns.map((key) => (
-                    <td
-                      key={key}
-                      className={
-                        currencyColumns.includes(key) || key in totals ? "report-number" : undefined
-                      }
-                    >
-                      {display(key, row[key])}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-            {rows.length > 0 && columns.some((key) => key in totals) && (
-              <tr className="report-totals">
-                {columns.map((key, index) => (
-                  <td key={key} className={key in totals ? "report-number" : "report-totals-label"}>
-                    {key in totals ? display(key, totals[key]) : index === 0 ? "Report total" : ""}
-                  </td>
-                ))}
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <FilteredRecords records={rows} title="report records" key={reportKey}>
+        {(filteredRows, filtersActive) => {
+          const filteredTotals = reportTotals(reportKey, filteredRows);
+          return (
+            <div className="table-card scrollable-report-table" ref={tableRef}>
+              <table>
+                <thead>
+                  <tr>
+                    {columns.map((key) => (
+                      <th
+                        key={key}
+                        className={
+                          currencyColumns.includes(key) || key in filteredTotals
+                            ? "report-number"
+                            : undefined
+                        }
+                      >
+                        {key.replace(/_/g, " ")}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {!filteredRows.length ? (
+                    <tr>
+                      <td colSpan={Math.max(1, columns.length)}>
+                        No records in the selected period.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRows.map((row, index) => (
+                      <tr key={index}>
+                        {columns.map((key) => (
+                          <td
+                            key={key}
+                            className={
+                              currencyColumns.includes(key) || key in filteredTotals
+                                ? "report-number"
+                                : undefined
+                            }
+                          >
+                            {display(key, row[key])}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                  {filteredRows.length > 0 && columns.some((key) => key in filteredTotals) && (
+                    <tr className="report-totals">
+                      {columns.map((key, index) => (
+                        <td
+                          key={key}
+                          className={
+                            key in filteredTotals ? "report-number" : "report-totals-label"
+                          }
+                        >
+                          {key in filteredTotals
+                            ? display(key, filteredTotals[key])
+                            : index === 0
+                              ? filtersActive
+                                ? "Matching total"
+                                : "Report total"
+                              : ""}
+                        </td>
+                      ))}
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          );
+        }}
+      </FilteredRecords>
       <p className="report-note">
         {reportKey === "product_report" || reportKey === "inventory_balance"
           ? "Current snapshot from system records at the time of generation."
@@ -10288,52 +10357,65 @@ function AgingReportView({ aging }: { aging: any }) {
           <b>{money(totals.total)}</b>
         </article>
       </div>
-      <div className="table-card">
-        <table>
-          <thead>
-            <tr>
-              <th>Supplier</th>
-              <th>Invoice</th>
-              <th>Invoice date</th>
-              <th>Due date</th>
-              <th>Days overdue</th>
-              <th>Aging bucket</th>
-              <th>Outstanding</th>
-            </tr>
-          </thead>
-          <tbody>
-            {aging.rows.length === 0 ? (
-              <tr>
-                <td colSpan={7}>No outstanding supplier invoices as of {aging.as_of}.</td>
-              </tr>
-            ) : (
-              aging.rows.map((row: any) => (
-                <tr key={row.id}>
-                  <td>
-                    <b>{row.supplier_code}</b>
-                    <br />
-                    {row.supplier}
-                  </td>
-                  <td>{row.invoice}</td>
-                  <td>{row.invoice_date}</td>
-                  <td>{row.due_date}</td>
-                  <td>{row.days_overdue}</td>
-                  <td>{status(row.bucket.replace("days_", ""))}</td>
-                  <td>
-                    <b>{money(row.outstanding)}</b>
-                  </td>
+      <FilteredRecords records={aging.rows} title="aging balances">
+        {(filteredRows, filtersActive) => (
+          <div className="table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Supplier</th>
+                  <th>Invoice</th>
+                  <th>Invoice date</th>
+                  <th>Due date</th>
+                  <th>Days overdue</th>
+                  <th>Aging bucket</th>
+                  <th>Outstanding</th>
                 </tr>
-              ))
-            )}
-            {aging.rows.length > 0 && (
-              <tr className="report-totals">
-                <td colSpan={6}>Total outstanding</td>
-                <td className="report-number">{money(totals.total)}</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {filteredRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>No outstanding supplier invoices as of {aging.as_of}.</td>
+                  </tr>
+                ) : (
+                  filteredRows.map((row: any) => (
+                    <tr key={row.id}>
+                      <td>
+                        <b>{row.supplier_code}</b>
+                        <br />
+                        {row.supplier}
+                      </td>
+                      <td>{row.invoice}</td>
+                      <td>{row.invoice_date}</td>
+                      <td>{row.due_date}</td>
+                      <td>{row.days_overdue}</td>
+                      <td>{status(row.bucket.replace("days_", ""))}</td>
+                      <td>
+                        <b>{money(row.outstanding)}</b>
+                      </td>
+                    </tr>
+                  ))
+                )}
+                {filteredRows.length > 0 && (
+                  <tr className="report-totals">
+                    <td colSpan={6}>
+                      {filtersActive ? "Matching outstanding" : "Total outstanding"}
+                    </td>
+                    <td className="report-number">
+                      {money(
+                        filteredRows.reduce(
+                          (sum: number, row: any) => sum + Number(row.outstanding || 0),
+                          0,
+                        ),
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </FilteredRecords>
       <p className="report-note">
         Based on posted goods receipts and each supplier’s payment terms. Posted supplier payment
         vouchers reduce the outstanding balance; cancelled payments are restored from their
@@ -10411,59 +10493,56 @@ function FinancialReportView({ selected, financial }: { selected: string; financ
     );
   if (selected === "trial_balance")
     return (
-      <div className="table-card">
-        <table>
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Account</th>
-              <th>Type</th>
-              <th>Debit</th>
-              <th>Credit</th>
-              <th>Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {financial.trial_balance.map((x: any) => (
-              <tr key={x.code}>
-                <td>{x.code}</td>
-                <td>{x.account}</td>
-                <td>{x.type}</td>
-                <td>{money(x.debit)}</td>
-                <td>{money(x.credit)}</td>
-                <td>{money(x.balance)}</td>
-              </tr>
-            ))}
-            <tr className="report-totals">
-              <td colSpan={3}>Trial balance totals</td>
-              <td className="report-number">
-                {money(
-                  financial.trial_balance.reduce(
-                    (sum: number, row: any) => sum + Number(row.debit),
-                    0,
-                  ),
-                )}
-              </td>
-              <td className="report-number">
-                {money(
-                  financial.trial_balance.reduce(
-                    (sum: number, row: any) => sum + Number(row.credit),
-                    0,
-                  ),
-                )}
-              </td>
-              <td className="report-number">
-                {money(
-                  financial.trial_balance.reduce(
-                    (sum: number, row: any) => sum + Number(row.balance),
-                    0,
-                  ),
-                )}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <FilteredRecords records={financial.trial_balance} title="trial balance accounts">
+        {(filteredRows, filtersActive) => (
+          <div className="table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Account</th>
+                  <th>Type</th>
+                  <th>Debit</th>
+                  <th>Credit</th>
+                  <th>Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((x: any) => (
+                  <tr key={x.code}>
+                    <td>{x.code}</td>
+                    <td>{x.account}</td>
+                    <td>{x.type}</td>
+                    <td>{money(x.debit)}</td>
+                    <td>{money(x.credit)}</td>
+                    <td>{money(x.balance)}</td>
+                  </tr>
+                ))}
+                <tr className="report-totals">
+                  <td colSpan={3}>
+                    {filtersActive ? "Matching account totals" : "Trial balance totals"}
+                  </td>
+                  <td className="report-number">
+                    {money(
+                      filteredRows.reduce((sum: number, row: any) => sum + Number(row.debit), 0),
+                    )}
+                  </td>
+                  <td className="report-number">
+                    {money(
+                      filteredRows.reduce((sum: number, row: any) => sum + Number(row.credit), 0),
+                    )}
+                  </td>
+                  <td className="report-number">
+                    {money(
+                      filteredRows.reduce((sum: number, row: any) => sum + Number(row.balance), 0),
+                    )}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </FilteredRecords>
     );
   return (
     <div className="statement-grid">
@@ -10505,12 +10584,25 @@ function Statement({ title, rows }: { title: string; rows: [string, number][] })
   return (
     <section className="statement">
       <h2>{title}</h2>
-      {rows.map(([label, value], i) => (
-        <div className={i === rows.length - 1 ? "statement-total" : ""} key={label}>
-          <span>{label}</span>
-          <b>{money(value)}</b>
-        </div>
-      ))}
+      <FilteredRecords
+        records={rows.map(([label, value], index) => ({ label, value, index }))}
+        title="statement lines"
+        fields={[
+          { key: "label", label: "Line" },
+          { key: "value", label: "Amount", kind: "number" },
+        ]}
+      >
+        {(filteredRows) => (
+          <>
+            {filteredRows.map(({ label, value, index }) => (
+              <div className={index === rows.length - 1 ? "statement-total" : ""} key={label}>
+                <span>{label}</span>
+                <b>{money(value)}</b>
+              </div>
+            ))}
+          </>
+        )}
+      </FilteredRecords>
     </section>
   );
 }

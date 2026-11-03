@@ -1,0 +1,644 @@
+import { useState } from "react";
+import {
+  ArrowDownLeft,
+  ArrowRight,
+  ArrowUpRight,
+  Banknote,
+  Boxes,
+  CalendarDays,
+  Check,
+  ClipboardList,
+  FileText,
+  Plus,
+  RefreshCw,
+  ShoppingCart,
+  Wallet,
+} from "lucide-react";
+import { financeMoney as money } from "./finance-utils";
+import { WorkflowGo } from "./workflow";
+import { matchesSearch } from "./search";
+import FilteredRecords from "./FilteredRecords";
+import "./dashboard.css";
+
+type Props = {
+  data: any;
+  days: number;
+  setDays: (days: number) => void;
+  refresh: () => void;
+  busy: boolean;
+  go: WorkflowGo;
+  createOrder?: () => void;
+  search: string;
+};
+const number = (value: number) => Number(value || 0).toLocaleString("en-LK");
+const date = (value: string) =>
+  new Date(`${value}T12:00:00+05:30`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+  });
+
+export default function DashboardOverview({
+  data,
+  days,
+  setDays,
+  refresh,
+  busy,
+  go,
+  createOrder,
+  search,
+}: Props) {
+  const [activity, setActivity] = useState("invoices");
+  const [taskGroup, setTaskGroup] = useState("All");
+  const period = `${date(data.period.from)} – ${date(data.period.to)}`;
+  const tasks = [
+    {
+      group: "Sales",
+      title: "Orders to dispatch",
+      count: data.dispatch_count,
+      detail: `${number(data.dispatch_pieces)} pieces still to supply`,
+      page: "Sales Orders",
+    },
+    {
+      group: "Finance",
+      title: "Overdue invoices",
+      count: data.overdue_count,
+      detail: `${money(data.overdue_total)} across overdue invoices`,
+      page: "Collections",
+    },
+    {
+      group: "Finance",
+      title: "Credit terms missing",
+      count: data.terms_missing_count,
+      detail: "Set due dates to complete customer aging",
+      page: "Debtors Aging",
+    },
+    {
+      group: "Inventory",
+      title: "Stock quantities not recorded",
+      count: data.stock.unrecorded,
+      detail: "Article sizes need a verified opening count",
+      page: "Bulk Inventory Import",
+    },
+    {
+      group: "Inventory",
+      title: "Out of stock",
+      count: data.stock.out,
+      detail: "Recorded article sizes with no available pieces",
+      page: "Finished Goods Stock",
+    },
+    {
+      group: "Inventory",
+      title: "Low stock",
+      count: data.stock.low,
+      detail: `${data.stock.threshold} pieces or fewer per article size`,
+      page: "Finished Goods Stock",
+    },
+    {
+      group: "Purchasing",
+      title: "Purchase orders to approve",
+      count: data.draft_purchase_orders,
+      detail: "Draft supplier orders awaiting review",
+      page: "Purchase Orders",
+    },
+    {
+      group: "Purchasing",
+      title: "Deliveries to receive",
+      count: data.awaiting_goods,
+      detail: "Approved or partly received purchase orders",
+      page: "Receive Goods",
+    },
+    {
+      group: "Purchasing",
+      title: "Supplier bills to register",
+      count: data.unbilled_receipts,
+      detail: "Posted GRNs without a purchase invoice",
+      page: "Supplier Invoices",
+    },
+    {
+      group: "Finance",
+      title: "Supplier payments overdue",
+      count: data.supplier_overdue_count,
+      detail: `${money(data.supplier_payables)} total supplier payables`,
+      page: "All Payables",
+    },
+  ].filter(
+    (task) =>
+      task.count > 0 &&
+      (taskGroup === "All" || task.group === taskGroup) &&
+      matchesSearch(task, search),
+  );
+  const metrics = [
+    {
+      title: "Accounts receivable",
+      value: money(data.outstanding_total),
+      detail: `${number(data.open_invoices_count)} open balances · as of today`,
+      page: "Debtors Aging",
+      icon: Wallet,
+      tone: "forest",
+    },
+    {
+      title: "Overdue receivables",
+      value: money(data.overdue_total),
+      detail: `${number(data.overdue_count)} invoices past their due date`,
+      page: "Debtors Aging",
+      icon: CalendarDays,
+      tone: "wine",
+    },
+    {
+      title: "Collections received",
+      value: money(data.collections_total),
+      detail: `Posted receipts · ${period}`,
+      page: "Collections",
+      icon: ArrowDownLeft,
+      tone: "teal",
+    },
+    {
+      title: "Sales invoiced",
+      value: money(data.period_sales),
+      detail: `${number(data.period_invoice_count)} invoices · ${period}`,
+      page: "Invoices",
+      icon: FileText,
+      tone: "ochre",
+    },
+    {
+      title: "Cash and bank",
+      value: money(data.cash_balance),
+      detail: "Posted ledger balance · as of today",
+      page: "Cash Flow",
+      icon: Banknote,
+      tone: "slate",
+    },
+    {
+      title: "Supplier payables",
+      value: money(data.supplier_payables),
+      detail: "Unpaid supplier receipt balances · as of today",
+      page: "All Payables",
+      icon: ClipboardList,
+      tone: "plum",
+    },
+  ];
+  const aging = [
+    ["current", "Not overdue", "current"],
+    ["1_30", "1–30 days", "early"],
+    ["31_60", "31–60 days", "mid"],
+    ["61_90", "61–90 days", "late"],
+    ["90_plus", "Over 90 days", "old"],
+    ["terms_not_set", "Terms not set", "unknown"],
+  ];
+  const activityRows = activity === "invoices" ? data.recent_invoices : data.recent_receipts;
+  return (
+    <div className="dashboard-overview" aria-busy={busy}>
+      <header className="db-header">
+        <div>
+          <span className="db-eyebrow">YOUR BUSINESS AT A GLANCE</span>
+          <h1>Business overview</h1>
+          <p>What needs attention, what came in, and what happens next.</p>
+        </div>
+        <div className="db-header-actions">
+          <button
+            className="db-secondary"
+            type="button"
+            disabled={busy}
+            onClick={refresh}
+            aria-label="Refresh dashboard"
+          >
+            <RefreshCw className={busy ? "db-spin" : ""} />
+            Refresh
+          </button>
+          {createOrder && (
+            <button className="db-primary" type="button" onClick={createOrder}>
+              <Plus />
+              Create sales order
+            </button>
+          )}
+        </div>
+      </header>
+      <div className="db-period-bar">
+        <div className="db-period-options" aria-label="Dashboard activity period">
+          {[7, 30, 90].map((value) => (
+            <button
+              type="button"
+              key={value}
+              aria-pressed={days === value}
+              onClick={() => setDays(value)}
+            >
+              Last {value} days
+            </button>
+          ))}
+        </div>
+        <p role="status">
+          {busy
+            ? "Updating dashboard…"
+            : `Updated ${new Date(data.generated_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Colombo" })} · Sri Lanka time`}
+        </p>
+      </div>
+      <section className="db-metrics" aria-label="Business balances and performance">
+        {metrics.map(({ title, value, detail, page, icon: Icon, tone }) => (
+          <button
+            type="button"
+            className={`db-metric db-${tone}`}
+            key={title}
+            onClick={() => go(page)}
+          >
+            <span className="db-metric-top">
+              <span>{title}</span>
+              <i>
+                <Icon />
+              </i>
+            </span>
+            <strong>{value}</strong>
+            <span className="db-metric-bottom">
+              {detail}
+              <ArrowUpRight />
+            </span>
+          </button>
+        ))}
+      </section>
+      <section className="db-quick-actions" aria-label="Frequently used pages">
+        {[
+          ["Collections", "Record collection", ArrowDownLeft],
+          ["Point of Sale", "Counter sale", ShoppingCart],
+          ["Purchase Orders", "Purchase orders", ClipboardList],
+          ["Payment Vouchers", "Payment vouchers", Wallet],
+          ["Inventory Overview", "Inventory", Boxes],
+          ["Reports", "Business reports", FileText],
+        ].map(([page, label, Icon]: any) => (
+          <button type="button" key={page} onClick={() => go(page)}>
+            <Icon />
+            <span>{label}</span>
+            <ArrowRight />
+          </button>
+        ))}
+      </section>
+      <div className="db-main-grid">
+        <section className="db-panel db-trend">
+          <div className="db-panel-title">
+            <div>
+              <span className="db-eyebrow">PERIOD ACTIVITY</span>
+              <h2>Sales and collections</h2>
+            </div>
+            <span>{period}</span>
+          </div>
+          <div className="db-chart-legend">
+            <span>
+              <i className="db-dot db-dot-sales" />
+              Sales invoices
+            </span>
+            <span>
+              <i className="db-dot db-dot-cash" />
+              Customer collections
+            </span>
+          </div>
+          <ActivityChart rows={data.trend} />
+          <div className="db-trend-foot">
+            <span>
+              Return credits in this period <strong>{money(data.period_return_credits)}</strong>
+            </span>
+            <button type="button" onClick={() => go("Reports")}>
+              Open reports <ArrowRight />
+            </button>
+          </div>
+          <p className="db-note">
+            Opening balances are excluded from sales. Collections may settle earlier invoices; these
+            are separate activity measures.
+          </p>
+        </section>
+        <section className="db-panel db-attention">
+          <div className="db-panel-title">
+            <div>
+              <span className="db-eyebrow">NEXT ACTIONS</span>
+              <h2>Needs attention</h2>
+            </div>
+            <select
+              aria-label="Filter tasks by area"
+              value={taskGroup}
+              onChange={(event) => setTaskGroup(event.target.value)}
+            >
+              {["All", "Sales", "Finance", "Inventory", "Purchasing"].map((group) => (
+                <option key={group}>{group}</option>
+              ))}
+            </select>
+          </div>
+          <div className="db-task-list">
+            {tasks.length ? (
+              tasks.map((task) => (
+                <button
+                  type="button"
+                  className="db-task"
+                  key={task.title}
+                  onClick={() => go(task.page)}
+                >
+                  <span
+                    className={`db-task-number ${task.group === "Finance" ? "db-task-wine" : ""}`}
+                  >
+                    {number(task.count)}
+                  </span>
+                  <span>
+                    <strong>{task.title}</strong>
+                    <small>{task.detail}</small>
+                  </span>
+                  <ArrowRight />
+                </button>
+              ))
+            ) : (
+              <div className="db-empty">
+                <Check />
+                <strong>No tasks in this selection</strong>
+                <p>Try another area or clear the top search.</p>
+              </div>
+            )}
+          </div>
+          <p className="db-note">
+            Recorded finished stock: <strong>{number(data.stock.pieces)} pieces</strong>. Sizes
+            without a recorded count are listed separately.
+          </p>
+        </section>
+      </div>
+      <div className="db-main-grid">
+        <section className="db-panel">
+          <div className="db-panel-title">
+            <div>
+              <span className="db-eyebrow">CUSTOMER BALANCES</span>
+              <h2>Receivables at a glance</h2>
+            </div>
+            <button type="button" onClick={() => go("Debtors Aging")}>
+              View aging <ArrowRight />
+            </button>
+          </div>
+          <div className="db-receivable-split">
+            <span>
+              Opening receivables<strong>{money(data.opening_receivables_total)}</strong>
+            </span>
+            <span>
+              Sales invoice balances<strong>{money(data.sales_receivables_total)}</strong>
+            </span>
+          </div>
+          {data.outstanding_total > 0 && (
+            <div className="db-aging-bar" role="img" aria-label="Receivables distribution by age">
+              {aging.map(
+                ([key, label, tone]) =>
+                  data.aging[key] > 0 && (
+                    <span
+                      key={key}
+                      className={`db-age-${tone}`}
+                      style={{ width: `${(data.aging[key] / data.outstanding_total) * 100}%` }}
+                      title={`${label}: ${money(data.aging[key])}`}
+                    />
+                  ),
+              )}
+            </div>
+          )}
+          <div className="db-aging-list">
+            {aging.map(([key, label, tone]) => (
+              <button type="button" onClick={() => go("Debtors Aging")} key={key}>
+                <span>
+                  <i className={`db-age-${tone}`} />
+                  {label}
+                </span>
+                <strong>{money(data.aging[key])}</strong>
+              </button>
+            ))}
+          </div>
+          {data.terms_missing_count > 0 && (
+            <p className="db-terms-note">
+              {number(data.terms_missing_count)} balances have no due date. They are shown as “Terms
+              not set”, not overdue.
+            </p>
+          )}
+        </section>
+        <section className="db-panel">
+          <div className="db-panel-title">
+            <div>
+              <span className="db-eyebrow">COLLECTION PRIORITIES</span>
+              <h2>Largest customer balances</h2>
+            </div>
+            <button type="button" onClick={() => go("Customer Ledgers")}>
+              Ledgers <ArrowRight />
+            </button>
+          </div>
+          <FilteredRecords
+            records={data.top_customers.filter((row: any) => matchesSearch(row, search))}
+            title="priority customers"
+            fields={[
+              { key: "code", label: "Customer code" },
+              { key: "customer", label: "Customer" },
+              { key: "outstanding", label: "Outstanding", kind: "number" },
+              { key: "overdue", label: "Overdue", kind: "number" },
+            ]}
+          >
+            {(rows) => (
+              <div className="db-customer-list">
+                {rows.map((customer: any, index: number) => (
+                  <button
+                    type="button"
+                    key={customer.id}
+                    onClick={() => go("Customers", { query: customer.code })}
+                  >
+                    <span className="db-rank">{index + 1}</span>
+                    <span className="db-customer-name">
+                      <strong>{customer.customer}</strong>
+                      <small>
+                        {customer.code} · {customer.invoices} open balances
+                      </small>
+                    </span>
+                    <span className="db-customer-amount">
+                      <strong>{money(customer.outstanding)}</strong>
+                      <small>
+                        {customer.overdue > 0
+                          ? `${money(customer.overdue)} overdue`
+                          : "No dated overdue balance"}
+                      </small>
+                    </span>
+                  </button>
+                ))}
+                {!rows.length && (
+                  <p className="db-note">No outstanding customers in this selection.</p>
+                )}
+              </div>
+            )}
+          </FilteredRecords>
+          <p className="db-note">
+            Top five by outstanding amount. {number(data.customers_count)} active customer accounts
+            in the system.
+          </p>
+        </section>
+      </div>
+      <section className="db-panel db-activity">
+        <div className="db-panel-title">
+          <div>
+            <span className="db-eyebrow">LATEST DOCUMENTS</span>
+            <h2>Recent activity</h2>
+          </div>
+          <div className="db-period-options">
+            <button
+              type="button"
+              aria-pressed={activity === "invoices"}
+              onClick={() => setActivity("invoices")}
+            >
+              Invoices
+            </button>
+            <button
+              type="button"
+              aria-pressed={activity === "collections"}
+              onClick={() => setActivity("collections")}
+            >
+              Collections
+            </button>
+          </div>
+        </div>
+        <FilteredRecords
+          key={activity}
+          records={activityRows.filter((row: any) => matchesSearch(row, search))}
+          title="recent documents"
+          fields={
+            activity === "invoices"
+              ? [
+                  { key: "number", label: "Invoice" },
+                  { key: "customer_name", label: "Customer" },
+                  { key: "invoice_date", label: "Date", kind: "date" },
+                  { key: "total", label: "Total", kind: "number" },
+                  { key: "outstanding", label: "Outstanding", kind: "number" },
+                ]
+              : [
+                  { key: "number", label: "Receipt" },
+                  { key: "customer_name", label: "Customer" },
+                  { key: "receipt_date", label: "Date", kind: "date" },
+                  { key: "amount", label: "Received", kind: "number" },
+                ]
+          }
+        >
+          {(rows) => (
+            <div className="db-activity-grid">
+              {rows.map((row: any) => (
+                <button
+                  type="button"
+                  className="db-document"
+                  key={row.id}
+                  onClick={() =>
+                    go(activity === "invoices" ? "Invoices" : "Collections", { query: row.number })
+                  }
+                >
+                  <i>{activity === "invoices" ? <FileText /> : <ArrowDownLeft />}</i>
+                  <span>
+                    <strong>{row.number}</strong>
+                    <small>{row.customer_name}</small>
+                    <small>{date(row.invoice_date || row.receipt_date)}</small>
+                  </span>
+                  <b>{money(activity === "invoices" ? row.total : row.amount)}</b>
+                  <ArrowUpRight />
+                </button>
+              ))}
+              {!rows.length && (
+                <p className="db-note">No {activity} recorded for this period and search.</p>
+              )}
+            </div>
+          )}
+        </FilteredRecords>
+        <p className="db-note">
+          Latest eight documents in the selected period. Opening balance documents are excluded.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function ActivityChart({ rows }: { rows: { date: string; sales: number; collections: number }[] }) {
+  const max = Math.max(0, ...rows.flatMap((row) => [row.sales, row.collections]));
+  if (!max)
+    return (
+      <div className="db-chart-empty">
+        <FileText />
+        <strong>No sales or collections in this period</strong>
+        <span>
+          New posted activity will appear here. Imported opening debt is shown in receivables.
+        </span>
+      </div>
+    );
+  const points = (key: "sales" | "collections") =>
+    rows
+      .map(
+        (row, index) =>
+          `${55 + (index / Math.max(1, rows.length - 1)) * 590},${190 - (row[key] / max) * 155}`,
+      )
+      .join(" ");
+  return (
+    <div className="db-chart">
+      <svg
+        viewBox="0 0 670 230"
+        role="img"
+        aria-label="Daily sales invoices and customer collections in LKR"
+      >
+        <title>Daily sales and collections</title>
+        {[0, 0.5, 1].map((fraction) => (
+          <g key={fraction}>
+            <line
+              x1="55"
+              y1={190 - fraction * 155}
+              x2="645"
+              y2={190 - fraction * 155}
+              stroke="#e5ebe8"
+            />
+            <text x="47" y={194 - fraction * 155} textAnchor="end">
+              {new Intl.NumberFormat("en", {
+                notation: "compact",
+                maximumFractionDigits: 1,
+              }).format(max * fraction)}
+            </text>
+          </g>
+        ))}
+        <polyline
+          points={points("sales")}
+          fill="none"
+          stroke="#187b62"
+          strokeWidth="3"
+          strokeLinejoin="round"
+        />
+        <polyline
+          points={points("collections")}
+          fill="none"
+          stroke="#b67b21"
+          strokeWidth="3"
+          strokeLinejoin="round"
+          strokeDasharray="7 4"
+        />
+        {[0, Math.floor((rows.length - 1) / 2), rows.length - 1].map((index) => (
+          <text
+            key={index}
+            x={55 + (index / Math.max(1, rows.length - 1)) * 590}
+            y="218"
+            textAnchor={index === 0 ? "start" : index === rows.length - 1 ? "end" : "middle"}
+          >
+            {date(rows[index].date)}
+          </text>
+        ))}
+      </svg>
+      <details>
+        <summary>View daily figures</summary>
+        <FilteredRecords records={rows} title="activity days">
+          {(filteredRows) => (
+            <div className="table-card">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Sales invoiced</th>
+                    <th>Collections</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.map((row) => (
+                    <tr key={row.date}>
+                      <td>{row.date}</td>
+                      <td>{money(row.sales)}</td>
+                      <td>{money(row.collections)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </FilteredRecords>
+      </details>
+    </div>
+  );
+}

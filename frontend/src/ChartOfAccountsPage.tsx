@@ -1,3 +1,5 @@
+import { matchesSearch } from "./search";
+import FilteredRecords from "./FilteredRecords";
 import { useCallback, useEffect, useState } from "react";
 import { Check, Eye, FileDown, Loader2, Pencil, Plus, RefreshCw, X } from "lucide-react";
 import {
@@ -43,7 +45,7 @@ export default function ChartOfAccountsPage({
   const rows = (data?.accounts || []).filter(
     (a: any) =>
       (type === "all" || (type === "cash" ? a.is_cash_account : a.type === type)) &&
-      `${a.code} ${a.name}`.toLowerCase().includes(search.toLowerCase()),
+      matchesSearch(a, search),
   );
   return (
     <>
@@ -155,97 +157,103 @@ export default function ChartOfAccountsPage({
           <Loader2 /> Loading accounts…
         </div>
       ) : (
-        <div className="table-card finance-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Code / account</th>
-                <th>Type</th>
-                <th>Role</th>
-                <th>Cash flow</th>
-                <th>Balance</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={7}>No accounts match your search.</td>
-                </tr>
-              ) : (
-                rows.map((a: any) => (
-                  <tr key={a.id}>
-                    <td style={{ paddingInlineStart: 18 + Number(a.depth || 0) * 22 }}>
-                      <b>{a.code}</b>
-                      <small>{a.name}</small>
-                      {a.parent_path && <small>Inside: {a.parent_path}</small>}
-                    </td>
-                    <td className="finance-capitalize">{a.type}</td>
-                    <td>
-                      {a.is_cash_account
-                        ? "Cash / bank"
-                        : a.is_postable
-                          ? "Posting account"
-                          : "Group account"}
-                      {!!a.is_system && <small>System account</small>}
-                    </td>
-                    <td>
-                      {a.is_cash_account ? "Cash balance" : activityLabel(a.cash_flow_activity)}
-                    </td>
-                    <td>
-                      <b>{money(a.balance)}</b>
-                      {a.child_count > 0 && <small>Includes subaccounts</small>}
-                      <small>
-                        {["liability", "equity", "income"].includes(a.type) ? "Credit" : "Debit"}{" "}
-                        normal side
-                      </small>
-                    </td>
-                    <td>
-                      <span className={`status ${a.is_active ? "posted" : "void"}`}>
-                        {a.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          className="icon-action view"
-                          title="View account ledger"
-                          aria-label={`Ledger for ${a.code}`}
-                          onClick={() => setLedger(a)}
-                        >
-                          <Eye />
-                        </button>
-                        {canManage && !a.is_postable && a.is_active && (
-                          <button
-                            className="icon-action"
-                            title="Create subaccount"
-                            onClick={() => {
-                              setNewParentId(Number(a.id));
-                              setNewGroup(false);
-                              setEditor(null);
-                            }}
-                          >
-                            <Plus />
-                          </button>
-                        )}
-                        {canManage && (
-                          <button
-                            className="icon-action edit"
-                            aria-label={`Edit account ${a.code}`}
-                            onClick={() => setEditor(a)}
-                          >
-                            <Pencil />
-                          </button>
-                        )}
-                      </div>
-                    </td>
+        <FilteredRecords records={rows} title="accounts">
+          {(filteredRows, filtersActive) => (
+            <div className="table-card finance-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Code / account</th>
+                    <th>Type</th>
+                    <th>Role</th>
+                    <th>Cash flow</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {filteredRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={7}>No accounts match your search.</td>
+                    </tr>
+                  ) : (
+                    filteredRows.map((a: any) => (
+                      <tr key={a.id}>
+                        <td style={{ paddingInlineStart: 18 + Number(a.depth || 0) * 22 }}>
+                          <b>{a.code}</b>
+                          <small>{a.name}</small>
+                          {a.parent_path && <small>Inside: {a.parent_path}</small>}
+                        </td>
+                        <td className="finance-capitalize">{a.type}</td>
+                        <td>
+                          {a.is_cash_account
+                            ? "Cash / bank"
+                            : a.is_postable
+                              ? "Posting account"
+                              : "Group account"}
+                          {!!a.is_system && <small>System account</small>}
+                        </td>
+                        <td>
+                          {a.is_cash_account ? "Cash balance" : activityLabel(a.cash_flow_activity)}
+                        </td>
+                        <td>
+                          <b>{money(a.balance)}</b>
+                          {a.child_count > 0 && <small>Includes subaccounts</small>}
+                          <small>
+                            {["liability", "equity", "income"].includes(a.type)
+                              ? "Credit"
+                              : "Debit"}{" "}
+                            normal side
+                          </small>
+                        </td>
+                        <td>
+                          <span className={`status ${a.is_active ? "posted" : "void"}`}>
+                            {a.is_active ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="row-actions">
+                            <button
+                              className="icon-action view"
+                              title="View account ledger"
+                              aria-label={`Ledger for ${a.code}`}
+                              onClick={() => setLedger(a)}
+                            >
+                              <Eye />
+                            </button>
+                            {canManage && !a.is_postable && a.is_active && (
+                              <button
+                                className="icon-action"
+                                title="Create subaccount"
+                                onClick={() => {
+                                  setNewParentId(Number(a.id));
+                                  setNewGroup(false);
+                                  setEditor(null);
+                                }}
+                              >
+                                <Plus />
+                              </button>
+                            )}
+                            {canManage && (
+                              <button
+                                className="icon-action edit"
+                                aria-label={`Edit account ${a.code}`}
+                                onClick={() => setEditor(a)}
+                              >
+                                <Pencil />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </FilteredRecords>
       )}
       <p className="report-note">
         Balances come from posted journals through the selected date. Positive balances follow each
@@ -636,38 +644,42 @@ function AccountLedger({
                   Closing <b>{money(data.closing)}</b>
                 </span>
               </div>
-              <div className="table-card finance-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Date / journal</th>
-                      <th>Description</th>
-                      <th>Debit</th>
-                      <th>Credit</th>
-                      <th>Running balance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.lines.map((line: any) => (
-                      <tr key={line.id}>
-                        <td>
-                          {line.posting_date}
-                          <small>{line.number}</small>
-                        </td>
-                        <td>{line.description || line.journal_description}</td>
-                        <td>{money(line.debit)}</td>
-                        <td>{money(line.credit)}</td>
-                        <td>{money(line.running_balance)}</td>
-                      </tr>
-                    ))}
-                    {!data.lines.length && (
-                      <tr>
-                        <td colSpan={5}>No posted movements in this period.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <FilteredRecords records={data.lines} title="ledger entries">
+                {(filteredRows, filtersActive) => (
+                  <div className="table-card finance-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Date / journal</th>
+                          <th>Description</th>
+                          <th>Debit</th>
+                          <th>Credit</th>
+                          <th>Running balance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredRows.map((line: any) => (
+                          <tr key={line.id}>
+                            <td>
+                              {line.posting_date}
+                              <small>{line.number}</small>
+                            </td>
+                            <td>{line.description || line.journal_description}</td>
+                            <td>{money(line.debit)}</td>
+                            <td>{money(line.credit)}</td>
+                            <td>{money(line.running_balance)}</td>
+                          </tr>
+                        ))}
+                        {!filteredRows.length && (
+                          <tr>
+                            <td colSpan={5}>No posted movements in this period.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </FilteredRecords>
               <p className="report-note">{data.balance_basis}</p>
             </>
           )}

@@ -1,3 +1,5 @@
+import { matchesSearch } from "./search";
+import FilteredRecords from "./FilteredRecords";
 import { useCallback, useEffect, useState } from "react";
 import { FileDown, Loader2, RefreshCw } from "lucide-react";
 import {
@@ -48,7 +50,7 @@ export default function CashFlowPage({
     (m: any) =>
       (activity === "all" ||
         m.allocations.some((a: any) => a.activity === activity && a.amount !== 0)) &&
-      `${m.number} ${m.description} ${m.source_type}`.toLowerCase().includes(search.toLowerCase()),
+      matchesSearch(m, search),
   );
   return (
     <>
@@ -241,53 +243,57 @@ export default function CashFlowPage({
               </select>
             </label>
           </div>
-          <div className="table-card finance-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date / journal</th>
-                  <th>Description / source</th>
-                  <th>Classification</th>
-                  <th>Cash in</th>
-                  <th>Cash out</th>
-                  <th>Net change</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((m: any) => (
-                  <tr key={m.journal_id}>
-                    <td>
-                      {m.date}
-                      <small>{m.number}</small>
-                    </td>
-                    <td>
-                      {m.description}
-                      <small>{m.source_type.replace(/_/g, " ")}</small>
-                    </td>
-                    <td>
-                      {m.allocations
-                        .filter((a: any) => a.amount !== 0)
-                        .map((a: any, i: number) => (
-                          <small key={i}>
-                            {activityLabel(a.activity)}: {money(a.amount)}
-                          </small>
-                        ))}
-                    </td>
-                    <td>{money(m.inflow)}</td>
-                    <td>{money(m.outflow)}</td>
-                    <td>
-                      <b>{money(m.net)}</b>
-                    </td>
-                  </tr>
-                ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={6}>No cash movements match this period or filter.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <FilteredRecords records={rows} title="cash movements">
+            {(filteredRows, filtersActive) => (
+              <div className="table-card finance-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date / journal</th>
+                      <th>Description / source</th>
+                      <th>Classification</th>
+                      <th>Cash in</th>
+                      <th>Cash out</th>
+                      <th>Net change</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRows.map((m: any) => (
+                      <tr key={m.journal_id}>
+                        <td>
+                          {m.date}
+                          <small>{m.number}</small>
+                        </td>
+                        <td>
+                          {m.description}
+                          <small>{m.source_type.replace(/_/g, " ")}</small>
+                        </td>
+                        <td>
+                          {m.allocations
+                            .filter((a: any) => a.amount !== 0)
+                            .map((a: any, i: number) => (
+                              <small key={i}>
+                                {activityLabel(a.activity)}: {money(a.amount)}
+                              </small>
+                            ))}
+                        </td>
+                        <td>{money(m.inflow)}</td>
+                        <td>{money(m.outflow)}</td>
+                        <td>
+                          <b>{money(m.net)}</b>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredRows.length === 0 && (
+                      <tr>
+                        <td colSpan={6}>No cash movements match this period or filter.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </FilteredRecords>
           <details className="finance-transfers">
             <summary>Internal cash/bank transfers ({data.transfers.length})</summary>
             {data.transfers.map((t: any) => (

@@ -1,3 +1,6 @@
+import FilteredRecords from "./FilteredRecords";
+import { recordFields } from "./record-filters";
+import { matchesSearch } from "./search";
 import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Check, Eye, FileDown, Plus, Printer, RefreshCw, X } from "lucide-react";
 import {
@@ -116,7 +119,7 @@ export default function BusinessWorkflowsPage({
     }
   };
   const run = (path: string, body: any) => mutate(path, body).catch((e) => setError(e.message));
-  const match = (row: any) => JSON.stringify(row).toLowerCase().includes(search.toLowerCase());
+  const match = (row: any) => matchesSearch(row, search);
   const rows = (values: any[] = []) => values.filter(match);
   const print = () => {
     if (
@@ -917,55 +920,71 @@ export function WorkflowTable({
   columns: Column[];
   actions?: (row: any) => ReactNode;
 }) {
+  const availableFields = recordFields(values);
   return (
-    <div className="table-card workflow-table">
-      <table>
-        <thead>
-          <tr>
-            {columns.map(([key, name, type]) => (
-              <th
-                key={key}
-                className={
-                  type === "money"
-                    ? "report-number"
-                    : /description|name|reason|note|address|issue|resolution|customer|supplier/.test(
-                          key,
-                        )
-                      ? "workflow-cell-text"
-                      : /reference|number|journal|code/.test(key)
-                        ? "workflow-cell-reference"
-                        : undefined
-                }
-              >
-                {name}
-              </th>
-            ))}
-            {actions && <th className="workflow-actions-cell">Actions</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {values.map((row, index) => (
-            <tr key={row.id ?? index}>
-              {columns.map(([key, , type]) => (
-                <td key={key} className={type === "money" ? "report-number" : undefined}>
-                  {type === "money" ? money(row[key]) : String(row[key] ?? "—")}
-                </td>
+    <FilteredRecords
+      records={values}
+      title="records"
+      key={columns.map(([key]) => key).join(",")}
+      fields={columns.map(([key, label, type]) => ({
+        key,
+        label,
+        kind: type === "money" ? "number" : availableFields.find((f) => f.key === key)?.kind,
+      }))}
+    >
+      {(filteredRows, filtersActive) => (
+        <div className="table-card workflow-table">
+          <table>
+            <thead>
+              <tr>
+                {columns.map(([key, name, type]) => (
+                  <th
+                    key={key}
+                    className={
+                      type === "money"
+                        ? "report-number"
+                        : /description|name|reason|note|address|issue|resolution|customer|supplier/.test(
+                              key,
+                            )
+                          ? "workflow-cell-text"
+                          : /reference|number|journal|code/.test(key)
+                            ? "workflow-cell-reference"
+                            : undefined
+                    }
+                  >
+                    {name}
+                  </th>
+                ))}
+                {actions && <th className="workflow-actions-cell">Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRows.map((row, index) => (
+                <tr key={row.id ?? index}>
+                  {columns.map(([key, , type]) => (
+                    <td key={key} className={type === "money" ? "report-number" : undefined}>
+                      {type === "money" ? money(row[key]) : String(row[key] ?? "—")}
+                    </td>
+                  ))}
+                  {actions && (
+                    <td className="workflow-actions-cell">
+                      <div className="workflow-actions">{actions(row)}</div>
+                    </td>
+                  )}
+                </tr>
               ))}
-              {actions && (
-                <td className="workflow-actions-cell">
-                  <div className="workflow-actions">{actions(row)}</div>
-                </td>
+              {!filteredRows.length && (
+                <tr>
+                  <td colSpan={columns.length + (actions ? 1 : 0)}>
+                    No records match this selection.
+                  </td>
+                </tr>
               )}
-            </tr>
-          ))}
-          {!values.length && (
-            <tr>
-              <td colSpan={columns.length + (actions ? 1 : 0)}>No records match this selection.</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </FilteredRecords>
   );
 }
 
@@ -1967,9 +1986,7 @@ function Subledger({
             <strong>Closing {stock ? data.closing : money(data.closing)}</strong>
           </div>
           <WorkflowTable
-            values={data.rows.filter((r: any) =>
-              JSON.stringify(r).toLowerCase().includes(search.toLowerCase()),
-            )}
+            values={data.rows.filter((r: any) => matchesSearch(r, search))}
             columns={columns}
             actions={(r) => <button onClick={() => go(r.source_page)}>Open source module →</button>}
           />

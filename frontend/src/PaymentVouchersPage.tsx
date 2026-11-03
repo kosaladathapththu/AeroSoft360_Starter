@@ -1,3 +1,5 @@
+import { matchesSearch } from "./search";
+import FilteredRecords from "./FilteredRecords";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WorkflowContext } from "./workflow";
 import { createPortal } from "react-dom";
@@ -131,11 +133,7 @@ export default function PaymentVouchersPage({
       </>
     );
   const rows = data.vouchers.filter(
-    (v: any) =>
-      (filter === "all" || v.status === filter) &&
-      `${v.number} ${v.payee} ${v.reference || ""} ${v.description}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
+    (v: any) => (filter === "all" || v.status === filter) && matchesSearch(v, search),
   );
   return (
     <>
@@ -205,102 +203,108 @@ export default function PaymentVouchersPage({
           <RefreshCw /> Refresh
         </button>
       </div>
-      <div className="table-card voucher-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Voucher</th>
-              <th>Date</th>
-              <th>Payee / purpose</th>
-              <th>Paid from</th>
-              <th>Amount</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={7}>
-                  <div className="empty">
-                    <FileText />
-                    <b>No payment vouchers found</b>
-                    <span>
-                      {canManage
-                        ? "Create a draft voucher to get started."
-                        : "Vouchers will appear here when recorded."}
-                    </span>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              rows.map((v: any) => (
-                <tr key={v.id}>
-                  <td>
-                    <b>{v.number}</b>
-                    <small>
-                      {v.kind === "supplier" ? `Supplier · ${v.receipt_number}` : "Expense payment"}
-                    </small>
-                  </td>
-                  <td>{v.payment_date}</td>
-                  <td>
-                    <b>{v.payee}</b>
-                    <small>{v.description}</small>
-                  </td>
-                  <td>
-                    {v.payment_account_name}
-                    <small>{v.payment_method.replace(/_/g, " ")}</small>
-                  </td>
-                  <td>
-                    <b>{money(v.total)}</b>
-                  </td>
-                  <td>
-                    <span className={`status ${v.status}`}>
-                      {v.status === "void" ? "Cancelled" : v.status}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="icon-action view"
-                        aria-label={`View or print ${v.number}`}
-                        title="View / print voucher"
-                        onClick={() => {
-                          setView(v);
-                          setError("");
-                        }}
-                      >
-                        <Eye />
-                      </button>
-                      {canManage && v.status === "draft" && (
-                        <button
-                          type="button"
-                          className="icon-action edit"
-                          aria-label={`Edit ${v.number}`}
-                          onClick={() => setEditor(v)}
-                        >
-                          <Pencil />
-                        </button>
-                      )}
-                      {canManage && v.status !== "void" && (
-                        <button
-                          type="button"
-                          className="icon-action delete"
-                          aria-label={`Cancel ${v.number}`}
-                          onClick={() => setCancelling(v)}
-                        >
-                          <X />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+      <FilteredRecords records={rows} title="payment vouchers">
+        {(filteredRows, filtersActive) => (
+          <div className="table-card voucher-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Voucher</th>
+                  <th>Date</th>
+                  <th>Payee / purpose</th>
+                  <th>Paid from</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {filteredRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>
+                      <div className="empty">
+                        <FileText />
+                        <b>No payment vouchers found</b>
+                        <span>
+                          {canManage
+                            ? "Create a draft voucher to get started."
+                            : "Vouchers will appear here when recorded."}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRows.map((v: any) => (
+                    <tr key={v.id}>
+                      <td>
+                        <b>{v.number}</b>
+                        <small>
+                          {v.kind === "supplier"
+                            ? `Supplier · ${v.receipt_number}`
+                            : "Expense payment"}
+                        </small>
+                      </td>
+                      <td>{v.payment_date}</td>
+                      <td>
+                        <b>{v.payee}</b>
+                        <small>{v.description}</small>
+                      </td>
+                      <td>
+                        {v.payment_account_name}
+                        <small>{v.payment_method.replace(/_/g, " ")}</small>
+                      </td>
+                      <td>
+                        <b>{money(v.total)}</b>
+                      </td>
+                      <td>
+                        <span className={`status ${v.status}`}>
+                          {v.status === "void" ? "Cancelled" : v.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="row-actions">
+                          <button
+                            type="button"
+                            className="icon-action view"
+                            aria-label={`View or print ${v.number}`}
+                            title="View / print voucher"
+                            onClick={() => {
+                              setView(v);
+                              setError("");
+                            }}
+                          >
+                            <Eye />
+                          </button>
+                          {canManage && v.status === "draft" && (
+                            <button
+                              type="button"
+                              className="icon-action edit"
+                              aria-label={`Edit ${v.number}`}
+                              onClick={() => setEditor(v)}
+                            >
+                              <Pencil />
+                            </button>
+                          )}
+                          {canManage && v.status !== "void" && (
+                            <button
+                              type="button"
+                              className="icon-action delete"
+                              aria-label={`Cancel ${v.number}`}
+                              onClick={() => setCancelling(v)}
+                            >
+                              <X />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </FilteredRecords>
       {editor !== undefined && (
         <VoucherEditor
           data={data}

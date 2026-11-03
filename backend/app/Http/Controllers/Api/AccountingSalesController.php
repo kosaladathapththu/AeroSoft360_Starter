@@ -67,61 +67,12 @@ final class AccountingSalesController extends Controller
         return response()->json($invoice);
     }
 
-    public function dashboard(): JsonResponse
+    public function dashboard(Request $request): JsonResponse
     {
-        $recentInvoices = DB::table("sales_invoices as invoice")
-            ->join("customers as customer", "customer.id", "=", "invoice.customer_id")
-            ->leftJoin("sales_representatives as rep", "rep.id", "=", "invoice.sales_rep_id")
-            ->select(
-                "invoice.id",
-                "invoice.number",
-                "invoice.outstanding",
-                "invoice.status",
-                "customer.name as customer_name",
-                "rep.name as rep_name",
-            )
-            ->latest("invoice.id")
-            ->limit(5)
-            ->get();
-        $recentReceipts = DB::table("customer_receipts as receipt")
-            ->join("customers as customer", "customer.id", "=", "receipt.customer_id")
-            ->select(
-                "receipt.id",
-                "receipt.number",
-                "receipt.receipt_date",
-                "receipt.amount",
-                "customer.name as customer_name",
-            )
-            ->latest("receipt.id")
-            ->limit(5)
-            ->get();
-        $automaticCommission = (float) DB::table("receipt_allocations")
-            ->where("commission_status", "eligible")
-            ->sum("commission_amount");
-        $manualCommission = (float) DB::table("manual_commissions")
-            ->where("status", "eligible")
-            ->sum("commission_amount");
-        $receivables = DB::table("sales_invoices")->whereNotIn("status", ["void", "cancelled"]);
-        return response()->json([
-            "customers_count" => DB::table("customers")->where("status", "active")->count(),
-            "open_invoices_count" => (clone $receivables)->where("outstanding", ">", 0)->count(),
-            "outstanding_total" => (float) (clone $receivables)->sum("outstanding"),
-            "opening_receivables_total" => (float) (clone $receivables)
-                ->where("is_opening_balance", true)
-                ->sum("outstanding"),
-            "sales_receivables_total" => (float) (clone $receivables)
-                ->where("is_opening_balance", false)
-                ->sum("outstanding"),
-            "collections_total" => (float) DB::table("customer_receipts")
-                ->when(
-                    Schema::hasColumn("customer_receipts", "is_opening_balance"),
-                    fn($q) => $q->where("is_opening_balance", false),
-                )
-                ->sum("amount"),
-            "commission_total" => $automaticCommission + $manualCommission,
-            "recent_invoices" => $recentInvoices,
-            "recent_receipts" => $recentReceipts,
-        ]);
+        $data = $request->validate(["days" => "nullable|integer|in:7,30,90"]);
+        return response()->json(
+            (new \App\Services\Reporting\DashboardService())->report((int) ($data["days"] ?? 30)),
+        );
     }
 
     public function workspace(SalesController $sales): JsonResponse

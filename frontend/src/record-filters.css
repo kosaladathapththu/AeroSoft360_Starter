@@ -1,0 +1,132 @@
+.record-filters {
+  padding: 16px;
+  margin: 16px 0;
+  border: 1px solid #d3e0e5;
+  border-radius: 12px;
+  background: #fff;
+  min-width: 0;
+}
+.record-filter-main,
+.record-filter-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.record-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 150px;
+  color: #405c6a;
+  font-size: 0.87rem;
+  font-weight: 600;
+}
+.record-filters .record-search {
+  flex: 1 1 310px;
+}
+.record-search > span {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+.record-search > span > svg {
+  width: 18px;
+  height: 18px;
+  position: absolute;
+  left: 13px;
+  pointer-events: none;
+}
+.record-filters input,
+.record-filters select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid #c8d9e0;
+  border-radius: 8px;
+  background: white;
+  color: #203d4b;
+  font: inherit;
+}
+.record-search input {
+  padding-left: 40px;
+}
+.record-filters button {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 13px;
+  border: 1px solid #bcd5d6;
+  border-radius: 8px;
+  background: #f1f8f7;
+  color: #087a71;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.record-filters button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.record-filters button svg {
+  width: 17px;
+  height: 17px;
+}
+.record-filters input:focus-visible,
+.record-filters select:focus-visible,
+.record-filters button:focus-visible {
+  outline: 3px solid #78c7bb;
+  outline-offset: 2px;
+}
+.record-filter-rule {
+  padding-top: 12px;
+}
+.record-filter-rule label {
+  flex: 1 1 180px;
+}
+.record-filters p {
+  margin: 12px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #5c7380;
+}
+.record-filters p[role="alert"] {
+  color: #a33737;
+}
+.record-filter-empty {
+  padding: 20px;
+  text-align: center;
+  color: #5c7380;
+}
+.record-filter-summary {
+  margin: 12px 0;
+  color: #42615c;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.panels > .dashboard-activity {
+  min-width: 0;
+}
+.dashboard-activity > section {
+  background: #fff;
+  border: 1px solid #e1e6ea;
+  border-radius: 12px;
+  padding: 22px;
+}
+@media (max-width: 640px) {
+  .record-filter-main > button {
+    flex: 1 1 140px;
+  }
+  .record-filter-rule label {
+    flex-basis: 100%;
+  }
+}
+@media print {
+  .record-filters {
+    display: none !important;
+  }
+}

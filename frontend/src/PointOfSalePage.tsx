@@ -1,3 +1,5 @@
+import FilteredRecords from "./FilteredRecords";
+import { matchesSearch } from "./search";
 import { useCallback, useEffect, useState } from "react";
 import { Check, Plus, RefreshCw } from "lucide-react";
 import { financeMoney as money, financeRequest, financeToday as today } from "./finance-utils";
@@ -74,44 +76,60 @@ export default function PointOfSalePage({
         <div className="workflow-pos-grid">
           <section>
             <h2>Products and sizes</h2>
-            <div className="workflow-operation-grid">
-              {data.items
-                .filter((i: any) =>
-                  `${i.code} ${i.name} ${i.size_label}`
-                    .toLowerCase()
-                    .includes(search.toLowerCase()),
-                )
+            <FilteredRecords
+              records={data.items
                 .map((item: any) => {
-                  const stock = data.stock.find(
-                    (s: any) =>
-                      s.article_id === item.article_id && s.size_label === item.size_label,
+                  const quantity = Number(
+                    data.stock.find(
+                      (stock: any) =>
+                        stock.article_id === item.article_id &&
+                        stock.size_label === item.size_label,
+                    )?.quantity || 0,
                   );
-                  return (
-                    <button
-                      key={item.id}
-                      disabled={busy || Number(stock?.quantity || 0) <= 0}
-                      onClick={() => {
-                        setKey(crypto.randomUUID());
-                        setCart((old) =>
-                          old.some((l) => l.id === item.id)
-                            ? old.map((l) =>
-                                l.id === item.id ? { ...l, quantity: l.quantity + 1 } : l,
-                              )
-                            : [...old, { ...item, quantity: 1 }],
-                        );
-                      }}
-                    >
-                      <h2>
-                        {item.code} · Size {item.size_label}
-                      </h2>
-                      <p>{item.name}</p>
-                      <b>{money(item.unit_price)}</b>
-                      <p>In stock: {stock?.quantity || 0}</p>
-                      <Plus />
-                    </button>
-                  );
-                })}
-            </div>
+                  return {
+                    ...item,
+                    available_quantity: quantity,
+                    availability: quantity > 0 ? "In stock" : "Out of stock",
+                  };
+                })
+                .filter((item: any) => matchesSearch(item, search))}
+              title="products"
+            >
+              {(filteredRows) => (
+                <div className="workflow-operation-grid">
+                  {filteredRows.map((item: any) => {
+                    const stock = data.stock.find(
+                      (s: any) =>
+                        s.article_id === item.article_id && s.size_label === item.size_label,
+                    );
+                    return (
+                      <button
+                        key={item.id}
+                        disabled={busy || Number(stock?.quantity || 0) <= 0}
+                        onClick={() => {
+                          setKey(crypto.randomUUID());
+                          setCart((old) =>
+                            old.some((l) => l.id === item.id)
+                              ? old.map((l) =>
+                                  l.id === item.id ? { ...l, quantity: l.quantity + 1 } : l,
+                                )
+                              : [...old, { ...item, quantity: 1 }],
+                          );
+                        }}
+                      >
+                        <h2>
+                          {item.code} · Size {item.size_label}
+                        </h2>
+                        <p>{item.name}</p>
+                        <b>{money(item.unit_price)}</b>
+                        <p>In stock: {stock?.quantity || 0}</p>
+                        <Plus />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </FilteredRecords>
           </section>
           <section className="workflow-pos-checkout">
             <h2>Review and collect payment</h2>

@@ -1,3 +1,4 @@
+import FilteredRecords from "./FilteredRecords";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 import { financeRequest, financeToday, financeMoney as money, financeCsv } from "./finance-utils";
@@ -224,53 +225,59 @@ export default function SalesReturnsPage({
         retained for management review. Opening AR balances have no item details; use an itemized
         invoice to identify returned pieces.
       </p>
-      <div className="table-card">
-        <table>
-          <thead>
-            <tr>
-              {[
-                "Return",
-                "Invoice / customer",
-                "Date",
-                "Pieces",
-                "Credit",
-                "Reason",
-                "Details",
-              ].map((h) => (
-                <th key={h}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r: any) => (
-              <tr key={r.id}>
-                <td>
-                  <b>{r.number}</b>
-                </td>
-                <td>
-                  {r.invoice_number}
-                  <br />
-                  <small>{r.customer_name}</small>
-                </td>
-                <td>{r.return_date}</td>
-                <td>{r.lines.reduce((sum: number, l: any) => sum + Number(l.quantity), 0)}</td>
-                <td>{money(r.total)}</td>
-                <td>{r.reason}</td>
-                <td>
-                  <button className="return-secondary" onClick={() => setDetail(r)}>
-                    View return
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!filtered.length && (
-              <tr>
-                <td colSpan={7}>{data ? "No matching sales returns." : "Loading returns..."}</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <FilteredRecords records={filtered} title="sales returns">
+        {(filteredRows, filtersActive) => (
+          <div className="table-card">
+            <table>
+              <thead>
+                <tr>
+                  {[
+                    "Return",
+                    "Invoice / customer",
+                    "Date",
+                    "Pieces",
+                    "Credit",
+                    "Reason",
+                    "Details",
+                  ].map((h) => (
+                    <th key={h}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((r: any) => (
+                  <tr key={r.id}>
+                    <td>
+                      <b>{r.number}</b>
+                    </td>
+                    <td>
+                      {r.invoice_number}
+                      <br />
+                      <small>{r.customer_name}</small>
+                    </td>
+                    <td>{r.return_date}</td>
+                    <td>{r.lines.reduce((sum: number, l: any) => sum + Number(l.quantity), 0)}</td>
+                    <td>{money(r.total)}</td>
+                    <td>{r.reason}</td>
+                    <td>
+                      <button className="return-secondary" onClick={() => setDetail(r)}>
+                        View return
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {!filteredRows.length && (
+                  <tr>
+                    <td colSpan={7}>
+                      {data ? "No matching sales returns." : "Loading returns..."}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </FilteredRecords>
       {creating && (
         <div className="backdrop">
           <form
