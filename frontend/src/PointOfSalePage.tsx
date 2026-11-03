@@ -1,10 +1,23 @@
 import FilteredRecords from "./FilteredRecords";
 import { matchesSearch } from "./search";
 import { useCallback, useEffect, useState } from "react";
-import { Check, Plus, RefreshCw } from "lucide-react";
-import { financeMoney as money, financeRequest, financeToday as today } from "./finance-utils";
+import {
+  Plus,
+  RefreshCw,
+  ShoppingBag,
+  Package,
+  Trash2,
+  CheckCircle2,
+  ArrowRight,
+} from "lucide-react";
+import {
+  financeMoney as money,
+  financeRequest,
+  financeToday as today,
+} from "./finance-utils";
 import { SimpleForm } from "./BusinessWorkflowsPage";
 import InvoiceBill from "./InvoiceBill";
+import "./point-of-sale.css";
 
 export default function PointOfSalePage({
   api,
@@ -27,6 +40,7 @@ export default function PointOfSalePage({
     [discount, setDiscount] = useState(0),
     [busy, setBusy] = useState(false),
     [bill, setBill] = useState<number | null>(null),
+    [completedInvoice, setCompletedInvoice] = useState<number | null>(null),
     [key, setKey] = useState(crypto.randomUUID());
   const load = useCallback(
     async () => setData(await financeRequest(api, token, "point-of-sale")),
@@ -37,45 +51,78 @@ export default function PointOfSalePage({
   }, [load]);
   const total =
     Math.round(
-      (cart.reduce((sum, line) => sum + line.quantity * Number(line.unit_price), 0) - discount) *
+      (cart.reduce(
+        (sum, line) => sum + line.quantity * Number(line.unit_price),
+        0,
+      ) -
+        discount) *
         100,
     ) / 100;
+  const subtotal = cart.reduce(
+    (sum, line) => sum + line.quantity * Number(line.unit_price),
+    0,
+  );
+  const pieces = cart.reduce((sum, line) => sum + line.quantity, 0);
   return (
-    <>
-      <div className="heading">
+    <div className="pos-page">
+      <div className="heading pos-heading">
         <div>
           <span>COUNTER SALES</span>
           <h1>Point of Sale</h1>
-          <p>
-            One checkout creates the sales invoice, stock issue, customer collection and balanced
-            journals.
-          </p>
+          <p>Choose articles, review your basket and collect payment.</p>
         </div>
-        <button disabled={busy} onClick={() => load().catch((e) => setError(e.message))}>
+        <button
+          disabled={busy}
+          onClick={() => load().catch((e) => setError(e.message))}
+        >
           <RefreshCw /> Refresh products
         </button>
       </div>
-      <div className="workflow-links">
-        {["Customers", "Invoices", "Collections", "Cashier Closing", "Serials & Warranty"].map(
-          (name) => (
-            <button key={name} onClick={() => go(name)}>
-              {name} →
-            </button>
-          ),
-        )}
+      <div className="workflow-links pos-links">
+        {[
+          "Customers",
+          "Invoices",
+          "Collections",
+          "Cashier Closing",
+          "Serials & Warranty",
+        ].map((name) => (
+          <button key={name} onClick={() => go(name)}>
+            {name} <ArrowRight size={14} />
+          </button>
+        ))}
       </div>
+      {completedInvoice && (
+        <div className="pos-success" role="status">
+          <CheckCircle2 />
+          <div>
+            <b>Sale completed successfully</b>
+            <span>The invoice and payment have been recorded.</span>
+          </div>
+          <button onClick={() => setBill(completedInvoice)}>
+            View receipt
+          </button>
+        </div>
+      )}
       {error && <div className="error">{error}</div>}
       {!data ? (
         <p>{error ? "Use Refresh to retry." : "Loading point of sale..."}</p>
       ) : !canManage ? (
         <p>
-          This profile can view sales through Invoices and Collections. Checkout requires accounting
-          access.
+          This profile can view sales through Invoices and Collections. Checkout
+          requires accounting access.
         </p>
       ) : (
-        <div className="workflow-pos-grid">
-          <section>
-            <h2>Products and sizes</h2>
+        <div className="workflow-pos-grid pos-layout">
+          <section className="pos-catalog">
+            <div className="pos-section-heading">
+              <div>
+                <span className="pos-step">01 / SELECT ARTICLES</span>
+                <h2>
+                  <Package /> Products &amp; sizes
+                </h2>
+              </div>
+              <span className="pos-count">{data.items.length} variants</span>
+            </div>
             <FilteredRecords
               records={data.items
                 .map((item: any) => {
@@ -96,14 +143,22 @@ export default function PointOfSalePage({
               title="products"
             >
               {(filteredRows) => (
-                <div className="workflow-operation-grid">
+                <div className="pos-product-grid">
+                  {!filteredRows.length && (
+                    <p className="pos-empty-results">
+                      No articles match your search. Try another name, code or
+                      size.
+                    </p>
+                  )}
                   {filteredRows.map((item: any) => {
                     const stock = data.stock.find(
                       (s: any) =>
-                        s.article_id === item.article_id && s.size_label === item.size_label,
+                        s.article_id === item.article_id &&
+                        s.size_label === item.size_label,
                     );
                     return (
                       <button
+                        className="pos-product"
                         key={item.id}
                         disabled={busy || Number(stock?.quantity || 0) <= 0}
                         onClick={() => {
@@ -111,19 +166,34 @@ export default function PointOfSalePage({
                           setCart((old) =>
                             old.some((l) => l.id === item.id)
                               ? old.map((l) =>
-                                  l.id === item.id ? { ...l, quantity: l.quantity + 1 } : l,
+                                  l.id === item.id
+                                    ? { ...l, quantity: l.quantity + 1 }
+                                    : l,
                                 )
                               : [...old, { ...item, quantity: 1 }],
                           );
                         }}
                       >
-                        <h2>
-                          {item.code} · Size {item.size_label}
-                        </h2>
-                        <p>{item.name}</p>
-                        <b>{money(item.unit_price)}</b>
-                        <p>In stock: {stock?.quantity || 0}</p>
-                        <Plus />
+                        <span className="pos-product-top">
+                          <span className="pos-article-code">{item.code}</span>
+                          <span className="pos-size">
+                            Size {item.size_label}
+                          </span>
+                        </span>
+                        <span className="pos-product-name">{item.name}</span>
+                        <span
+                          className={`pos-stock ${Number(stock?.quantity || 0) > 0 ? "" : "is-empty"}`}
+                        >
+                          {Number(stock?.quantity || 0) > 0
+                            ? `${stock.quantity} pieces in stock`
+                            : "Out of stock"}
+                        </span>
+                        <span className="pos-product-bottom">
+                          <b>{money(item.unit_price)}</b>
+                          <span className="pos-add">
+                            <Plus size={16} /> Add
+                          </span>
+                        </span>
                       </button>
                     );
                   })}
@@ -131,8 +201,16 @@ export default function PointOfSalePage({
               )}
             </FilteredRecords>
           </section>
-          <section className="workflow-pos-checkout">
-            <h2>Review and collect payment</h2>
+          <section className="workflow-pos-checkout pos-checkout">
+            <div className="pos-section-heading">
+              <div>
+                <span className="pos-step">02 / REVIEW & PAY</span>
+                <h2>
+                  <ShoppingBag /> Current sale
+                </h2>
+              </div>
+              <span className="pos-count">{pieces} pieces</span>
+            </div>
             <SimpleForm
               busy={busy}
               submitDisabled={!cart.length || total <= 0}
@@ -154,20 +232,85 @@ export default function PointOfSalePage({
                       reference: f.get("reference"),
                       discount,
                       expected_total: total,
-                      lines: cart.map((l) => ({ set_item_id: l.id, quantity: l.quantity })),
+                      lines: cart.map((l) => ({
+                        set_item_id: l.id,
+                        quantity: l.quantity,
+                      })),
                     },
                     "POST",
                   );
                   setCart([]);
                   setDiscount(0);
                   setKey(crypto.randomUUID());
-                  await load();
+                  setCompletedInvoice(result.invoice_id);
                   setBill(result.invoice_id);
+                  await load().catch((e) =>
+                    setError(
+                      `Sale completed. Product refresh failed: ${e.message}`,
+                    ),
+                  );
                 } finally {
                   setBusy(false);
                 }
               }}
             >
+              <div className="pos-cart">
+                {!cart.length && (
+                  <div className="pos-empty-cart">
+                    <ShoppingBag />
+                    <b>Your basket is empty</b>
+                    <span>Select an article and size to start a sale.</span>
+                  </div>
+                )}
+                {cart.map((line) => (
+                  <div className="pos-cart-line" key={line.id}>
+                    <div className="pos-cart-title">
+                      <b>
+                        {line.code} <span>Size {line.size_label}</span>
+                      </b>
+                      <span>{line.name}</span>
+                      <small>{money(line.unit_price)} / piece</small>
+                    </div>
+                    <div className="pos-cart-controls">
+                      <label>
+                        Pieces
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          step="1"
+                          value={line.quantity}
+                          onChange={(e) => {
+                            setCart(
+                              cart.map((l) =>
+                                l.id === line.id
+                                  ? { ...l, quantity: Number(e.target.value) }
+                                  : l,
+                              ),
+                            );
+                            setKey(crypto.randomUUID());
+                          }}
+                        />
+                      </label>
+                      <strong>
+                        {money(line.quantity * Number(line.unit_price))}
+                      </strong>
+                      <button
+                        type="button"
+                        className="pos-remove"
+                        aria-label={`Remove ${line.code} size ${line.size_label}`}
+                        onClick={() => {
+                          setCart(cart.filter((l) => l.id !== line.id));
+                          setKey(crypto.randomUUID());
+                        }}
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <h3 className="pos-form-heading">Customer details</h3>
               <label>
                 Customer
                 <select name="customer_id" required>
@@ -181,10 +324,17 @@ export default function PointOfSalePage({
               </label>
               <label>
                 Salesperson / collector
-                <select name="sales_rep_id" required defaultValue={user?.sales_rep_id || ""}>
+                <select
+                  name="sales_rep_id"
+                  required
+                  defaultValue={user?.sales_rep_id || ""}
+                >
                   <option value="">Choose salesperson</option>
                   {data.reps
-                    .filter((r: any) => !user?.sales_rep_id || r.id === user.sales_rep_id)
+                    .filter(
+                      (r: any) =>
+                        !user?.sales_rep_id || r.id === user.sales_rep_id,
+                    )
                     .map((r: any) => (
                       <option key={r.id} value={r.id}>
                         {r.name}
@@ -192,43 +342,7 @@ export default function PointOfSalePage({
                     ))}
                 </select>
               </label>
-              {cart.map((line) => (
-                <div className="workflow-return-line" key={line.id}>
-                  <div>
-                    <b>
-                      {line.code} · {line.size_label}
-                    </b>
-                    <small>{money(line.unit_price)} / piece</small>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCart(cart.filter((l) => l.id !== line.id));
-                        setKey(crypto.randomUUID());
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                  <label>
-                    Pieces
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      step="1"
-                      value={line.quantity}
-                      onChange={(e) => {
-                        setCart(
-                          cart.map((l) =>
-                            l.id === line.id ? { ...l, quantity: Number(e.target.value) } : l,
-                          ),
-                        );
-                        setKey(crypto.randomUUID());
-                      }}
-                    />
-                  </label>
-                </div>
-              ))}
+              <h3 className="pos-form-heading">Payment details</h3>
               <label>
                 Discount (LKR)
                 <input
@@ -277,20 +391,37 @@ export default function PointOfSalePage({
                 Reference
                 <input name="reference" maxLength={80} />
               </label>
-              <div className="workflow-summary">
+              <div className="pos-totals">
+                <div>
+                  <span>Subtotal</span>
+                  <b>{money(subtotal)}</b>
+                </div>
+                <div>
+                  <span>Discount</span>
+                  <b>- {money(discount)}</b>
+                </div>
+              </div>
+              <div className="workflow-summary pos-total">
                 <span>Amount collected</span>
                 <strong>{money(total)}</strong>
               </div>
               <p className="report-note">
-                The full invoice amount is recorded as received. Serial requirements and available
-                stock are checked before anything posts. Use Invoices for credit or part-payment
-                sales.
+                The full invoice amount is recorded as received. Serial
+                requirements and available stock are checked before anything
+                posts. Use Invoices for credit or part-payment sales.
               </p>
             </SimpleForm>
           </section>
         </div>
       )}
-      {bill && <InvoiceBill id={bill} api={api} token={token} close={() => setBill(null)} />}
-    </>
+      {bill && (
+        <InvoiceBill
+          id={bill}
+          api={api}
+          token={token}
+          close={() => setBill(null)}
+        />
+      )}
+    </div>
   );
 }
