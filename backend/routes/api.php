@@ -22,6 +22,7 @@ Route::prefix("v1")->group(function (): void {
         Route::get("/access", [AccessController::class, "index"])->middleware(
             "permission:admin.manage",
         );
+        Route::post('/users/{id}/password', [AccessController::class, 'resetPassword'])->middleware('permission:admin.manage');
         Route::post("/users", [AccessController::class, "storeUser"])->middleware(
             "permission:admin.manage",
         );

@@ -1,4 +1,5 @@
 import DashboardOverview from "./DashboardOverview";
+import UserPasswordModal from "./UserPasswordModal";
 import RecordDetails from "./RecordDetails";
 import ManualOpeningModal from "./ManualOpeningModal";
 import SalesOrderDetails from "./SalesOrderDetails";
@@ -7645,6 +7646,9 @@ function AccessPage({
   const [tab, setTab] = useState<"users" | "roles">("users");
   const [editing, setEditing] = useState<any>(null);
   const [creating, setCreating] = useState(false);
+  const [accessDetails, setAccessDetails] = useState<any>(null);
+  const [passwordUser, setPasswordUser] = useState<any>(null);
+  const [accessMessage, setAccessMessage] = useState("");
   const [error, setError] = useState("");
   const load = useCallback(async () => {
     const r = await fetch(`${API}/access`, { headers: { Authorization: `Bearer ${token}` } });
@@ -7737,6 +7741,15 @@ function AccessPage({
         </button>
       </div>
       {error && <div className="error">{error}</div>}
+      {accessMessage && <div className="success-message" role="status">{accessMessage}</div>}
+      <div className="opening-balance-toolbar"><div><b>Logins, passwords &amp; access</b><small>Add user creates a login. Edit assigns a role or enables access. Reset password sets a new login password.</small></div></div>
+      {passwordUser && <UserPasswordModal user={passwordUser} close={() => setPasswordUser(null)} save={async (body) => {
+        const response = await fetch(`${API}/users/${passwordUser.id}/password`, {method: "POST", headers: {Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json"}, body: JSON.stringify(body)});
+        const result = await response.json();
+        if (!response.ok) throw new Error(Object.values(result.errors || {}).flat().join(" ") || result.message || "Password update failed");
+        setAccessMessage(`Password updated for ${passwordUser.email}. Other sessions signed out.`);
+      }} />}
+      {accessDetails && <RecordDetails page="User access" row={accessDetails} close={() => setAccessDetails(null)} />}
       <div className="report-tabs">
         <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}>
           Users <small>{data.users.length}</small>
@@ -7799,6 +7812,13 @@ function AccessPage({
                       )}
                       <td>
                         <div className="row-actions">
+                          {tab === "users" && <>
+                            <button className="icon-action view" title="View user access" aria-label={`View access for ${row.name}`} onClick={() => {
+                              const role = data.roles.find((r: any) => r.id === row.role_id);
+                              setAccessDetails({name: row.name, email: row.email, role: row.role_name, login_access: row.active ? "Enabled" : "Disabled", linked_salesperson: row.sales_rep_name || "Not linked", permissions: data.permissions.filter((p: any) => role?.permission_ids.includes(p.id)).map((p: any) => p.name || p.code).join(", ") || "No assigned permissions", password: "Set a new password using Reset password"});
+                            }}><Eye /></button>
+                            <button className="secondary-action" title="Set a new login password" onClick={() => { setAccessMessage(""); setPasswordUser(row); }}>Reset password</button>
+                          </>}
                           <button
                             className="icon-action edit"
                             onClick={() => {

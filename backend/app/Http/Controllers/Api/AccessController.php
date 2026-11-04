@@ -11,6 +11,31 @@ use Illuminate\Validation\Rule;
 
 final class AccessController extends Controller
 {
+    public function resetPassword(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'password' => 'required|string|min:8|max:128|confirmed',
+            'reason' => 'required|string|max:500',
+        ]);
+        abort_if(trim($data['reason']) === '', 422, 'Enter a reason for resetting the password.');
+        return DB::transaction(function () use ($request, $id, $data) {
+            $user = DB::table('users')->where('id', $id)->lockForUpdate()->first();
+            abort_unless($user, 404, 'User not found.');
+            DB::table('users')->where('id', $id)->update(['password' => Hash::make($data['password']), 'updated_at' => now()]);
+            $sessions = DB::table('access_tokens')->where('user_id', $id);
+            if ((int) $request->attributes->get('auth_user')->id === $id) {
+                $sessions->where('token_hash', '!=', hash('sha256', $request->bearerToken()));
+            }
+            $sessions->delete();
+            DB::table('audit_logs')->insert([
+                'event' => 'user.password_reset', 'entity_type' => 'user', 'entity_id' => $id,
+                'payload' => json_encode(['actor_id' => $request->attributes->get('auth_user')->id, 'reason' => trim($data['reason'])]),
+                'created_at' => now(),
+            ]);
+            return response()->json(['message' => 'Password updated. Other active sessions have been signed out.']);
+        });
+    }
+
     public function index(): JsonResponse
     {
         $users = DB::table("users as u")
@@ -69,7 +94,9 @@ final class AccessController extends Controller
         $data["created_at"] = now();
         $data["updated_at"] = now();
         $id = DB::table("users")->insertGetId($data);
-        return response()->json(DB::table("users")->find($id), 201);
+        $user = (array) DB::table("users")->find($id);
+        unset($user['password'], $user['remember_token']);
+        return response()->json($user, 201);
     }
 
     public function updateUser(Request $request, int $id): JsonResponse
@@ -110,7 +137,9 @@ final class AccessController extends Controller
         }
         $data["updated_at"] = now();
         DB::table("users")->where("id", $id)->update($data);
-        return response()->json(DB::table("users")->find($id));
+        $user = (array) DB::table("users")->find($id);
+        unset($user['password'], $user['remember_token']);
+        return response()->json($user);
     }
 
     public function deleteUser(Request $request, int $id): JsonResponse
