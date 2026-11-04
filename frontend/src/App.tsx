@@ -1,4 +1,5 @@
 import DashboardOverview from "./DashboardOverview";
+import ManualOpeningModal from "./ManualOpeningModal";
 import SalesOrderDetails from "./SalesOrderDetails";
 import ReceivableActionModal from "./ReceivableActionModal";
 import FilteredRecords from "./FilteredRecords";
@@ -850,6 +851,8 @@ function SalesPage({
     [error, setError] = useState(""),
     [modal, setModal] = useState(""),
     [editingMaster, setEditingMaster] = useState<{ type: string; row: any } | null>(null),
+    [manualOpening, setManualOpening] = useState(false),
+    [openingMessage, setOpeningMessage] = useState(""),
     [receivableAction, setReceivableAction] = useState<{ row: any; mode: "edit" | "delete" } | null>(null),
     [editingTransaction, setEditingTransaction] = useState<any>(null),
     [editingArticle, setEditingArticle] = useState<any>(null),
@@ -1477,6 +1480,17 @@ function SalesPage({
       </div>
       {error && <div className="error">{error}</div>}
       {orderConfirmation}
+      {["Invoices", "Debtors Aging", "Customers"].includes(page) && permissions.includes("accounting.manage") && (
+        <div className="opening-balance-toolbar">
+          <div><b>Customer opening balances</b><small>Add an unpaid balance from before system use.</small></div>
+          <button className="primary" type="button" onClick={() => { setOpeningMessage(""); setManualOpening(true); }}><Plus /> New opening balance</button>
+        </div>
+      )}
+      {openingMessage && <div className="success-message" role="status">{openingMessage}</div>}
+      {manualOpening && <ManualOpeningModal data={data} close={() => setManualOpening(false)} save={async (body) => {
+        await post("receivables/opening", body);
+        setOpeningMessage(`Opening receivable ${body.opening_reference} posted successfully.`);
+      }} />}
       {priceImportMessage && page === "Pricing List" && (
         <div className="success-message">{priceImportMessage}</div>
       )}
@@ -1688,6 +1702,7 @@ function SalesPage({
               ref={salesTableRef}
               className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
             >
+              {page === "Invoices" && <p className="invoice-table-help">Scroll horizontally to see received amounts, outstanding balances, status and actions.</p>}
               <table>
                 <thead>
                   <tr>
@@ -2786,8 +2801,9 @@ function salesCells(page: string, r: any) {
   if (page === "Invoices")
     return (
       <>
-        <td>
-          <b>{r.number}</b>
+        <td className="invoice-reference-cell">
+          <b>{r.original_invoice_number ? `Invoice ${r.original_invoice_number}` : r.number}</b>
+          {r.is_opening_balance && <small className="invoice-reference-kind">Opening receivable</small>}
         </td>
         <td>{r.customer_name}</td>
         <td>{r.rep_name}</td>

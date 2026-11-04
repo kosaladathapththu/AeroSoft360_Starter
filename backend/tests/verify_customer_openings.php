@@ -397,3 +397,29 @@ $customerValues['credit_days'] = 45;
 check(DB::table('sales_invoices')->where('number', 'AR-UNKNOWN')->value('due_date') === '2026-10-16', 'Filling customer credit days resolves previously blank invoice due dates');
 $resolvedProfile = app(App\Services\Reporting\CustomerProfileService::class)->profile($unknownCustomer['id'], '2026-10-29');
 check((float) $resolvedProfile['aging']['terms_not_set'] === 0.0 && (float) $resolvedProfile['summary']['overdue'] === 125.0, 'Resolved terms move the debt into the correct overdue bucket');
+
+// Manual opening entry for an existing customer; still SQLite memory only.
+$manualCustomer = createCustomer('MANUAL');
+$manual = new App\Http\Controllers\Api\ReceivableController();
+$manualInput = [
+    'customer_id' => $manualCustomer['id'], 'opening_reference' => 'OLD-12345',
+    'opening_balance' => 875, 'invoice_date' => '2025-06-01',
+    'opening_date' => '2026-10-01', 'opening_due_date' => null,
+    'opening_account_id' => DB::table('accounts')->where('code', '3990')->value('id'),
+    'reason' => 'Approved customer statement',
+];
+$created = $manual->store(Illuminate\Http\Request::create('/', 'POST', $manualInput))->getData(true);
+$saved = DB::table('sales_invoices')->find($created['invoice_id']);
+check($saved->number === 'OLD-12345' && $saved->invoice_date === '2025-06-01', 'Manual opening keeps original invoice reference and date');
+check($saved->due_date === null && (float) $saved->outstanding === 875.0, 'Manual opening preserves unknown terms and unpaid amount');
+$manualProfile = app(CustomerProfileService::class)->profile($manualCustomer['id'], '2026-10-29');
+check((float) $manualProfile['summary']['ledger_difference'] === 0.0 && (float) $manualProfile['summary']['opening_receivable'] === 875.0, 'Manual opening reconciles to customer ledger');
+check((float) $manualProfile['summary']['total_invoiced'] === 0.0, 'Manual opening does not create sales turnover');
+check(DB::table('audit_logs')->where('event', 'receivable.manual_opening')->where('entity_id', $saved->id)->exists(), 'Manual opening records source reason in audit history');
+try {
+    $manual->store(Illuminate\Http\Request::create('/', 'POST', $manualInput));
+    check(false, 'Duplicate manual opening rejected');
+} catch (Symfony\Component\HttpKernel\Exception\HttpException $e) {
+    check($e->getStatusCode() === 422, 'Duplicate manual opening rejected');
+}
+check(DB::table('sales_invoices')->where('number', 'OLD-12345')->count() === 1, 'Retry does not create another opening');

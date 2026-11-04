@@ -7,6 +7,45 @@ use Illuminate\Support\Facades\DB;
 
 final class ReceivableController
 {
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'customer_id' => 'required|integer|exists:customers,id',
+            'opening_reference' => 'required|string|max:60',
+            'opening_balance' => 'required|numeric|min:0.01',
+            'invoice_date' => 'required|date_format:Y-m-d|before_or_equal:today',
+            'opening_date' => 'required|date_format:Y-m-d|after_or_equal:invoice_date|before_or_equal:today',
+            'opening_due_date' => 'nullable|date_format:Y-m-d|after_or_equal:invoice_date',
+            'opening_account_id' => 'required|integer|exists:accounts,id',
+            'sales_rep_id' => 'nullable|integer|exists:sales_representatives,id',
+            'reason' => 'required|string|max:1000',
+        ]);
+        $data['opening_reference'] = trim($data['opening_reference']);
+        abort_if($data['opening_reference'] === '' || trim($data['reason']) === '', 422, 'Enter the invoice reference and source or reason.');
+        return DB::transaction(function () use ($request, $data) {
+            DB::table('customers')->where('id', $data['customer_id'])->lockForUpdate()->first();
+            abort_if(DB::table('sales_invoices')->where('number', $data['opening_reference'])->exists(), 422,
+                'This invoice reference already exists. Review the existing receivable before entering it again.');
+            $importedDuplicate = DB::table('audit_logs as a')
+                ->join('sales_invoices as i', 'i.id', '=', 'a.entity_id')
+                ->where('a.event', 'receivable.import')->where('a.entity_type', 'sales_invoice')
+                ->where('i.customer_id', $data['customer_id'])->pluck('a.payload')
+                ->contains(function ($payload) use ($data) {
+                    $source = json_decode($payload, true) ?: [];
+                    return trim((string) ($source['original_invoice_number'] ?? '')) === $data['opening_reference'];
+                });
+            abort_if($importedDuplicate, 422, 'This invoice was already imported for this customer. Review the existing opening receivable.');
+            app(\App\Services\Accounting\CustomerOpeningService::class)->create((int) $data['customer_id'], $data + ['opening_type' => 'receivable']);
+            $invoice = DB::table('sales_invoices')->where('number', $data['opening_reference'])->first();
+            DB::table('audit_logs')->insert([
+                'event' => 'receivable.manual_opening', 'entity_type' => 'sales_invoice', 'entity_id' => $invoice->id,
+                'payload' => json_encode(['reason' => trim($data['reason']), 'actor_id' => $request->attributes->get('auth_user')->id ?? null, 'input' => $data]),
+                'created_at' => now(),
+            ]);
+            return response()->json(['message' => 'Opening receivable posted.', 'invoice_id' => $invoice->id, 'number' => $invoice->number], 201);
+        });
+    }
+
     public function update(Request $request, int $id)
     {
         $data = $request->validate([

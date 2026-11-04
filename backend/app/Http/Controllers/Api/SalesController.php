@@ -89,6 +89,17 @@ class SalesController
             ->select("l.*", "a.code as article_code", "a.name as article_name")
             ->get()
             ->groupBy("sales_invoice_id");
+        // Keep the imported source invoice number separate from the unique
+        // internal AR reference used by accounting links.
+        $sourceInvoiceNumbers = DB::table("audit_logs")
+            ->where("event", "receivable.import")
+            ->where("entity_type", "sales_invoice")
+            ->orderBy("id")
+            ->get(["entity_id", "payload"])
+            ->mapWithKeys(function ($entry) {
+                $payload = json_decode($entry->payload, true) ?: [];
+                return [$entry->entity_id => $payload["original_invoice_number"] ?? null];
+            });
         $invoices = DB::table("sales_invoices as i")
             ->join("customers as c", "c.id", "=", "i.customer_id")
             ->leftJoin("sales_representatives as r", "r.id", "=", "i.sales_rep_id")
@@ -102,8 +113,9 @@ class SalesController
             )
             ->latest("i.id")
             ->get()
-            ->map(function ($invoice) use ($invoiceLines) {
+            ->map(function ($invoice) use ($invoiceLines, $sourceInvoiceNumbers) {
                 $invoice->lines = $invoiceLines->get($invoice->id, collect())->values();
+                $invoice->original_invoice_number = $sourceInvoiceNumbers->get($invoice->id);
                 return $invoice;
             });
         $receipts = DB::table("customer_receipts as p")

@@ -27,11 +27,11 @@ final class CustomerOpeningService
         );
         $customer = DB::table("customers")->find($customerId);
         $debit = ($data["opening_type"] ?? "receivable") === "receivable";
-        $number = "OB-" . $customer->code;
+        $number = $data["opening_reference"] ?? "OB-" . $customer->code;
         $common = [
             "number" => $number,
             "customer_id" => $customerId,
-            "sales_rep_id" => null,
+            "sales_rep_id" => $data["sales_rep_id"] ?? null,
             "is_opening_balance" => true,
             "created_at" => now(),
             "updated_at" => now(),
@@ -42,8 +42,8 @@ final class CustomerOpeningService
             $invoiceId = DB::table("sales_invoices")->insertGetId(
                 $common + [
                     "sales_order_id" => null,
-                    "invoice_date" => $date,
-                    "due_date" => $data["opening_due_date"] ?? $date,
+                    "invoice_date" => $data["invoice_date"] ?? $date,
+                    "due_date" => array_key_exists("opening_reference", $data) ? ($data["opening_due_date"] ?? null) : ($data["opening_due_date"] ?? $date),
                     "sale_type" => "credit",
                     "status" => "unpaid",
                     "subtotal" => 0,
@@ -88,7 +88,7 @@ final class CustomerOpeningService
             "customer_id" => $customerId,
             "amount" => $debit ? $amount : -$amount,
             "balance_date" => $date,
-            "due_date" => $debit ? $data["opening_due_date"] ?? $date : null,
+            "due_date" => $debit ? (array_key_exists("opening_reference", $data) ? ($data["opening_due_date"] ?? null) : ($data["opening_due_date"] ?? $date)) : null,
             "offset_account_id" => $offset->id,
             "invoice_id" => $invoiceId,
             "receipt_id" => $receiptId,
