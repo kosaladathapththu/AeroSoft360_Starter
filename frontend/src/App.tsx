@@ -1,4 +1,5 @@
 import DashboardOverview from "./DashboardOverview";
+import RecordDetails from "./RecordDetails";
 import ManualOpeningModal from "./ManualOpeningModal";
 import SalesOrderDetails from "./SalesOrderDetails";
 import ReceivableActionModal from "./ReceivableActionModal";
@@ -7175,94 +7176,7 @@ function Records({
 
 function RecordView({ page, row, close }: { page: string; row: any; close: () => void }) {
   if (page === "Sales Orders") return <SalesOrderDetails row={row} close={close} />;
-  const hidden = ["id", "lines", "items", "review_changes", "created_at", "updated_at"];
-  return (
-    <div className="backdrop" onMouseDown={close}>
-      <div
-        className="modal"
-        onMouseDown={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Business record dialog"
-      >
-        <div className="popup-header">
-          <button className="close" onClick={close} aria-label="Close dialog">
-            <X />
-          </button>
-          <span>RECORD DETAILS</span>
-          <h2>{page}</h2>
-        </div>
-        <div className="popup-body">
-          <div className="detail-grid">
-            {Object.entries(row)
-              .filter(([k]) => !hidden.includes(k))
-              .map(([k, v]) => (
-                <div key={k}>
-                  <small>{k.replace(/_/g, " ")}</small>
-                  <b>
-                    {typeof v === "number" &&
-                    ["total", "salary", "cost", "debit", "credit"].some((x) => k.includes(x))
-                      ? money(v)
-                      : String(v ?? "—")}
-                  </b>
-                </div>
-              ))}
-          </div>
-          {(row.lines || row.items)?.length > 0 && (
-            <div className="detail-lines">
-              <h3>Lines</h3>
-              {(row.lines || row.items).map((line: any) => (
-                <div key={line.id}>
-                  <span>
-                    {line.article_name
-                      ? `${line.article_code} — ${line.article_name}${line.order_mode === "size" && line.size_label ? ` — Size ${line.size_label}` : line.set_name ? ` — ${line.set_name}` : ""}`
-                      : line.material_name || line.account_name || line.name}
-                  </span>
-                  <b>
-                    {line.article_name
-                      ? `${line.order_mode === "size" ? `${Number(line.pieces)} pieces` : `${Number(line.sets)} badges / ${Number(line.pieces)} pieces`} · ${money(line.line_total)}`
-                      : line.net_salary
-                        ? `Net ${money(line.net_salary)}`
-                        : line.quantity
-                          ? `${line.quantity} × ${money(line.unit_cost)}`
-                          : `Dr ${money(line.debit)} / Cr ${money(line.credit)}`}
-                  </b>
-                </div>
-              ))}
-            </div>
-          )}
-          {row.review_changes?.length > 0 && (
-            <section className="review-change-history">
-              <h3>Order review changes</h3>
-              <p>Reasons recorded when this sales order was created.</p>
-              {row.review_changes.map((change: any, index: number) => (
-                <article key={index}>
-                  <div>
-                    <b>
-                      Size {change.size_label}
-                      {change.colour ? ` · ${change.colour}` : ""}
-                    </b>
-                    <span>
-                      {change.action === "removed" ? "Removed" : "Quantity edited"} ·{" "}
-                      {Number(change.original_quantity)} → {Number(change.quantity)} pieces
-                    </span>
-                  </div>
-                  <p>{change.reason}</p>
-                </article>
-              ))}
-            </section>
-          )}
-        </div>
-        <div className="popup-footer">
-          <div className="actions">
-            <button type="button" onClick={close}>
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <RecordDetails page={page} row={row} close={close} />;
 }
 
 function CreateModal({
