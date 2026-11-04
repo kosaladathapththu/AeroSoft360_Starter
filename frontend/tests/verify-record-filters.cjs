@@ -17,6 +17,17 @@ function load(name) {
   return result;
 }
 const { filterRecords, recordFields } = load("record-filters");
+const { dateRangePreset } = load("record-filters");
+const preset = (key, day) => JSON.parse(JSON.stringify(dateRangePreset(key, day)));
+assert.deepEqual(preset('today', '2026-11-04'), {from:'2026-11-04', to:'2026-11-04'});
+assert.deepEqual(preset('last7', '2026-11-04'), {from:'2026-10-29', to:'2026-11-04'});
+assert.deepEqual(preset('last30', '2026-11-04'), {from:'2026-10-06', to:'2026-11-04'});
+assert.deepEqual(preset('month', '2026-11-04'), {from:'2026-11-01', to:'2026-11-04'});
+assert.deepEqual(preset('previousMonth', '2026-01-04'), {from:'2025-12-01', to:'2025-12-31'});
+assert.deepEqual(preset('previousMonth', '2024-03-04'), {from:'2024-02-01', to:'2024-02-29'});
+assert.deepEqual(preset('year', '2026-11-04'), {from:'2026-01-01', to:'2026-11-04'});
+assert.deepEqual(preset('all', '2026-11-04'), {from:'', to:''});
+console.log('8 date preset checks passed.');
 const records = [
   {
     id: 1,
@@ -174,4 +185,6 @@ assert.equal(
   3,
   "The panel initially displays the complete source selection",
 );
-console.log("4 filter panel rendering checks passed.");
+assert.ok(markup.includes('aria-expanded="false"'), 'Filter panel starts collapsed');
+assert.ok(/class="record-filter-options" hidden=""/.test(markup), 'Advanced controls are hidden initially');
+console.log("6 filter panel rendering checks passed.");

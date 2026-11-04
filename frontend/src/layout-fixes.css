@@ -3,6 +3,9 @@
   display: none !important;
 }
 @media screen {
+  .invoice-return-marker { display: block; margin-top: 7px; color: #9b6230; font-size: 11px; font-weight: 600; }
+  .representative-cell > b { display: block; color: #21483f; font-size: 15px; margin-bottom: 8px; }
+  .representative-cell .representative-code { display: inline-block; border: 1px solid #c8ded5; background: #eaf4ef; color: #31745d; border-radius: 6px; padding: 4px 9px; font-size: 11px; font-weight: 700; letter-spacing: .6px; }
   .opening-balance-toolbar {
     display: flex; align-items: center; justify-content: space-between; gap: 20px;
     flex-wrap: wrap; margin: 0 0 22px; padding: 18px 20px;

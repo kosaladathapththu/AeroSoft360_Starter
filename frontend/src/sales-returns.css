@@ -1,6 +1,12 @@
 .sales-return-modal {
   width: min(1100px, 96vw);
 }
+.return-availability { padding: 24px; background: #fffaf0; border: 1px solid #e3d5ae; border-radius: 12px; margin-bottom: 18px; color: #685b3d; }
+.return-availability-label { font-size: 10px; font-weight: 750; letter-spacing: 1px; color: #937b43; }
+.return-availability h3 { font-size: 21px; margin: 10px 0 14px; color: #4c513d; }
+.return-availability p, .return-availability li { font-size: 13px; line-height: 1.8; }
+.return-availability ol { padding-left: 20px; margin: 14px 0 20px; }
+.return-availability .actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .sales-return-modal .popup-body {
   display: grid;
   gap: 18px;

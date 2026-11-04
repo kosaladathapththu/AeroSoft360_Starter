@@ -6,9 +6,11 @@ const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const mod = {};
+const representative = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/representative-reference.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports: representative });
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/RecordDetails.tsx'), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 },
-}).outputText, { exports: mod, require: (name) => name === './finance-utils' ? { financeMoney: (value) => 'LKR ' + Number(value).toFixed(2) } : require(name) });
+}).outputText, { exports: mod, require: (name) => name === './representative-reference' ? representative : name === './finance-utils' ? { financeMoney: (value) => 'LKR ' + Number(value).toFixed(2) } : require(name) });
 const render = (row, page = 'Invoices') => renderToStaticMarkup(React.createElement(mod.default, { page, row, close() {} }));
 const opening = render({ number: 'AR-25225-9e740e8be94a', original_invoice_number: '25225', customer_id: 163, sales_rep_id: 7, customer_name: 'THEJAN SP', is_opening_balance: true, total: '63400.00', received_amount: '0.00', outstanding: '63400.00', subtotal: '0.00', due_date: null, lines: [] });
 assert(opening.includes('Invoice 25225') && !opening.includes('9e740e8be94a'));
@@ -21,4 +23,7 @@ assert(invoice.includes('Fixed rate / piece') && invoice.includes('Given rate / 
 assert(!invoice.includes('NaN') && !invoice.includes('[object Object]'));
 assert.equal(mod.detailValue('is_opening_balance', 0), 'No');
 assert(render({ number: 'PO-1', lines: [] }, 'Customer POs').includes('No item lines recorded'));
-console.log('9 record detail rendering checks passed.');
+assert.equal(representative.representativeReference({id: 7, code: 'AR-R-581832950537'}), 'REP-007');
+const repView = render({id: 7, code: 'AR-R-581832950537', name: 'CORPORATE'}, 'Salespersons');
+assert(repView.includes('REP-007') && !repView.includes('581832950537'));
+console.log('11 record detail rendering checks passed.');

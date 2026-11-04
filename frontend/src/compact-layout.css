@@ -1,0 +1,44 @@
+/* Compact shared page chrome; dialog and print typography stay independent. */
+@media screen {
+  .content { padding-top: 18px; }
+  .content .heading { margin-bottom: 14px; gap: 12px; }
+  .content .heading h1 { font-size: 28px; line-height: 1.25; margin-top: 4px; margin-bottom: 4px; }
+  .content .heading p { margin-top: 4px; margin-bottom: 0; font-size: 12px; line-height: 1.5; }
+  .content .heading > div > span { font-size: 10px; letter-spacing: 1.2px; }
+  .content .heading .actions > button, .content .heading > button { min-height: 40px; padding: 9px 14px; font-size: 13px; }
+  .content .workflow-step-strip { margin: 0 0 14px; padding: 0; gap: 6px; }
+  .content .workflow-step-strip button { min-height: 42px; padding: 8px 10px; border-radius: 8px; gap: 8px; flex-basis: 130px; }
+  .content .workflow-step-strip small { display: none; }
+  .content .workflow-step-strip b { font-size: 11px; line-height: 1.35; }
+  .content .workflow-step-strip i { height: 24px; width: 24px; font-size: 12px; }
+  .content .opening-balance-toolbar { margin-bottom: 14px; padding: 10px 14px; border-radius: 9px; gap: 10px; }
+  .content .opening-balance-toolbar > div { gap: 2px; }
+  .content .opening-balance-toolbar b { font-size: 12px; }
+  .content .opening-balance-toolbar small { font-size: 11px; }
+  .content .opening-balance-toolbar > button { min-height: 36px; padding: 8px 13px; font-size: 12px; }
+  .record-filters.record-filters { margin: 12px 0; padding: 12px 14px; border-radius: 9px; }
+  .record-filters .record-filter-main { gap: 8px; }
+  .record-filters label { font-size: 11px; gap: 4px; }
+  .record-filters .record-search { flex-basis: 280px; }
+  .record-filters input, .record-filters select { height: 36px; min-height: 36px; padding: 7px 9px; border-radius: 6px; font-size: 12px; }
+  .record-filters .record-search input { padding-left: 36px; }
+  .record-filters .record-search > span > svg { width: 16px; height: 16px; left: 11px; }
+  .record-filters button { min-height: 36px; padding: 7px 10px; border-radius: 6px; font-size: 12px; gap: 5px; }
+  .record-filters button svg { height: 15px; width: 15px; }
+  .record-filters > p { font-size: 11px; margin-top: 7px; line-height: 1.4; }
+  .record-filters .record-quick-filters { padding-top: 12px; margin-top: 12px; }
+  .record-filters .record-date-range { padding: 10px; margin-bottom: 10px; }
+  .record-filters .record-date-range, .record-filters .record-quick-values { gap: 10px; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+  .record-filter-options > button { margin-top: 10px; }
+  .record-filter-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; border-radius: 20px; background: #0b887d; color: #fff; font-size: 10px; }
+  .record-filter-summary { margin: 7px 0; font-size: 11px; }
+  .record-filter-rule { gap: 8px; padding-top: 10px; }
+  .record-filter-options[hidden] { display: none; }
+  .content .report-tabs { margin-top: 10px; margin-bottom: 12px; }
+  @media(max-width: 600px) {
+    .content .heading h1 { font-size: 24px; }
+    .record-filters .record-date-range, .record-filters .record-quick-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .record-filters .record-search { flex-basis: 100%; }
+    .content .opening-balance-toolbar > button { width: auto; }
+  }
+}

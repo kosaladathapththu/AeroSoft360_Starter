@@ -13,12 +13,14 @@ export default function SalesReturnsPage({
   permissions,
   search,
   initialInvoiceId,
+  go,
 }: {
   api: string;
   token: string;
   permissions: string[];
   search: string;
   initialInvoiceId?: number;
+  go?: (page: string) => void;
 }) {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
@@ -218,6 +220,7 @@ export default function SalesReturnsPage({
           {error}
         </div>
       )}
+      {data && !data.invoices.length && <ReturnAvailability openingCount={data.availability?.opening_balance_count || 0} go={go} retry={() => load().catch((e) => setError(e.message))} />}
       <p className="report-note">
         Sellable returns increase finished stock. Damaged pieces remain in the return register and
         are excluded from available stock. Credit exceeding the unpaid invoice balance is held for
@@ -304,6 +307,7 @@ export default function SalesReturnsPage({
                   {error}
                 </div>
               )}
+              {!data ? <p role="status">Loading invoices...</p> : !data.invoices.length ? <ReturnAvailability openingCount={data.availability?.opening_balance_count || 0} go={go} retry={() => load().catch((e) => setError(e.message))} /> : <>
               <label>
                 Find the original invoice
                 <input
@@ -479,8 +483,10 @@ export default function SalesReturnsPage({
                   </span>
                 )}
               </div>
+              </>}
             </div>
             <div className="popup-footer">
+              <div className="actions">
               <button
                 type="button"
                 className="return-secondary"
@@ -492,6 +498,7 @@ export default function SalesReturnsPage({
               <button className="primary" disabled={busy || !selectedLines.length}>
                 {busy ? "Posting return..." : "Post return and update stock"}
               </button>
+              </div>
             </div>
           </form>
         </div>
@@ -593,4 +600,14 @@ export default function SalesReturnsPage({
       )}
     </>
   );
+}
+
+export function ReturnAvailability({ openingCount, go, retry }: { openingCount: number; go?: (page: string) => void; retry: () => void }) {
+  return <section className="return-availability" role="status">
+    <span className="return-availability-label">NO ITEMIZED INVOICES AVAILABLE</span>
+    <h3>There are no invoice items to return yet</h3>
+    {openingCount > 0 && <p><b>{openingCount} opening receivables</b> are recorded. They contain unpaid balances, without the original article, size, colour and quantity lines.</p>}
+    <ol><li>For a new sale, create and invoice the actual sold items.</li><li>Return to this page and choose that invoice to select the returned pieces.</li><li>For an older opening balance, obtain its original itemized invoice first. Do not create another sale just to duplicate an imported debt.</li></ol>
+    <div className="actions">{go && <button className="primary" type="button" onClick={() => go("Invoices")}>Go to invoices</button>}<button className="return-secondary" type="button" onClick={retry}>Refresh invoices</button></div>
+  </section>;
 }

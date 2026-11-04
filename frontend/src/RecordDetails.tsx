@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { X } from "lucide-react";
 import { financeMoney } from "./finance-utils";
+import { representativeReference } from "./representative-reference";
 
 const labels: Record<string, string> = {
   number: "Document number", rep_name: "Salesperson", invoice_rep_name: "Invoice salesperson",
@@ -28,7 +29,8 @@ export function detailValue(key: string, value: any): string {
   return String(value);
 }
 
-export default function RecordDetails({ page, row, close }: { page: string; row: any; close: () => void }) {
+export default function RecordDetails({ page, row, close, onReturn }: { page: string; row: any; close: () => void; onReturn?: () => void }) {
+  if (page === "Salespersons") row = { ...row, code: representativeReference(row) };
   const titleId = useId();
   const closeButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -54,7 +56,7 @@ export default function RecordDetails({ page, row, close }: { page: string; row:
         {(lines.length > 0 || ["Invoices", "Customer POs"].includes(page)) && <section className="record-details-section"><div className="record-details-section-heading"><h3>Item details</h3><small>{lines.length} lines</small></div>{lines.length ? <div className="record-details-table" tabIndex={0} role="region" aria-label="Item details; scroll horizontally for all columns"><table><thead><tr>{columns.map((key) => <th key={key}>{titleFor(key)}</th>)}</tr></thead><tbody>{lines.map((line, index) => <tr key={line.id ?? index}>{columns.map((key) => <td key={key}>{detailValue(key, line[key])}</td>)}</tr>)}</tbody></table></div> : <p className="record-details-empty">{row.is_opening_balance ? "No product lines apply to this opening balance. The amount above is the unpaid balance brought forward." : "No item lines recorded for this document."}</p>}</section>}
         {Array.isArray(row.review_changes) && row.review_changes.length > 0 && <section className="record-details-section"><h3>Review history &amp; reasons</h3>{row.review_changes.map((change: any, index: number) => <article className="record-details-history" key={index}><b>Size {change.size_label}{change.colour ? ` / ${change.colour}` : ""}</b><span>{change.original_quantity} to {change.quantity} pieces</span><p>{change.reason || "No reason recorded"}</p></article>)}</section>}
       </div>
-      <div className="popup-footer"><div className="actions"><button type="button" onClick={close}>Close details</button></div></div>
+      <div className="popup-footer"><div className="actions">{onReturn && <button type="button" className="primary" onClick={onReturn}>Return items</button>}<button type="button" onClick={close}>Close details</button></div></div>
     </div>
   </div>;
 }

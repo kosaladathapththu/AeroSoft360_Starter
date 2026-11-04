@@ -1,4 +1,5 @@
 import DashboardOverview from "./DashboardOverview";
+import { representativeReference } from "./representative-reference";
 import UserPasswordModal from "./UserPasswordModal";
 import RecordDetails from "./RecordDetails";
 import ManualOpeningModal from "./ManualOpeningModal";
@@ -68,6 +69,7 @@ import CashFlowPage from "./CashFlowPage";
 import SalesReturnsPage from "./SalesReturnsPage";
 import "./layout-fixes.css";
 import "./form-defaults.css";
+import "./compact-layout.css";
 
 const API =
   import.meta.env.VITE_API_URL ||
@@ -643,6 +645,7 @@ export default function App() {
                   permissions={profile.permissions}
                   search={search}
                   initialInvoiceId={workflowContext.invoiceId}
+                  go={goToPage}
                 />
               ) : page === "Serials & Warranty" ? (
                 <SerialWarrantyPage
@@ -1968,15 +1971,15 @@ function SalesPage({
                                         <Printer />
                                       </button>
                                     )}
-                                    {page === "Invoices" && !r.is_opening_balance && (
+                                    {page === "Invoices" && !r.is_opening_balance && permissions.includes("accounting.manage") && (
                                       <button
                                         className="return-secondary"
-                                        title="Return individual pieces from an invoice"
+                                        title="Mark one or more invoiced pieces as returned"
                                         onClick={() =>
                                           go("Sales Returns", { invoiceId: Number(r.id) })
                                         }
                                       >
-                                        Return pieces
+                                        Return items
                                       </button>
                                     )}
                                     <button
@@ -2225,7 +2228,8 @@ function SalesPage({
             close={() => setViewing(null)}
           />
         ) : (
-          <RecordView page={page} row={viewing} close={() => setViewing(null)} />
+          <RecordView page={page} row={viewing} close={() => setViewing(null)}
+            onReturn={page === "Invoices" && !viewing.is_opening_balance && permissions.includes("accounting.manage") ? () => { setViewing(null); go("Sales Returns", {invoiceId: Number(viewing.id)}); } : undefined} />
         ))}
       {inventoryRecord && (
         <InventoryRecordModal
@@ -2632,7 +2636,7 @@ function SalesTransactionEditModal({
               >
                 {data.reps.map((rep: any) => (
                   <option value={rep.id} key={rep.id}>
-                    {rep.code} â€” {rep.name}
+                    {representativeReference(rep)} â€” {rep.name}
                   </option>
                 ))}
               </select>
@@ -2698,10 +2702,9 @@ function salesCells(page: string, r: any) {
   if (page === "Salespersons")
     return (
       <>
-        <td>
-          <b>{r.code}</b>
-          <br />
-          {r.name}
+        <td className="representative-cell">
+          <b>{r.name}</b>
+          <span className="representative-code">{representativeReference(r)}</span>
         </td>
         <td>{r.manager_name || "—"}</td>
         <td>{r.channel.replaceAll("_", " ")}</td>
@@ -2806,6 +2809,7 @@ function salesCells(page: string, r: any) {
         <td className="invoice-reference-cell">
           <b>{r.original_invoice_number ? `Invoice ${r.original_invoice_number}` : r.number}</b>
           {r.is_opening_balance && <small className="invoice-reference-kind">Opening receivable</small>}
+          {Number(r.returned_amount || 0) > 0 && <small className="invoice-return-marker">Returned credit: {money(r.returned_amount)}</small>}
         </td>
         <td>{r.customer_name}</td>
         <td>{r.rep_name}</td>
@@ -5995,7 +5999,7 @@ function SalesCreateModal({
                         .filter((rep: any) => rep.status === "active")
                         .map((rep: any) => (
                           <option value={rep.id} key={rep.id}>
-                            {rep.code} — {rep.name}
+                            {representativeReference(rep)} — {rep.name}
                           </option>
                         ))}
                     </select>
@@ -6709,7 +6713,7 @@ function SalesCreateModal({
                     <select name="sales_rep_id" required defaultValue={initial?.sales_rep_id}>
                       {data.reps.map((rep: any) => (
                         <option value={rep.id} key={rep.id}>
-                          {rep.code} — {rep.name}
+                          {representativeReference(rep)} — {rep.name}
                         </option>
                       ))}
                     </select>
@@ -7175,9 +7179,9 @@ function Records({
   );
 }
 
-function RecordView({ page, row, close }: { page: string; row: any; close: () => void }) {
+function RecordView({ page, row, close, onReturn }: { page: string; row: any; close: () => void; onReturn?: () => void }) {
   if (page === "Sales Orders") return <SalesOrderDetails row={row} close={close} />;
-  return <RecordDetails page={page} row={row} close={close} />;
+  return <RecordDetails page={page} row={row} close={close} onReturn={onReturn} />;
 }
 
 function CreateModal({
@@ -7905,7 +7909,7 @@ function AccessPage({
                         <option value="">Not a salesperson login</option>
                         {(data.sales_reps || []).map((rep: any) => (
                           <option value={rep.id} key={rep.id}>
-                            {rep.code} — {rep.name}
+                            {representativeReference(rep)} — {rep.name}
                           </option>
                         ))}
                       </select>

@@ -6,6 +6,12 @@
   background: #fff;
   min-width: 0;
 }
+.record-quick-filters { padding-top: 18px; margin-top: 18px; border-top: 1px solid #e1e9e4; }
+.record-date-range, .record-quick-values { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.record-date-range { padding: 14px; background: #f1f6f0; border-radius: 9px; margin-bottom: 14px; }
+.record-quick-filters label { min-width: 0; }
+.record-quick-filters > small { display: block; margin-top: 12px; color: #69816e; font-size: 11px; line-height: 1.6; }
+@media(max-width: 550px) { .record-date-range, .record-quick-values { grid-template-columns: 1fr; } }
 .record-filter-main,
 .record-filter-rule {
   display: flex;

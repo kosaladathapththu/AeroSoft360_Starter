@@ -80,7 +80,12 @@ final class SalesReturnController
                     : [];
             }
         }
-        return response()->json(["invoices" => $invoices, "returns" => $returns]);
+        return response()->json([
+            "invoices" => $invoices, "returns" => $returns,
+            "availability" => [
+                "opening_balance_count" => DB::table('sales_invoices')->where('is_opening_balance', true)->whereNotIn('status', ['void', 'cancelled'])->count(),
+            ],
+        ]);
     }
     public function store(Request $request, SalesReturnService $service)
     {
