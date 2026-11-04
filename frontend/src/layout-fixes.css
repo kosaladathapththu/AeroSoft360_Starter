@@ -412,11 +412,23 @@
   .article-picker-control {
     align-items: start;
   }
-  .modal .searchable-article-select input {
+  /* Match the popup field selector's specificity so its padding cannot
+     overwrite the space reserved for the search and dropdown icons. */
+  .modal .searchable-article-select > input:not([type="checkbox"]):not([type="radio"]):not([type="color"]) {
     padding: 12px 40px 12px 44px;
+    height: 52px;
     min-height: 52px;
     border: 1px solid #87bdb8;
     background: #fff;
+  }
+  .modal .article-picker-control .article-details-button {
+    height: 52px;
+    min-height: 52px;
+    margin-top: 0;
+    align-self: start;
+    box-sizing: border-box;
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
   .selected-article-name {
     display: grid;
