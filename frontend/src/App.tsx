@@ -5488,6 +5488,7 @@ function SalesCreateModal({
                           )}
                         </label>
                         <RateFields
+                          articlePrice={selectedArticle?.selling_price}
                           items={selectableItems.map((item: any) => ({
                             ...item,
                             fixed_rate: fixedItemRate(line, item),
@@ -6175,6 +6176,7 @@ function SalesCreateModal({
                         </button>
                       </div>
                       <RateFields
+                        articlePrice={article?.selling_price}
                         items={(set?.items || []).map((item: any) => ({
                           ...item,
                           fixed_rate: line.fixed_rates?.[item.id] ?? item.unit_price,

@@ -15,6 +15,21 @@
   font-size: 13px;
   color: #526e78;
 }
+.fixed-rate-empty {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.fixed-rate-empty strong {
+  color: #173f45;
+  font-size: 20px;
+}
+.fixed-rate-empty small {
+  color: #746137;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+}
 .opening-balance-fields {
   padding: 18px;
   margin: 20px 0;
