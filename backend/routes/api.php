@@ -19,6 +19,7 @@ Route::prefix("v1")->group(function (): void {
     Route::middleware("token.auth")->group(function (): void {
         Route::get("/auth/me", [AuthController::class, "me"]);
         Route::post("/auth/logout", [AuthController::class, "logout"]);
+        Route::post('/admin/database-backup', [\App\Http\Controllers\Api\DatabaseBackupController::class, 'download'])->middleware(['permission:admin.manage', 'throttle:3,1']);
         Route::get("/access", [AccessController::class, "index"])->middleware(
             "permission:admin.manage",
         );

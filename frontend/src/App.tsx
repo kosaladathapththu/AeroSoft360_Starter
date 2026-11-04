@@ -1,4 +1,6 @@
 import DashboardOverview from "./DashboardOverview";
+import DatabaseBackupPage from "./DatabaseBackupPage";
+import { invoiceReference } from "./invoice-reference";
 import { representativeReference } from "./representative-reference";
 import UserPasswordModal from "./UserPasswordModal";
 import RecordDetails from "./RecordDetails";
@@ -336,7 +338,7 @@ export default function App() {
     {
       name: "Administration",
       icon: Settings,
-      items: [["Access Control", ShieldCheck]],
+      items: [["Access Control", ShieldCheck], ["Database Backup", FileDown]],
     },
   ] as const;
   const goToPage = (name: string, context?: WorkflowContext) => {
@@ -721,6 +723,8 @@ export default function App() {
                   search={search}
                   requestedReport={requestedReport}
                 />
+              ) : page === "Database Backup" && profile.permissions.includes("admin.manage") ? (
+                <DatabaseBackupPage api={API} token={token() || ""} />
               ) : page === "Access Control" ? (
                 <AccessPage token={token() || ""} currentUserId={profile.user.id} search={search} />
               ) : (
@@ -2768,7 +2772,7 @@ function salesCells(page: string, r: any) {
     return (
       <>
         <td>
-          <b>{r.number}</b>
+          <b>{invoiceReference(r)}</b>
           <br />
           <small>{r.customer_po_reference || "No customer reference"}</small>
         </td>
@@ -2794,7 +2798,7 @@ function salesCells(page: string, r: any) {
     return (
       <>
         <td>
-          <b>{r.number}</b>
+          <b>{invoiceReference(r)}</b>
         </td>
         <td>{r.customer_name}</td>
         <td>{r.rep_name}</td>
@@ -2807,7 +2811,7 @@ function salesCells(page: string, r: any) {
     return (
       <>
         <td className="invoice-reference-cell">
-          <b>{r.original_invoice_number ? `Invoice ${r.original_invoice_number}` : r.number}</b>
+          <b>{invoiceReference(r)}</b>
           {r.is_opening_balance && <small className="invoice-reference-kind">Opening receivable</small>}
           {Number(r.returned_amount || 0) > 0 && <small className="invoice-return-marker">Returned credit: {money(r.returned_amount)}</small>}
         </td>
@@ -2829,7 +2833,7 @@ function salesCells(page: string, r: any) {
     return (
       <>
         <td>
-          <b>{r.number}</b>
+          <b>{invoiceReference(r)}</b>
         </td>
         <td>{r.customer_name}</td>
         <td>{r.invoice_rep_name}</td>
@@ -2844,7 +2848,7 @@ function salesCells(page: string, r: any) {
     return (
       <>
         <td>
-          <b>{r.number}</b>
+          <b>{invoiceReference(r)}</b>
         </td>
         <td>{r.customer_name}</td>
         <td>{r.rep_name}</td>
@@ -2861,7 +2865,7 @@ function salesCells(page: string, r: any) {
     return (
       <>
         <td>
-          <b>{r.number}</b>
+          <b>{invoiceReference(r)}</b>
         </td>
         <td>{r.customer_name}</td>
         <td>{r.rep_name}</td>
@@ -8799,7 +8803,7 @@ function PayrollPage({
                                   ) : (
                                     <ChevronRight />
                                   )}
-                                  <b>{r.number}</b>
+                                  <b>{invoiceReference(r)}</b>
                                 </button>
                               </td>
                               <td>

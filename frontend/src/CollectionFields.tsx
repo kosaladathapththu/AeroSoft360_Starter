@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { invoiceReference } from "./invoice-reference";
 
 const money = (amount: unknown) =>
   `LKR ${Number(amount || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -56,7 +57,7 @@ export default function CollectionFields({
           >
             {invoices.map((item: any) => (
               <option key={item.id} value={item.id}>
-                {item.number} - {item.customer_name}
+                {invoiceReference(item)} - {item.customer_name}
               </option>
             ))}
           </select>
