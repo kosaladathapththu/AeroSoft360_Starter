@@ -6,5 +6,5 @@ export function fixedItemRate(line: any, item: any): number {
   return Number(prices[item.id] ?? item.unit_price ?? 0);
 }
 export function givenItemRate(line: any, item: any): number {
-  return Number(line.custom_rate ?? fixedItemRate(line, item));
+  return Number(line.given_rates?.[item.id] ?? line.custom_rate ?? fixedItemRate(line, item));
 }

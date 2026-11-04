@@ -5,11 +5,15 @@ export default function RateFields({
   rate,
   change,
   articlePrice,
+  givenRates,
+  changeItem,
 }: {
   items: any[];
   rate: number | string | null | undefined;
   change: (rate: number | null) => void;
   articlePrice?: number | string | null;
+  givenRates?: Record<string, number>;
+  changeItem?: (id: number, rate: number | null) => void;
 }) {
   return (
     <div className="fixed-rate-fields">
@@ -28,11 +32,15 @@ export default function RateFields({
           {items.map((item) => (
             <span key={item.id}>
               Size {item.size_label}: {financeMoney(item.fixed_rate ?? item.unit_price)}{" "}
+              {changeItem && <label className="size-given-rate">Given rate for size {item.size_label} (LKR)
+                <input type="number" min="0" step="0.01" value={givenRates?.[item.id] ?? ""}
+                  placeholder="Use fixed rate" onChange={(e) => changeItem(item.id, e.target.value === "" ? null : Number(e.target.value))} />
+              </label>}
             </span>
           ))}
         </div>
       </div>
-      <label>
+      {!changeItem && <label>
         Given rate / piece (LKR)
         <input
           type="number"
@@ -46,7 +54,7 @@ export default function RateFields({
           Optional. Applies to the selected sizes and colours in this article. Totals use the given
           rate.
         </small>
-      </label>
+      </label>}
     </div>
   );
 }

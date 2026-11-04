@@ -1,4 +1,5 @@
 import DashboardOverview from "./DashboardOverview";
+import SalesOrderDetails from "./SalesOrderDetails";
 import ReceivableActionModal from "./ReceivableActionModal";
 import FilteredRecords from "./FilteredRecords";
 import { Fragment, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -4225,8 +4226,17 @@ function SalesCreateModal({
       Math.max(1, Number(line.selected_colours?.length || 0))
     );
   };
-  const poLineTotal = (line: any) =>
-    line.custom_rate == null ? poFixedTotal(line) : Number(line.custom_rate) * poLinePieces(line);
+  const poLineTotal = (line: any) => {
+    if (line.order_mode === "custom") {
+      const items = data.articles.flatMap((article: any) => article.sets.flatMap((set: any) => set.items));
+      return Object.entries(line.custom_sizes || {}).reduce((sum: number, [id, qty]: any) => {
+        const item = items.find((value: any) => Number(value.id) === Number(id));
+        const pieces = Object.values(line.custom_colour_quantities?.[id] || {}).reduce((total: number, value: any) => total + Number(value || 0), 0) || Number(qty || 0);
+        return sum + (item ? givenItemRate(line, item) : 0) * pieces;
+      }, 0);
+    }
+    return line.custom_rate == null ? poFixedTotal(line) : Number(line.custom_rate) * poLinePieces(line);
+  };
   const poGrandTotal = poLines.reduce((total: number, line: any) => total + poLineTotal(line), 0);
   const poTotalPieces = poLines.reduce((total: number, line: any) => {
     if (line.order_mode === "custom") {
@@ -4473,7 +4483,7 @@ function SalesCreateModal({
                     colour,
                     order_mode: "size",
                     set_template_id: item?.set_template_id,
-                    rate: line.custom_rate ?? null,
+                    rate: item ? givenItemRate(line, item) : null,
                     set_item_id: Number(itemId),
                     quantity: colour
                       ? Number(line.custom_colour_quantities?.[itemId]?.[colour] || 1)
@@ -5489,7 +5499,14 @@ function SalesCreateModal({
                         </label>
                         <RateFields
                           articlePrice={selectedArticle?.selling_price}
-                          items={selectableItems.map((item: any) => ({
+                          givenRates={line.given_rates}
+                          changeItem={line.order_mode === "custom" ? (id, rate) => setPoLines((lines) => lines.map((value, i) => {
+                            if (i !== index) return value;
+                            const given = { ...value.given_rates };
+                            if (rate == null) delete given[id]; else given[id] = rate;
+                            return { ...value, given_rates: given, custom_rate: null };
+                          })) : undefined}
+                          items={(line.order_mode === "custom" ? selectableItems : (selectedArticle?.sets?.find((set: any) => Number(set.id) === Number(line.set_template_id))?.items || [])).map((item: any) => ({
                             ...item,
                             fixed_rate: fixedItemRate(line, item),
                           }))}
@@ -6177,6 +6194,13 @@ function SalesCreateModal({
                       </div>
                       <RateFields
                         articlePrice={article?.selling_price}
+                        givenRates={line.given_rates}
+                        changeItem={line.order_mode === "custom" ? (id, rate) => setInvoiceLines((lines) => lines.map((value, i) => {
+                          if (i !== index) return value;
+                          const given = { ...value.given_rates };
+                          if (rate == null) delete given[id]; else given[id] = rate;
+                          return { ...value, given_rates: given, custom_rate: null };
+                        })) : undefined}
                         items={(set?.items || []).map((item: any) => ({
                           ...item,
                           fixed_rate: line.fixed_rates?.[item.id] ?? item.unit_price,
@@ -7134,6 +7158,7 @@ function Records({
 }
 
 function RecordView({ page, row, close }: { page: string; row: any; close: () => void }) {
+  if (page === "Sales Orders") return <SalesOrderDetails row={row} close={close} />;
   const hidden = ["id", "lines", "items", "review_changes", "created_at", "updated_at"];
   return (
     <div className="backdrop" onMouseDown={close}>
