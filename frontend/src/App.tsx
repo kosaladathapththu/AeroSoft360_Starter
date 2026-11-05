@@ -76,7 +76,7 @@ import "./compact-layout.css";
 const PublicSite = lazy(() => import("./PublicSite"));
 const API =
   import.meta.env.VITE_API_URL ||
-  `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
+  (import.meta.env.PROD ? "/api/v1" : `${window.location.protocol}//${window.location.hostname}:8000/api/v1`);
 type Supplier = {
   id: number;
   code: string;
