@@ -1,4 +1,7 @@
 import DashboardOverview from "./DashboardOverview";
+import CustomerOrderContext from "./CustomerOrderContext";
+import { createPortal } from "react-dom";
+import type { ReactNode } from "react";
 import DatabaseBackupPage from "./DatabaseBackupPage";
 import { invoiceReference } from "./invoice-reference";
 import { representativeReference } from "./representative-reference";
@@ -72,6 +75,7 @@ import SalesReturnsPage from "./SalesReturnsPage";
 import "./layout-fixes.css";
 import "./form-defaults.css";
 import "./compact-layout.css";
+import "./workspace-entry.css";
 
 const PublicSite = lazy(() => import("./PublicSite"));
 const API =
@@ -192,6 +196,7 @@ export default function App() {
   const [workflowContext, setWorkflowContext] = useState<WorkflowContext>({});
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    setModal("");
   }, [page]);
   const token = () => localStorage.getItem("aerosoft_token");
   const load = useCallback(async () => {
@@ -800,6 +805,7 @@ export default function App() {
             </>
           )}
         </section>
+        <div id="workspace-entry-root" />
       </main>
       {modal && (
         <CreateModal
@@ -3950,6 +3956,17 @@ function OrderCustomerPicker({
   );
 }
 
+function WorkspaceEntry({ children }: { children: ReactNode }) {
+  const target = typeof document !== "undefined" ? document.getElementById("workspace-entry-root") : null;
+  const heading = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+    window.scrollTo({ top: 0 });
+  }, []);
+  const content = <div className="record-workspace-page" ref={heading} tabIndex={-1}>{children}</div>;
+  return target ? createPortal(content, target) : content;
+}
+
 function SalesCreateModal({
   type,
   data,
@@ -4051,13 +4068,7 @@ function SalesCreateModal({
         article.status !== "inactive" &&
         article.sets?.some((set: any) => set.status !== "inactive" && Number(set.set_price) > 0),
     ) || data.articles?.[0];
-  const firstSet =
-    firstArticle?.sets?.find(
-      (set: any) => set.status !== "inactive" && Number(set.set_price) > 0,
-    ) || firstArticle?.sets?.[0];
-  const firstSetId = Number(firstSet?.id || 0);
   const firstArticleId = Number(firstArticle?.id || 0);
-  const firstItemId = Number(firstSet?.items?.[0]?.id || 0);
   const [inventoryArticleId, setInventoryArticleId] = useState(firstArticleId);
   const [expandedPoLine, setExpandedPoLine] = useState<number | null>(null);
   const [poLines, setPoLines] = useState<any[]>([
@@ -4087,12 +4098,12 @@ function SalesCreateModal({
         }))
       : [
           {
-            article_id: firstArticleId,
+            article_id: 0,
             colour: "",
             selected_colours: [],
             order_mode: "badge",
-            set_template_id: firstSetId,
-            set_item_id: firstItemId,
+            set_template_id: 0,
+            set_item_id: 0,
             quantity: 1,
           },
         ]),
@@ -4703,20 +4714,18 @@ function SalesCreateModal({
     }
   };
   return (
-    <div className="backdrop" onMouseDown={close}>
+    <WorkspaceEntry>
       <form
         className={`modal ${type === "po" || type === "sales_order" || type === "invoice" ? "po-modal" : type === "article" ? "price-modal" : type === "commission" ? "commission-modal" : type === "receipt" ? "collection-modal" : ""}`}
         ref={orderForm}
         noValidate={isEasyOrder}
         onSubmit={submit}
         onMouseDown={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Business record dialog"
+        aria-label="Business record form"
       >
         <div className="popup-header">
-          <button type="button" className="close" onClick={close} aria-label="Close dialog">
-            <X />
+          <button type="button" className="workspace-entry-back" onClick={close}>
+            <ArrowLeft /> Back to records
           </button>
           <span>SALES MASTER AND TRANSACTION</span>
           <h2>
@@ -5156,6 +5165,17 @@ function SalesCreateModal({
             </>
           ) : type === "po" || type === "sales_order" ? (
             <>
+              {!newCustomer && selectedCustomerId > 0 && (
+                <CustomerOrderContext
+                  key={selectedCustomerId}
+                  api={API}
+                  customerId={selectedCustomerId}
+                  data={data}
+                  articleIds={poLines.map((line) => Number(line.article_id)).filter(Boolean)}
+                  excludePoId={type === "po" && initial ? Number(initial.id) : undefined}
+                  excludeOrderId={type === "sales_order" && initial ? Number(initial.id) : undefined}
+                />
+              )}
               <nav className="easy-order-steps" aria-label="Order progress">
                 {["Customer", "Items", "Review"].map((label, index) => (
                   <span
@@ -5358,12 +5378,12 @@ function SalesCreateModal({
                         setPoLines((lines) => [
                           ...lines,
                           {
-                            article_id: firstArticleId,
+                            article_id: 0,
                             colour: "",
                             selected_colours: [],
                             order_mode: "badge",
-                            set_template_id: firstSetId,
-                            set_item_id: firstItemId,
+                            set_template_id: 0,
+                            set_item_id: 0,
                             quantity: 1,
                           },
                         ])
@@ -6904,7 +6924,7 @@ function SalesCreateModal({
           </div>
         </div>
       </form>
-    </div>
+    </WorkspaceEntry>
   );
 }
 function Dashboard({ data, go }: { data: Workspace; go: (x: string) => void }) {
