@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import { matchesSearch } from "./search";
 import FilteredRecords from "./FilteredRecords";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -552,7 +553,7 @@ function VoucherEditor({
                     </option>
                     {data.payment_accounts.map((account: any) => (
                       <option value={account.id} key={account.id}>
-                        {account.code} - {account.name}
+                        {displayCode(account)} - {account.name}
                       </option>
                     ))}
                   </select>
@@ -599,7 +600,7 @@ function VoucherEditor({
                           <option value="">Choose account</option>
                           {data.expense_accounts.map((account: any) => (
                             <option key={account.id} value={account.id}>
-                              {account.code} - {account.name}
+                              {displayCode(account)} - {account.name}
                             </option>
                           ))}
                         </select>

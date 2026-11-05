@@ -1,3 +1,4 @@
+import { displayCode, displayReferenceValue } from "./representative-reference";
 import FilteredRecords from "./FilteredRecords";
 import { recordFields } from "./record-filters";
 import { matchesSearch } from "./search";
@@ -657,7 +658,7 @@ export default function BusinessWorkflowsPage({
                     .filter((a: any) => a.is_cash_account)
                     .map((a: any) => (
                       <option key={a.id} value={a.id}>
-                        {a.code} ? {a.name}
+                        {displayCode(a)} ? {a.name}
                       </option>
                     ))}
                 </select>
@@ -963,7 +964,7 @@ export function WorkflowTable({
                 <tr key={row.id ?? index}>
                   {columns.map(([key, , type]) => (
                     <td key={key} className={type === "money" ? "report-number" : undefined}>
-                      {type === "money" ? money(row[key]) : String(row[key] ?? "—")}
+                      {type === "money" ? money(row[key]) : String(displayReferenceValue(row[key], row, key) ?? "—")}
                     </td>
                   ))}
                   {actions && (
@@ -1099,7 +1100,7 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
             </option>
             {data.customers.map((c: any) => (
               <option key={c.id} value={c.id}>
-                {c.code} — {c.name}
+                {displayCode(c)} — {c.name}
               </option>
             ))}
           </select>
@@ -1120,7 +1121,7 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
               .filter((r: any) => !user?.sales_rep_id || r.id === user.sales_rep_id)
               .map((r: any) => (
                 <option key={r.id} value={r.id}>
-                  {r.code} — {r.name}
+                  {displayCode(r)} — {r.name}
                 </option>
               ))}
           </select>
@@ -1174,7 +1175,7 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
               </option>
               {data.items.map((i: any) => (
                 <option key={i.id} value={i.id}>
-                  {i.code} · {i.name} · Size {i.size_label} · {money(i.unit_price)}
+                  {displayCode(i)} · {i.name} · Size {i.size_label} · {money(i.unit_price)}
                 </option>
               ))}
             </select>
@@ -1369,7 +1370,7 @@ function PurchaseReturnForm({ data, busy, save }: any) {
         <div className="workflow-return-line" key={l.id}>
           <div>
             <b>
-              {l.code} · {l.name}
+              {displayCode(l)} · {l.name}
             </b>
             <small>
               Batch {l.batch_number} · Returnable {l.returnable} · {money(l.unit_cost)} / unit
@@ -1440,7 +1441,7 @@ function CashClosingForm({ data, request, busy, save }: any) {
             {!cash.length && <option value="">Set up a cash account first</option>}
             {cash.map((a: any) => (
               <option key={a.id} value={a.id}>
-                {a.code} · {a.name}
+                {displayCode(a)} · {a.name}
               </option>
             ))}
           </select>
@@ -1551,7 +1552,7 @@ function RecurringForm({ data, busy, save }: any) {
               </option>
               {data.accounts.map((a: any) => (
                 <option key={a.id} value={a.code}>
-                  {a.code} · {a.name}
+                  {displayCode(a)} · {a.name}
                 </option>
               ))}
             </select>
@@ -1641,7 +1642,7 @@ function MasterData({ page, data, canManage, busy, save }: any) {
                 <option value="">Select article</option>
                 {data.articles.map((a: any) => (
                   <option key={a.id} value={a.id}>
-                    {a.code} · {a.name}
+                    {displayCode(a)} · {a.name}
                   </option>
                 ))}
               </select>
@@ -1921,7 +1922,7 @@ function Subledger({
             <option value="">Choose {stock ? "product" : "party"}</option>
             {options.map((o: any) => (
               <option key={o.id} value={o.id}>
-                {o.code} · {o.name}
+                {displayCode(o)} · {o.name}
               </option>
             ))}
           </select>
@@ -1964,11 +1965,11 @@ function Subledger({
         <button
           disabled={!data}
           onClick={() =>
-            financeCsv(`${page}_${data.party.code}_${to}.csv`, [
+            financeCsv(`${page}_${displayCode(data.party)}_${to}.csv`, [
               [page, data.party.name, from, to],
               ["Opening", data.opening],
               columns.map((c) => c[1]),
-              ...data.rows.map((r: any) => columns.map((c) => r[c[0]])),
+              ...data.rows.map((r: any) => columns.map((c) => displayReferenceValue(r[c[0]], r, c[0]))),
               ["Closing", data.closing],
             ])
           }
@@ -1984,7 +1985,7 @@ function Subledger({
       {data && (
         <div ref={output} className="subledger-output">
           <h2>
-            {data.party.code} · {data.party.name}
+            {displayCode(data.party)} · {data.party.name}
           </h2>
           <div className="workflow-summary">
             <span>Opening {stock ? data.opening : money(data.opening)}</span>

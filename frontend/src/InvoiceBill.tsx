@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Printer, RefreshCw, X } from "lucide-react";
 import "./invoice-bill.css";
+import { displayCode } from "./representative-reference";
 
 const money = (value: unknown) =>
   `LKR ${Number(value || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -39,7 +40,7 @@ export function BillDocument({ invoice }: { invoice: any }) {
           <p>{invoice.customer_address}</p>
           {invoice.customer_phone && <p>Phone: {invoice.customer_phone}</p>}
           {invoice.customer_tin && <p>Customer TIN: {invoice.customer_tin}</p>}
-          <p>Customer: {invoice.customer_code}</p>
+          <p>Customer: {displayCode({id: invoice.customer_id, code: invoice.customer_code})}</p>
         </div>
         <dl>
           <div>

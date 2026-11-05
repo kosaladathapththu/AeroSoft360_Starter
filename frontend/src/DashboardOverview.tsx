@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import { useState } from "react";
 import {
   ArrowDownLeft,
@@ -438,7 +439,7 @@ export default function DashboardOverview({
                     <span className="db-customer-name">
                       <strong>{customer.customer}</strong>
                       <small>
-                        {customer.code} · {customer.invoices} open balances
+                        {displayCode(customer)} · {customer.invoices} open balances
                       </small>
                     </span>
                     <span className="db-customer-amount">

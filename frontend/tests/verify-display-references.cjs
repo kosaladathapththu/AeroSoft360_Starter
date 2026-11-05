@@ -1,0 +1,16 @@
+const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm'), assert = require('node:assert/strict'), ts = require('typescript');
+const helpers = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/representative-reference.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:helpers});
+const customer = {id:163,code:'AR-C-99c3300be988'};
+assert.equal(helpers.displayCode(customer),'CUS-163');
+assert.equal(helpers.displayCode({id:7,code:'AR-R-581832950537'}),'REP-007');
+assert.equal(helpers.displayCode({id:3,code:'CUS-003'}),'CUS-003');
+assert.equal(helpers.displayCode({id:8,code:'2206'}),'2206');
+assert.equal(helpers.displayCode({id:9,code:'1000'}),'1000');
+assert.equal(helpers.displayCode({code:'AR-C-99c3300be988'}),'Customer');
+assert.equal(helpers.displayReferenceValue(customer.code,{id:900,customer_id:163},'customer_code'),'CUS-163','Related record uses customer id, not invoice id');
+assert.equal(helpers.displayReferenceValue('AR-R-581832950537',{sales_rep_id:7},'rep_code'),'REP-007');
+assert.equal(helpers.displayReferenceValue('AR-25225-9e740e8be94a',{},'invoice_number'),'Invoice 25225');
+assert.equal(helpers.displayReferenceValue('INV-2611-0001',{},'number'),'INV-2611-0001');
+assert.equal(customer.code,'AR-C-99c3300be988','Original keys remain untouched');
+console.log('11 readable reference checks passed.');

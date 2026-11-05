@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import { useState } from "react";
 import { financeToday } from "./finance-utils";
 
@@ -53,7 +54,7 @@ export default function CustomerOpeningFields({ accounts = [] }: { accounts?: an
             <option value="">Default: 3990 — Opening Balance Equity</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.code} — {a.name}
+                {displayCode(a)} — {a.name}
               </option>
             ))}
           </select>

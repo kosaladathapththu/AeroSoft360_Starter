@@ -121,11 +121,14 @@ export default function RateFields({
               : "Set total is the sum of each size's fixed price multiplied by its pack quantity."}
           </p>
           {readOnly ? (
-            <p className="set-price-help">
+            <details className="set-price-guidance">
+              <summary>Pricing rules</summary>
+              <p className="set-price-help">
               Complete sets use fixed size prices here. You can enter a
               customer-specific price when making the invoice. Use Customize to
               change prices for individual sizes.
-            </p>
+              </p>
+            </details>
           ) : (
             <div className="set-given-price">
               <label>

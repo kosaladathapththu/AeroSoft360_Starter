@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import { matchesSearch } from "./search";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileDown, Plus, Printer, RefreshCw } from "lucide-react";
@@ -250,7 +251,7 @@ export default function SerialWarrantyPage({
               }
             >
               <p>
-                {modal.row.code} · Size {modal.row.size_label}. This will not change the invoice
+                {displayCode(modal.row)} · Size {modal.row.size_label}. This will not change the invoice
                 amount or stock quantity.
               </p>
               <InvoiceSelect invoices={data.invoices} />
@@ -390,7 +391,7 @@ function SerialRegister({
           <option value="">Choose article</option>
           {data.articles.map((a: any) => (
             <option key={a.id} value={a.id}>
-              {a.code} · {a.name}
+              {displayCode(a)} · {a.name}
             </option>
           ))}
         </select>

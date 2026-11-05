@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import { financeMoney } from "./finance-utils";
 export type PurchaseDraftLine = { material_id: number; quantity: string; unit_cost: string };
 export default function PurchaseOrderLines({
@@ -34,7 +35,7 @@ export default function PurchaseOrderLines({
                   value={m.id}
                   disabled={lines.some((other, i) => i !== index && other.material_id === m.id)}
                 >
-                  {m.code} — {m.name}
+                  {displayCode(m)} — {m.name}
                 </option>
               ))}
             </select>

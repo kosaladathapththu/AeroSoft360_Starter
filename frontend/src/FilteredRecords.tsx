@@ -3,6 +3,7 @@ import { Download, Filter, RotateCcw, Search, X } from "lucide-react";
 import { financeCsv, financeToday } from "./finance-utils";
 import { dateRangePreset, filterRecords, recordFields, RecordCondition, RecordField } from "./record-filters";
 import "./record-filters.css";
+import { displayReferenceValue } from "./representative-reference";
 
 type Props<T> = {
   records: T[];
@@ -76,7 +77,7 @@ export default function FilteredRecords<T extends Record<string, any>>({
             onClick={() =>
               financeCsv(`${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-filtered.csv`, [
                 fields.map((f) => f.label),
-                ...rows.map((row) => fields.map((f) => row[f.key])),
+                ...rows.map((row) => fields.map((f) => displayReferenceValue(row[f.key], row, f.key))),
               ])
             }
           >

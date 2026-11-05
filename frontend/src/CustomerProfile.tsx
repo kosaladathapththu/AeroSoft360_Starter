@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
@@ -137,7 +138,7 @@ export default function CustomerProfile({
             <h3>Customer details</h3>
             <dl className="customer-profile-details">
               {[
-                ["Customer code", c.code],
+                ["Customer code", displayCode(c)],
                 ["Name", c.name],
                 ["Phone", c.phone],
                 ["Address", c.address],
@@ -404,7 +405,7 @@ export default function CustomerProfile({
   };
   const exportCsv = () => {
     const rows: any[][] = [
-      ["Customer profile", data.customer.code, data.customer.name],
+      ["Customer profile", displayCode(data.customer), data.customer.name],
       ["As of", data.as_of],
       [data.basis],
       [],
@@ -452,7 +453,7 @@ export default function CustomerProfile({
       ],
     );
     add("Account ledger", data.ledger.rows, ledgerColumns);
-    financeCsv(`${data.customer.code}-statement-${data.as_of}.csv`, rows);
+    financeCsv(`${displayCode(data.customer)}-statement-${data.as_of}.csv`, rows);
   };
   return createPortal(
     <>
@@ -477,7 +478,7 @@ export default function CustomerProfile({
               <h2 id="customer-profile-title">{data ? data.customer.name : "Customer profile"}</h2>
               <p>
                 {data
-                  ? `${data.customer.code} · ${data.customer.status}`
+                  ? `${displayCode(data.customer)} · ${data.customer.status}`
                   : "Details, balances and account history"}
               </p>
             </div>
@@ -502,7 +503,7 @@ export default function CustomerProfile({
                 if (data && printRef.current)
                   printReport({
                     key: "customer_profile",
-                    title: `Customer profile — ${data.customer.code} — ${data.customer.name}`,
+                    title: `Customer profile — ${displayCode(data.customer)} — ${data.customer.name}`,
                     group: "Customer account statement",
                     from: data.as_of,
                     to: data.as_of,

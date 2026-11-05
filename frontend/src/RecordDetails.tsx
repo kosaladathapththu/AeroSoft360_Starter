@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { X } from "lucide-react";
 import { financeMoney } from "./finance-utils";
-import { representativeReference } from "./representative-reference";
+import { representativeReference, displayCode, displayReferenceValue } from "./representative-reference";
 
 const labels: Record<string, string> = {
   number: "Document number", rep_name: "Salesperson", invoice_rep_name: "Invoice salesperson",
@@ -18,7 +18,7 @@ const titleFor = (key: string) => labels[key] || key.replace(/_/g, " ").replace(
 export function readableReference(row: any): string {
   if (row.original_invoice_number) return `Invoice ${row.original_invoice_number}`;
   if (row.is_opening_balance && /^AR-(.+)-[a-f0-9]{12}$/i.test(row.number || "")) return `Invoice ${row.number.replace(/^AR-(.+)-[a-f0-9]{12}$/i, "$1")}`;
-  return row.number || row.code || row.name || "Record details";
+  return row.number || (row.code ? displayCode(row) : row.name) || "Record details";
 }
 export function detailValue(key: string, value: any): string {
   if (value == null || value === "") return key === "due_date" ? "Terms not set" : "Not recorded";
@@ -31,6 +31,7 @@ export function detailValue(key: string, value: any): string {
 
 export default function RecordDetails({ page, row, close, onReturn }: { page: string; row: any; close: () => void; onReturn?: () => void }) {
   if (page === "Salespersons") row = { ...row, code: representativeReference(row) };
+  row = Object.fromEntries(Object.entries(row).map(([key, value]) => [key, displayReferenceValue(value, row, key)]));
   const titleId = useId();
   const closeButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {

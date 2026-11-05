@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import { matchesSearch } from "./search";
 import FilteredRecords from "./FilteredRecords";
 import { useCallback, useEffect, useState } from "react";
@@ -181,7 +182,7 @@ export default function ChartOfAccountsPage({
                     filteredRows.map((a: any) => (
                       <tr key={a.id}>
                         <td style={{ paddingInlineStart: 18 + Number(a.depth || 0) * 22 }}>
-                          <b>{a.code}</b>
+                          <b>{displayCode(a)}</b>
                           <small>{a.name}</small>
                           {a.parent_path && <small>Inside: {a.parent_path}</small>}
                         </td>
@@ -217,7 +218,7 @@ export default function ChartOfAccountsPage({
                             <button
                               className="icon-action view"
                               title="View account ledger"
-                              aria-label={`Ledger for ${a.code}`}
+                              aria-label={`Ledger for ${displayCode(a)}`}
                               onClick={() => setLedger(a)}
                             >
                               <Eye />
@@ -238,7 +239,7 @@ export default function ChartOfAccountsPage({
                             {canManage && (
                               <button
                                 className="icon-action edit"
-                                aria-label={`Edit account ${a.code}`}
+                                aria-label={`Edit account ${displayCode(a)}`}
                                 onClick={() => setEditor(a)}
                               >
                                 <Pencil />
@@ -400,7 +401,7 @@ function AccountEditor({
           <span>CHART OF ACCOUNTS</span>
           <h2 id="account-editor-title">
             {a
-              ? `Edit ${a.code}`
+              ? `Edit ${displayCode(a)}`
               : defaultGroup
                 ? "New account group"
                 : defaultParentId
@@ -469,7 +470,7 @@ function AccountEditor({
                 {validParents.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.parent_path ? p.parent_path + " / " : ""}
-                    {p.code} - {p.name}
+                    {displayCode(p)} - {p.name}
                   </option>
                 ))}
               </select>
@@ -609,7 +610,7 @@ function AccountLedger({
           </button>
           <span>POSTED ACCOUNT LEDGER</span>
           <h2 id="account-ledger-title">
-            {account.code} · {account.name}
+            {displayCode(account)} · {account.name}
           </h2>
         </div>
         <div className="popup-body">
@@ -691,7 +692,7 @@ function AccountLedger({
               disabled={!data}
               className="primary"
               onClick={() =>
-                financeCsv(`Ledger_${account.code}_${to}.csv`, [
+                financeCsv(`Ledger_${displayCode(account)}_${to}.csv`, [
                   [
                     "Date",
                     "Journal",

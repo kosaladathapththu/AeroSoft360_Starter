@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import FilteredRecords from "./FilteredRecords";
 import { matchesSearch } from "./search";
 import { useCallback, useEffect, useState } from "react";
@@ -175,7 +176,7 @@ export default function PointOfSalePage({
                         }}
                       >
                         <span className="pos-product-top">
-                          <span className="pos-article-code">{item.code}</span>
+                          <span className="pos-article-code">{displayCode(item)}</span>
                           <span className="pos-size">
                             Size {item.size_label}
                           </span>
@@ -266,7 +267,7 @@ export default function PointOfSalePage({
                   <div className="pos-cart-line" key={line.id}>
                     <div className="pos-cart-title">
                       <b>
-                        {line.code} <span>Size {line.size_label}</span>
+                        {displayCode(line)} <span>Size {line.size_label}</span>
                       </b>
                       <span>{line.name}</span>
                       <small>{money(line.unit_price)} / piece</small>
@@ -298,7 +299,7 @@ export default function PointOfSalePage({
                       <button
                         type="button"
                         className="pos-remove"
-                        aria-label={`Remove ${line.code} size ${line.size_label}`}
+                        aria-label={`Remove ${displayCode(line)} size ${line.size_label}`}
                         onClick={() => {
                           setCart(cart.filter((l) => l.id !== line.id));
                           setKey(crypto.randomUUID());
@@ -317,7 +318,7 @@ export default function PointOfSalePage({
                   <option value="">Choose customer</option>
                   {data.customers.map((c: any) => (
                     <option key={c.id} value={c.id}>
-                      {c.code} · {c.name}
+                      {displayCode(c)} · {c.name}
                     </option>
                   ))}
                 </select>
@@ -382,7 +383,7 @@ export default function PointOfSalePage({
                   <option value="">Choose cash/bank account</option>
                   {data.payment_accounts.map((a: any) => (
                     <option key={a.id} value={a.id}>
-                      {a.code} · {a.name}
+                      {displayCode(a)} · {a.name}
                     </option>
                   ))}
                 </select>

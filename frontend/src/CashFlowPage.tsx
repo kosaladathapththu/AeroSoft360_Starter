@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import { matchesSearch } from "./search";
 import FilteredRecords from "./FilteredRecords";
 import { useCallback, useEffect, useState } from "react";
@@ -132,7 +133,7 @@ export default function CashFlowPage({
                 "Closing",
               ],
               ...data.accounts.map((a: any) => [
-                `${a.code} - ${a.name}`,
+                `${displayCode(a)} - ${a.name}`,
                 a.opening,
                 a.receipts,
                 a.payments,
@@ -220,7 +221,7 @@ export default function CashFlowPage({
                 <div className="cash-account-balance" key={a.id}>
                   <span>
                     <b>
-                      {a.code} · {a.name}
+                      {displayCode(a)} · {a.name}
                     </b>
                     <small>Opening {money(a.opening)}</small>
                   </span>

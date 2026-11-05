@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import { useState } from "react";
 import { financeToday } from "./finance-utils";
 import { WorkflowModal } from "./BusinessWorkflowsPage";
@@ -51,7 +52,7 @@ export default function AccountOpeningModal({
             <select value={id} onChange={(e) => setId(Number(e.target.value))} required>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.code} — {a.name}
+                  {displayCode(a)} — {a.name}
                 </option>
               ))}
             </select>

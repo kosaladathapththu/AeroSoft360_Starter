@@ -1,4 +1,5 @@
 import { matchesSearch } from "./search";
+import { displayReferenceValue } from "./representative-reference";
 
 export type RecordField = { key: string; label: string; kind?: "text" | "number" | "date" };
 export type RecordCondition = { key: string; value: string; from: string; to: string };
@@ -63,7 +64,7 @@ export function filterRecords<T extends Record<string, any>>(
 ): T[] {
   return records.filter(
     (row) =>
-      matchesSearch(row, query) &&
+      matchesSearch([row, Object.entries(row).map(([key, value]) => displayReferenceValue(value, row, key))], query) &&
       conditions.every((condition) => {
         const field = fields.find((candidate) => candidate.key === condition.key);
         if (!field) return true;
@@ -86,7 +87,7 @@ export function filterRecords<T extends Record<string, any>>(
         // Dropdown choices use an exact value; free text uses the same all-word search as the app.
         return condition.value.startsWith("=")
           ? String(value ?? "") === condition.value.slice(1)
-          : matchesSearch(value, condition.value);
+          : matchesSearch([value, displayReferenceValue(value, row, field.key)], condition.value);
       }),
   );
 }

@@ -143,8 +143,8 @@ vm.runInNewContext(
   {
     exports: panel,
     require: (file) =>
-      file === "./record-filters"
-        ? load("record-filters")
+      file === "./record-filters" || file === "./representative-reference"
+        ? load(file.replace("./", ""))
         : file === "./finance-utils"
           ? { financeCsv() {} }
           : file.endsWith(".css")

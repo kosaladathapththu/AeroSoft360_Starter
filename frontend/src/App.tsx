@@ -1,10 +1,11 @@
 import DashboardOverview from "./DashboardOverview";
 import CustomerOrderContext from "./CustomerOrderContext";
+import OrderCustomerPicker from "./OrderCustomerPicker";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import DatabaseBackupPage from "./DatabaseBackupPage";
 import { invoiceReference } from "./invoice-reference";
-import { representativeReference } from "./representative-reference";
+import { representativeReference, displayCode, displayReferenceValue } from "./representative-reference";
 import UserPasswordModal from "./UserPasswordModal";
 import RecordDetails from "./RecordDetails";
 import ManualOpeningModal from "./ManualOpeningModal";
@@ -1389,7 +1390,7 @@ function SalesPage({
             record_id: item.id,
             inventory_kind: "raw",
             type: "Raw materials",
-            item: `${item.code} — ${item.name}`,
+            item: `${displayCode(item)} — ${item.name}`,
             category: item.category || "Uncategorized",
             variant: `Batch ${item.batch_number}`,
             quantity: Number(item.quantity || 0),
@@ -2701,7 +2702,7 @@ function salesCells(page: string, r: any) {
     return (
       <>
         <td>
-          <b>{r.code}</b>
+          <b>{displayCode(r)}</b>
           <br />
           {r.name}
         </td>
@@ -3245,7 +3246,7 @@ function ArticleSearchPicker({
 }) {
   const selected = articles.find((article: any) => Number(article.id) === Number(selectedId));
   const labelFor = (article: any) =>
-    `${article.code} — ${article.name}${article.category ? ` · ${article.category}` : ""}`;
+    `${displayCode(article)} — ${article.name}${article.category ? ` · ${article.category}` : ""}`;
   const [query, setQuery] = useState(selected ? labelFor(selected) : "");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -3328,7 +3329,7 @@ function ArticleSearchPicker({
       <ChevronDown className="picker-chevron" aria-hidden="true" />
       {selected && (
         <div className="selected-article-name">
-          <small>Selected article: {selected.code}</small>
+          <small>Selected article: {displayCode(selected)}</small>
           <strong>{selected.name}</strong>
           {selected.category && <span>{selected.category}</span>}
         </div>
@@ -3352,7 +3353,7 @@ function ArticleSearchPicker({
                   event.preventDefault();
                 }}
               >
-                <b>{article.code}</b>
+                <b>{displayCode(article)}</b>
                 <span>{article.name}</span>
                 {article.category && <small>{article.category}</small>}
               </button>
@@ -3907,52 +3908,6 @@ function DispatchInvoiceModal({
         </div>
       </form>
     </div>
-  );
-}
-
-function OrderCustomerPicker({
-  customers,
-  selectedId,
-  select,
-}: {
-  customers: any[];
-  selectedId: number;
-  select: (id: number) => void;
-}) {
-  const labelFor = (customer: any) =>
-    `${customer.code} — ${customer.name}${customer.phone ? ` · ${customer.phone}` : ""}`;
-  const [query, setQuery] = useState(() => {
-    const customer = customers.find((item) => Number(item.id) === selectedId);
-    return customer ? labelFor(customer) : "";
-  });
-  const input = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    input.current?.setCustomValidity(selectedId ? "" : "Choose a customer from the suggestions.");
-  }, [selectedId, query]);
-  return (
-    <label className="easy-customer-picker">
-      Customer
-      <input
-        ref={input}
-        list="order-customer-options"
-        type="text"
-        value={query}
-        required
-        placeholder="Type customer name, code or phone"
-        autoComplete="off"
-        onChange={(event) => {
-          setQuery(event.target.value);
-          const customer = customers.find((item) => labelFor(item) === event.target.value);
-          select(customer ? Number(customer.id) : 0);
-        }}
-      />
-      <datalist id="order-customer-options">
-        {customers.map((customer) => (
-          <option key={customer.id} value={labelFor(customer)} />
-        ))}
-      </datalist>
-      <small>Type to search, then choose a customer.</small>
-    </label>
   );
 }
 
@@ -4758,7 +4713,12 @@ function SalesCreateModal({
               <div className="form-row">
                 <label>
                   Customer code
-                  <input name="code" defaultValue={initial?.code} required />
+                  {initial && /^AR-[CR]-[a-f0-9]{12}$/i.test(initial.code || "") ? (
+                    <>
+                      <input type="hidden" name="code" value={initial.code} />
+                      <input value={displayCode(initial)} readOnly aria-label="Reference code" />
+                    </>
+                  ) : <input name="code" defaultValue={initial?.code} required />}
                 </label>
                 <label>
                   Customer name
@@ -4802,7 +4762,12 @@ function SalesCreateModal({
               <div className="form-row">
                 <label>
                   Rep code
-                  <input name="code" defaultValue={initial?.code} required />
+                  {initial && /^AR-[CR]-[a-f0-9]{12}$/i.test(initial.code || "") ? (
+                    <>
+                      <input type="hidden" name="code" value={initial.code} />
+                      <input value={displayCode(initial)} readOnly aria-label="Reference code" />
+                    </>
+                  ) : <input name="code" defaultValue={initial?.code} required />}
                 </label>
                 <label>
                   Name
@@ -4837,7 +4802,12 @@ function SalesCreateModal({
               <div className="form-row">
                 <label>
                   Article code
-                  <input name="code" defaultValue={initial?.code} required />
+                  {initial && /^AR-[CR]-[a-f0-9]{12}$/i.test(initial.code || "") ? (
+                    <>
+                      <input type="hidden" name="code" value={initial.code} />
+                      <input value={displayCode(initial)} readOnly aria-label="Reference code" />
+                    </>
+                  ) : <input name="code" defaultValue={initial?.code} required />}
                 </label>
                 <label>
                   Article name
@@ -5114,7 +5084,7 @@ function SalesCreateModal({
                   >
                     {data.articles.map((article: any) => (
                       <option value={article.id} key={article.id}>
-                        {article.code} — {article.name}
+                        {displayCode(article)} — {article.name}
                       </option>
                     ))}
                   </select>
@@ -5268,7 +5238,7 @@ function SalesCreateModal({
                           <ShieldCheck />
                           <span>
                             <b>
-                              {currentUser.sales_rep_code} — {currentUser.sales_rep_name}
+                              {displayCode({id: currentUser.sales_rep_id ?? undefined, code: currentUser.sales_rep_code})} — {currentUser.sales_rep_name}
                             </b>
                             <small>Automatically assigned from your login</small>
                           </span>
@@ -5284,7 +5254,7 @@ function SalesCreateModal({
                         >
                           {visibleReps.map((x: any) => (
                             <option value={x.id} key={x.id}>
-                              {x.code} — {x.name}
+                              {x.name} — {displayCode(x)}
                             </option>
                           ))}
                         </select>
@@ -5403,7 +5373,7 @@ function SalesCreateModal({
                       (quantity: any) => Number(quantity) > 0,
                     ).length;
                     return (
-                      <div className="po-line" key={index}>
+                      <div className={`po-line compact-order-line ${selectedArticle ? "has-article" : ""}`} key={index}>
                         <label className="po-article-field">
                           Search article
                           <div className="article-picker-control">
@@ -5506,7 +5476,7 @@ function SalesCreateModal({
                             </button>
                           </div>
                         </div>
-                        <label>
+                        <label className="order-colour-field">
                           {line.order_mode === "custom" ? "Colours" : "Colour / variant"}
                           {line.order_mode === "custom" ? (
                             <div className="custom-size-summary">Choose colours per size below</div>
@@ -5568,7 +5538,7 @@ function SalesCreateModal({
                             )
                           }
                         />
-                        <label>
+                        <label className="order-template-field">
                           {line.order_mode === "badge" ? "Set template" : "Selected sizes"}
                           {line.order_mode === "badge" ? (
                             <select
@@ -5602,7 +5572,7 @@ function SalesCreateModal({
                           )}
                         </label>
                         {line.order_mode === "badge" ? (
-                          <label>
+                          <label className="order-quantity-field">
                             Number of sets
                             <input
                               type="number"
@@ -5995,7 +5965,7 @@ function SalesCreateModal({
                   <select name="customer_id" defaultValue={initial?.customer_id} required>
                     {data.customers.map((customer: any) => (
                       <option value={customer.id} key={customer.id}>
-                        {customer.code} — {customer.name}
+                        {displayCode(customer)} — {customer.name}
                       </option>
                     ))}
                   </select>
@@ -6009,7 +5979,7 @@ function SalesCreateModal({
                         <ShieldCheck />
                         <span>
                           <b>
-                            {currentUser.sales_rep_code} — {currentUser.sales_rep_name}
+                            {displayCode({id: currentUser.sales_rep_id ?? undefined, code: currentUser.sales_rep_code})} — {currentUser.sales_rep_name}
                           </b>
                           <small>Automatically assigned from your login</small>
                         </span>
@@ -6750,7 +6720,7 @@ function SalesCreateModal({
                       <option value="">Not linked</option>
                       {data.customers.map((customer: any) => (
                         <option value={customer.id} key={customer.id}>
-                          {customer.code} — {customer.name}
+                          {displayCode(customer)} — {customer.name}
                         </option>
                       ))}
                     </select>
@@ -7087,7 +7057,7 @@ function Records({
                 <tr key={row.id}>
                   {page === "Suppliers" ? (
                     <>
-                      <td>{row.code}</td>
+                      <td>{displayCode(row)}</td>
                       <td>
                         <b>{row.name}</b>
                       </td>
@@ -7109,7 +7079,7 @@ function Records({
                   ) : page === "Raw Material Stock" ? (
                     <>
                       <td>
-                        <b>{row.code}</b>
+                        <b>{displayCode(row)}</b>
                       </td>
                       <td>{row.name}</td>
                       <td>{row.category.replace("_", " ")}</td>
@@ -7321,7 +7291,7 @@ function CreateModal({
               <option value="">Select supplier</option>
               {data.suppliers.map((x) => (
                 <option value={x.id} key={x.id}>
-                  {x.code} — {x.name}
+                  {x.name} — {displayCode(x)}
                 </option>
               ))}
             </select>
@@ -7355,7 +7325,7 @@ function CreateModal({
                 </option>
                 {data.materials.map((material) => (
                   <option value={material.id} key={material.id}>
-                    {material.code} — {material.name}
+                    {displayCode(material)} — {material.name}
                   </option>
                 ))}
               </select>
@@ -7432,7 +7402,7 @@ function CreateModal({
                 </option>
                 {data.accounts.map((account) => (
                   <option value={account.code} key={account.id}>
-                    {account.code} — {account.name}
+                    {displayCode(account)} — {account.name}
                   </option>
                 ))}
               </select>
@@ -7445,7 +7415,7 @@ function CreateModal({
                 </option>
                 {data.accounts.map((account) => (
                   <option value={account.code} key={account.id}>
-                    {account.code} — {account.name}
+                    {displayCode(account)} — {account.name}
                   </option>
                 ))}
               </select>
@@ -7550,7 +7520,7 @@ function EditModal({
         <>
           <label>
             Material
-            <input value={`${row.code} — ${row.name}`} disabled />
+            <input value={`${displayCode(row)} — ${row.name}`} disabled />
           </label>
           <label>
             Batch number
@@ -7611,7 +7581,7 @@ function EditModal({
             <select name="supplier_id" required defaultValue={row.supplier_id}>
               {suppliers.map((x) => (
                 <option value={x.id} key={x.id}>
-                  {x.code} — {x.name}
+                  {x.name} — {displayCode(x)}
                 </option>
               ))}
             </select>
@@ -7819,7 +7789,7 @@ function AccessPage({
                           <td>
                             <b>{row.name}</b>
                           </td>
-                          <td>{row.code}</td>
+                          <td>{displayCode(row)}</td>
                           <td>{row.permission_ids.length} permissions</td>
                           <td>{data.users.filter((u: any) => u.role_id === row.id).length}</td>
                         </>
@@ -7979,7 +7949,7 @@ function AccessPage({
                         />{" "}
                         <span>
                           <b>{permission.name}</b>
-                          <small>{permission.code}</small>
+                          <small>{displayCode(permission)}</small>
                         </span>
                       </label>
                     ))}
@@ -9878,7 +9848,7 @@ function ReportsPage({
     const escapeCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const csv = [
       columns.map(escapeCell).join("\t"),
-      ...rows.map((row: any) => columns.map((key) => escapeCell(row[key])).join("\t")),
+      ...rows.map((row: any) => columns.map((key) => escapeCell(displayReferenceValue(row[key], row, key))).join("\t")),
     ].join("\r\n");
     const blob = new Blob(["\ufeff", csv], { type: "application/vnd.ms-excel;charset=utf-8" });
     const url = URL.createObjectURL(blob),
@@ -10235,7 +10205,7 @@ function RetailReportView({
                                 : undefined
                             }
                           >
-                            {display(key, row[key])}
+                            {display(key, displayReferenceValue(row[key], row, key))}
                           </td>
                         ))}
                       </tr>
@@ -10393,7 +10363,7 @@ function FinancialReportView({ selected, financial }: { selected: string; financ
           title="Assets"
           rows={[
             ...financial.balance_sheet.assets.map(
-              (x: any) => [`${x.code} ${x.account}`, x.amount] as [string, number],
+              (x: any) => [`${displayCode(x)} ${x.account}`, x.amount] as [string, number],
             ),
             ["Total assets", financial.balance_sheet.assets_total],
           ]}
@@ -10402,7 +10372,7 @@ function FinancialReportView({ selected, financial }: { selected: string; financ
           title="Liabilities"
           rows={[
             ...financial.balance_sheet.liabilities.map(
-              (x: any) => [`${x.code} ${x.account}`, x.amount] as [string, number],
+              (x: any) => [`${displayCode(x)} ${x.account}`, x.amount] as [string, number],
             ),
             ["Total liabilities", financial.balance_sheet.liabilities_total],
           ]}
@@ -10411,7 +10381,7 @@ function FinancialReportView({ selected, financial }: { selected: string; financ
           title="Equity"
           rows={[
             ...financial.balance_sheet.equity.map(
-              (x: any) => [`${x.code} ${x.account}`, x.amount] as [string, number],
+              (x: any) => [`${displayCode(x)} ${x.account}`, x.amount] as [string, number],
             ),
             ["Current-period profit", financial.balance_sheet.current_profit],
             ["Total equity", financial.balance_sheet.equity_total],
@@ -10458,7 +10428,7 @@ function FinancialReportView({ selected, financial }: { selected: string; financ
               <tbody>
                 {filteredRows.map((x: any) => (
                   <tr key={x.code}>
-                    <td>{x.code}</td>
+                    <td>{displayCode(x)}</td>
                     <td>{x.account}</td>
                     <td>{x.type}</td>
                     <td>{money(x.debit)}</td>

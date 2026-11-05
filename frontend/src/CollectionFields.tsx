@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import { useState } from "react";
 import { invoiceReference } from "./invoice-reference";
 
@@ -151,7 +152,7 @@ export default function CollectionFields({
               </option>
               {reps.map((rep: any) => (
                 <option key={rep.id} value={rep.id}>
-                  {rep.code} - {rep.name}
+                  {displayCode(rep)} - {rep.name}
                 </option>
               ))}
             </select>
@@ -177,7 +178,7 @@ export default function CollectionFields({
             </option>
             {(data.payment_accounts || []).map((account: any) => (
               <option key={account.id} value={account.id}>
-                {account.code} - {account.name}
+                {displayCode(account)} - {account.name}
               </option>
             ))}
           </select>

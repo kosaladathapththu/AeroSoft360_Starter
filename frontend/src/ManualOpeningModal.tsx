@@ -1,3 +1,4 @@
+import { displayCode } from "./representative-reference";
 import { FormEvent, useState } from "react";
 import { X } from "lucide-react";
 import { financeToday } from "./finance-utils";
@@ -22,14 +23,14 @@ export default function ManualOpeningModal({ data, save, close }: {
       {error && <div className="error" role="alert">{error}</div>}
       <fieldset disabled={busy} style={{ border: 0, padding: 0, minWidth: 0 }}>
         <div className="form-row">
-          <label>Customer<select name="customer_id" required><option value="">Choose customer</option>{data.customers.map((c: any) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}</select></label>
+          <label>Customer<select name="customer_id" required><option value="">Choose customer</option>{data.customers.map((c: any) => <option key={c.id} value={c.id}>{displayCode(c)} - {c.name}</option>)}</select></label>
           <label>Original invoice / opening reference<input name="opening_reference" required maxLength={60} placeholder="e.g. 25225 or OB-2026-001" /></label>
           <label>Unpaid amount (LKR)<input name="opening_balance" type="number" required min="0.01" step="0.01" /></label>
           <label>Original invoice date<input name="invoice_date" type="date" required max={financeToday()} /></label>
           <label>Opening posting date<input name="opening_date" type="date" required defaultValue={financeToday()} max={financeToday()} /><small>Must belong to an open accounting period.</small></label>
           <label>Due date (optional)<input name="opening_due_date" type="date" /><small>Leave blank when credit terms are unknown.</small></label>
           <label>Salesperson (optional)<select name="sales_rep_id"><option value="">Not assigned</option>{data.reps.map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-          <label>Opening offset account<select name="opening_account_id" required defaultValue={data.opening_accounts?.find((a: any) => a.code === "3990")?.id || ""}><option value="">Choose equity account</option>{data.opening_accounts?.map((a: any) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}</select></label>
+          <label>Opening offset account<select name="opening_account_id" required defaultValue={data.opening_accounts?.find((a: any) => a.code === "3990")?.id || ""}><option value="">Choose equity account</option>{data.opening_accounts?.map((a: any) => <option key={a.id} value={a.id}>{displayCode(a)} - {a.name}</option>)}</select></label>
         </div>
         <label>Source / reason<textarea name="reason" required maxLength={1000} rows={3} placeholder="Source invoice, statement or approved opening balance reference" /></label>
       </fieldset>
