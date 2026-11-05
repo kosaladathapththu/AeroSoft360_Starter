@@ -244,6 +244,8 @@ $migration->up();
 $migration = require __DIR__ .
     "/../database/migrations/2026_10_28_000002_add_chart_of_accounts_controls.php";
 $migration->up();
+$hierarchy = require __DIR__ . "/../database/migrations/2026_11_02_000003_add_account_hierarchy.php";
+$hierarchy->up();
 DB::table("articles")->insert([
     "id" => 1,
     "code" => "SHOE-1",

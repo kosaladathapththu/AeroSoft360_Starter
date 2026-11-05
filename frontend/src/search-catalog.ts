@@ -52,4 +52,5 @@ export const pageSearchKeywords: Record<string, string> = {
   "Cashier Closing": "cash register till shift daily closing reconciliation",
   "Recurring Journals": "repeat recurring scheduled monthly journal",
   "Access Control": "user role permission access password login",
+  "Database Backup": "database backup download export sql snapshot administrator",
 };

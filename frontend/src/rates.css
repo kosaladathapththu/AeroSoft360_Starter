@@ -9,6 +9,126 @@
   border: 1px solid #c9e3df;
   border-radius: 10px;
 }
+.modal .fixed-rate-fields.set-pricing,
+.modal .fixed-rate-fields.custom-pricing {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  background: #f2f7f1;
+  border-color: #d0e0cb;
+}
+.pricing-section-title {
+  display: grid;
+  gap: 5px;
+}
+.pricing-section-title > b {
+  color: #264b36;
+  font-size: 16px;
+}
+.pricing-section-title > small,
+.set-given-price small {
+  color: #718367;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.set-price-summary {
+  display: grid;
+  grid-template-columns: 1.2fr 0.7fr 1.2fr;
+  gap: 12px;
+}
+.set-price-summary > div {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid #dce7d6;
+  border-radius: 8px;
+  min-width: 0;
+}
+.set-price-summary small {
+  color: #70816a;
+  font-size: 11px;
+}
+.set-price-summary strong {
+  font-size: 19px;
+  color: #315137;
+  overflow-wrap: anywhere;
+}
+.set-price-summary > .set-price-total {
+  background: #e4efdf;
+  border-color: #bcd3b1;
+}
+.fixed-rate-fields .set-price-formula,
+.fixed-rate-fields .set-price-help {
+  margin: 0;
+  color: #64795e;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.set-given-price {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: end;
+  border-top: 1px solid #d3e0cc;
+  padding-top: 12px;
+}
+.set-given-price > div {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+.set-given-price strong {
+  color: #28523a;
+  font-size: 22px;
+}
+.modal .set-given-price label {
+  margin: 0;
+}
+.size-rate-table {
+  max-width: 100%;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #d3e1cb;
+  border-radius: 8px;
+}
+.modal .size-rate-table table {
+  min-width: 580px;
+  width: 100%;
+  border-collapse: collapse;
+}
+.modal .size-rate-table th {
+  padding: 12px;
+  font-size: 11px;
+  background: #e9f0e3;
+  color: #59734c;
+}
+.modal .size-rate-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e1e9da;
+  font-size: 13px;
+  vertical-align: middle;
+}
+.size-rate-table td small {
+  display: block;
+  font-size: 10px;
+  color: #859477;
+  line-height: 1.6;
+  margin-top: 4px;
+}
+.modal .size-rate-table input {
+  max-width: 220px;
+}
+@media (max-width: 600px) {
+  .set-price-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  .set-price-summary .set-price-total {
+    grid-column: 1 / -1;
+  }
+  .set-given-price {
+    grid-template-columns: 1fr;
+  }
+}
 .fixed-rate-fields span {
   display: inline-block;
   padding: 6px 12px 6px 0;

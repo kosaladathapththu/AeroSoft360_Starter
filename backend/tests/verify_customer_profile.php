@@ -54,6 +54,7 @@ $tables = [
         "source_id",
     ],
     "journal_lines" => ["journal_entry_id", "account_id", "debit", "credit"],
+    "customer_opening_balances" => ["customer_id", "invoice_id", "receipt_id", "balance_date", "amount"],
 ];
 foreach ($tables as $name => $columns) {
     Schema::create($name, function ($t) use ($columns) {
@@ -203,6 +204,7 @@ check(
         "days_31_60" => 200,
         "days_61_90" => 200,
         "days_90_plus" => 100,
+        "terms_not_set" => 0,
     ],
     "Every aging boundary is calculated from due dates",
 );

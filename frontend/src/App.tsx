@@ -8,7 +8,7 @@ import ManualOpeningModal from "./ManualOpeningModal";
 import SalesOrderDetails from "./SalesOrderDetails";
 import ReceivableActionModal from "./ReceivableActionModal";
 import FilteredRecords from "./FilteredRecords";
-import { Fragment, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Building2,
@@ -53,7 +53,7 @@ import InvoiceBill from "./InvoiceBill";
 import CustomerProfile from "./CustomerProfile";
 import CustomerOpeningFields from "./CustomerOpeningFields";
 import RateFields from "./RateFields";
-import { fixedItemRate, givenItemRate } from "./rates";
+import { fixedItemRate, givenItemRate, setPricing } from "./rates";
 import "./rates.css";
 import WorkflowSteps from "./WorkflowSteps";
 import ReceivingPage from "./ReceivingPage";
@@ -73,6 +73,7 @@ import "./layout-fixes.css";
 import "./form-defaults.css";
 import "./compact-layout.css";
 
+const PublicSite = lazy(() => import("./PublicSite"));
 const API =
   import.meta.env.VITE_API_URL ||
   `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
@@ -419,6 +420,7 @@ export default function App() {
     } finally {
       localStorage.removeItem("aerosoft_token");
       setProfile(null);
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
       setData(empty);
     }
   };
@@ -430,13 +432,13 @@ export default function App() {
     );
   if (!profile)
     return (
-      <Login
+      <Suspense fallback={<div className="login-page" role="status" aria-label="Loading AeroSoft360"><Loader2 className="login-spinner" /></div>}><PublicSite api={API}
         onLogin={(result) => {
           localStorage.setItem("aerosoft_token", result.token);
           setProfile({ user: result.user, permissions: result.permissions });
           load();
         }}
-      />
+      /></Suspense>
     );
   return (
     <div className="shell">
@@ -2870,7 +2872,7 @@ function salesCells(page: string, r: any) {
         <td>{r.customer_name}</td>
         <td>{r.rep_name}</td>
         <td>{r.due_date || "Terms not set"}</td>
-        <td>{r.days_overdue ?? "?"}</td>
+        <td>{r.days_overdue ?? "Terms not set"}</td>
         <td>{status(r.bucket)}</td>
         <td>
           {r.last_collection_date ? (
@@ -4311,7 +4313,7 @@ function SalesCreateModal({
               colour,
               quantity: Number(line.custom_colour_quantities?.[item.id]?.[colour] || 0),
               fixed_rate: Number(line.fixed_rates?.[item.id] ?? item.unit_price),
-              rate: Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price),
+              rate: givenItemRate(line, item),
             }))
             .filter((entry: any) => entry.quantity > 0);
         return fallbackQuantity > 0
@@ -4323,7 +4325,7 @@ function SalesCreateModal({
                 colour: null,
                 quantity: fallbackQuantity,
                 fixed_rate: Number(line.fixed_rates?.[item.id] ?? item.unit_price),
-                rate: Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price),
+                rate: givenItemRate(line, item),
               },
             ]
           : [];
@@ -4335,7 +4337,7 @@ function SalesCreateModal({
       colour: line.colour || null,
       quantity: Number(item.quantity) * Number(line.sets || 0),
       fixed_rate: Number(line.fixed_rates?.[item.id] ?? item.unit_price),
-      rate: Number(line.custom_rate ?? line.given_rates?.[item.id] ?? item.unit_price),
+      rate: givenItemRate(line, item),
     }));
   });
   const invoiceSubtotal = expandedInvoiceLines.reduce(
@@ -5376,7 +5378,7 @@ function SalesCreateModal({
                     );
                     const selectableItems = (selectedArticle?.sets || [])
                       .filter((set: any) => set.status !== "inactive")
-                      .flatMap((set: any) => set.items);
+                      .flatMap((set: any) => set.items.map((item: any) => ({ ...item, set_name: set.name })));
                     const selectedSizeCount = Object.values(line.custom_sizes || {}).filter(
                       (quantity: any) => Number(quantity) > 0,
                     ).length;
@@ -5525,6 +5527,7 @@ function SalesCreateModal({
                         </label>
                         <RateFields
                           articlePrice={selectedArticle?.selling_price}
+                          readOnly={line.order_mode !== "custom"}
                           givenRates={line.given_rates}
                           changeItem={line.order_mode === "custom" ? (id, rate) => setPoLines((lines) => lines.map((value, i) => {
                             if (i !== index) return value;
@@ -5788,7 +5791,7 @@ function SalesCreateModal({
                                       <small>No colour specified</small>
                                     )}
                                   </div>
-                                  <span>{money(item.unit_price)}</span>
+                                  <span><small>Fixed: {money(fixedItemRate(line, item))}</small><br /><b>Given: {money(givenItemRate(line, item))}</b></span>
                                   <span>
                                     {Number(
                                       (data.finished_stock || []).find(
@@ -5865,7 +5868,7 @@ function SalesCreateModal({
                                       "—"}
                                   </span>
                                   <span>{item.quantity}</span>
-                                  <span>{money(item.unit_price)}</span>
+                                  <span><small>Fixed: {money(fixedItemRate(line, item))}</small><br /><b>Given: {money(givenItemRate(line, item))}</b></span>
                                   <span>
                                     {Number(
                                       (data.finished_stock || []).find(
@@ -6074,24 +6077,7 @@ function SalesCreateModal({
                         0,
                       ),
                   );
-                  const setPrice =
-                    line.custom_rate != null
-                      ? Number(line.custom_rate) * piecesPerSet
-                      : Number(
-                          set?.set_price ||
-                            (set?.items || []).reduce(
-                              (sum: number, item: any) =>
-                                sum +
-                                Number(item.quantity || 0) *
-                                  Number(
-                                    line.custom_rate ??
-                                      line.given_rates?.[item.id] ??
-                                      item.unit_price ??
-                                      0,
-                                  ),
-                              0,
-                            ),
-                        );
+                  const setPrice = setPricing(line, set?.items || []).given;
                   const customPieces = (set?.items || []).reduce(
                     (sum: number, item: any) =>
                       sum +
@@ -6104,7 +6090,7 @@ function SalesCreateModal({
                   const customTotal = (set?.items || []).reduce(
                     (sum: number, item: any) =>
                       sum +
-                      Number(item.unit_price || 0) *
+                      givenItemRate(line, item) *
                         (Object.values(line.custom_colour_quantities?.[item.id] || {}).reduce(
                           (subtotal: number, quantity: any) => subtotal + Number(quantity || 0),
                           0,
@@ -6428,7 +6414,7 @@ function SalesCreateModal({
                                     </label>
                                   ))}
                                 </div>
-                                <span>{money(item.unit_price)}</span>
+                                <span><small>Fixed: {money(fixedItemRate(line, item))}</small><br /><b>Given: {money(givenItemRate(line, item))}</b></span>
                               </div>
                             );
                           })}
@@ -8112,66 +8098,6 @@ function GrnFields({ orders }: { orders: Order[] }) {
   );
 }
 
-function Login({ onLogin }: { onLogin: (result: Profile & { token: string }) => void }) {
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
-    const f = new FormData(e.currentTarget);
-    try {
-      const r = await fetch(`${API}/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          email: f.get("email"),
-          password: f.get("password"),
-        }),
-      });
-      const json = await r.json();
-      if (!r.ok) throw new Error(json.message || "Unable to sign in.");
-      onLogin(json);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="login-page">
-      <form className="login-card" onSubmit={submit}>
-        <div className="login-brand">
-          <div className="logo">A</div>
-          <div>
-            <b>AeroSoft360</b>
-            <span>Finance & Manufacturing ERP</span>
-          </div>
-        </div>
-        <span className="eyebrow">SECURE WORKSPACE</span>
-        <h1>Sign in</h1>
-        <p>Use your assigned AeroSoft360 account.</p>
-        {error && <div className="error">{error}</div>}
-        <label>
-          Email
-          <input name="email" type="email" required defaultValue="admin@aerosoft360.lk" />
-        </label>
-        <label>
-          Password
-          <input name="password" type="password" required defaultValue="Admin@123" />
-        </label>
-        <button className="primary login-submit" disabled={busy}>
-          {busy ? <Loader2 /> : <ShieldCheck />}
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-        <small>Demo profiles are documented in README.md.</small>
-      </form>
-    </div>
-  );
-}
 
 function ModuleHeader({ title, back }: { title: string; back: () => void }) {
   return (
