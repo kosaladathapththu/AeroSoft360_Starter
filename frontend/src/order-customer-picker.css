@@ -1,0 +1,23 @@
+.customer-dropdown { position: relative; min-width: 0; }
+.customer-dropdown > label { margin: 0 0 6px; }
+.customer-dropdown-control { display: flex; align-items: center; position: relative; }
+.customer-dropdown-control > svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: #75867c; pointer-events: none; }
+/* Reserve icon space even when shared form rules set shorthand input padding. */
+.modal .customer-dropdown .customer-dropdown-control > input[type="text"][role="combobox"] {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 46px 10px 44px;
+  text-indent: 0;
+}
+.modal .customer-dropdown-control > button { position: absolute; right: 3px; top: 3px; bottom: 3px; min-width: 36px; border: 0; background: transparent; color: #426958; padding: 6px; display: grid; place-items: center; cursor: pointer; }
+.customer-dropdown-menu { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40; border: 1px solid #c5d8cc; border-radius: 9px; background: #fff; box-shadow: 0 10px 28px #183a2920; overflow: hidden; }
+.customer-dropdown-count { padding: 8px 12px; font-size: 11px; color: #6c7b70; background: #f4f7f2; border-bottom: 1px solid #e4ebe0; }
+.customer-dropdown-menu > [role="listbox"] { max-height: 280px; overflow-y: auto; overscroll-behavior: contain; }
+.modal .customer-dropdown-menu [role="option"] { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 10px 14px; margin: 0; text-align: left; border: 0; border-bottom: 1px solid #eef1eb; border-radius: 0; background: #fff; color: #294536; cursor: pointer; }
+.modal .customer-dropdown-menu [role="option"]:hover,
+.modal .customer-dropdown-menu [role="option"].highlighted { background: #edf5eb; }
+.customer-dropdown-menu b { display: block; font-size: 14px; font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
+.customer-dropdown-menu small { display: block; margin-top: 4px; font-size: 11px; color: #6e8073; }
+.customer-dropdown-menu p { margin: 0; padding: 16px; font-size: 13px; color: #6e8073; }
+.customer-dropdown-help { display: block; margin-top: 6px; font-size: 11px; color: #788c7b; }

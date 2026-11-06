@@ -1,0 +1,131 @@
+/* Record entry uses the main workspace and the document's normal scroll. */
+.shell > main:has(.record-workspace-page) > section {
+  display: none;
+}
+.record-workspace-page {
+  padding: 24px;
+  outline: none;
+  min-width: 0;
+}
+.record-workspace-page .modal.modal {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  box-shadow: none;
+  border-radius: 12px;
+}
+.record-workspace-page .popup-body {
+  overflow: visible;
+  max-height: none;
+  scrollbar-gutter: auto;
+}
+.record-workspace-page .popup-header,
+.record-workspace-page .popup-footer {
+  position: static;
+}
+.record-workspace-page .workspace-entry-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 9px 12px;
+  border: 1px solid #c9ddda;
+  border-radius: 8px;
+  background: #f2f8f6;
+  color: #17685f;
+  font: inherit;
+  cursor: pointer;
+}
+.workspace-entry-back svg { width: 18px; height: 18px; }
+/* Order entry is a compact editor, rather than a stack of oversized cards. */
+.record-workspace-page { max-width: 1500px; margin: 0 auto; padding: 20px; }
+.record-workspace-page .modal > .popup-header { padding: 16px 20px; }
+.record-workspace-page .popup-header > span { display: none; }
+.record-workspace-page .popup-header h2 { font-size: 24px; margin: 0; }
+.record-workspace-page .workspace-entry-back { margin-bottom: 10px; padding: 6px 10px; font-size: 12px; }
+.record-workspace-page .modal > .popup-body { padding: 18px 20px; background: #f7f8f6; }
+.record-workspace-page .easy-order-steps { padding: 0 0 14px; margin: 0 0 18px; }
+.record-workspace-page .order-step > legend { font-size: 19px; }
+.record-workspace-page .order-step[data-step="2"] > .report-note { display: none; }
+.record-workspace-page .order-step .po-lines { padding: 0; margin-top: 0; border: 0; background: transparent; overflow: visible; }
+.record-workspace-page .po-lines-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 0;
+  position: sticky;
+  top: 64px;
+  z-index: 12;
+  background: #f7f8f6;
+  border-bottom: 1px solid #dce5dc;
+}
+.record-workspace-page .po-lines-head > button { margin-left: auto; flex-shrink: 0; }
+.record-workspace-page .po-lines-head b { font-size: 18px; }
+.record-workspace-page .po-lines-head small { font-size: 12px; }
+.record-workspace-page .po-lines-head button { min-height: 40px; padding: 9px 14px; font-size: 14px; }
+.record-workspace-page .modal .compact-order-line:not(.invoice-line) {
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  grid-template-areas: "article article article remove" "method method colour colour" "template template quantity total" "pricing pricing pricing pricing" "custom custom custom custom" "details details details details";
+  gap: 14px; padding: 18px; margin-top: 12px; align-items: end;
+}
+.record-workspace-page .modal .compact-order-line > * { grid-column: auto; grid-row: auto; margin: 0; min-width: 0; }
+.record-workspace-page .modal .compact-order-line > .po-article-field { grid-area: article; }
+.record-workspace-page .modal .compact-order-line > .order-method-field { grid-area: method; }
+.record-workspace-page .modal .compact-order-line > .order-colour-field { grid-area: colour; }
+.record-workspace-page .modal .compact-order-line > .order-template-field { grid-area: template; }
+.record-workspace-page .modal .compact-order-line > .order-quantity-field,
+.record-workspace-page .modal .compact-order-line > .pieces-summary { grid-area: quantity; }
+.record-workspace-page .modal .compact-order-line > .po-line-total { grid-area: total; padding: 10px 12px; min-height: 44px; }
+.record-workspace-page .modal .compact-order-line > .icon-action { grid-area: remove; align-self: start; margin-top: 22px; }
+.record-workspace-page .modal .compact-order-line > .fixed-rate-fields { grid-area: pricing; }
+.record-workspace-page .modal .compact-order-line > .custom-size-picker { grid-area: custom; }
+.record-workspace-page .modal .compact-order-line > .po-article-details { grid-area: details; }
+.record-workspace-page .modal .compact-order-line:not(.has-article) > :not(.po-article-field):not(.icon-action) { display: none; }
+.record-workspace-page .modal .compact-order-line label { font-size: 12px; gap: 6px; }
+.record-workspace-page .modal .compact-order-line input:not([type="checkbox"]):not([type="radio"]),
+.record-workspace-page .modal .compact-order-line select { min-height: 42px; height: 42px; font-size: 14px; padding-top: 8px; padding-bottom: 8px; }
+.record-workspace-page .modal .compact-order-line .article-details-button { min-height: 42px; height: 42px; padding: 8px 10px; font-size: 12px; }
+.record-workspace-page .compact-order-line .selected-article-name { padding: 6px 0 0; margin: 0; border: 0; border-radius: 0; background: transparent; display: block; }
+.record-workspace-page .compact-order-line .selected-article-name small,
+.record-workspace-page .compact-order-line .selected-article-name span { display: none; }
+.record-workspace-page .compact-order-line .selected-article-name strong { font-size: 13px; font-weight: 500; color: #667569; white-space: normal; }
+.record-workspace-page .compact-order-line .order-method-field > span { font-size: 12px; }
+.record-workspace-page .compact-order-line .order-method-options button { min-height: 42px; padding: 9px 12px; font-size: 13px; }
+.record-workspace-page .compact-order-line .order-method-options small { display: none; }
+.record-workspace-page .compact-order-line .fixed-rate-fields { padding: 12px 14px; gap: 10px; background: #f6f8f2; border: 1px solid #e1e7d8; }
+.record-workspace-page .compact-order-line .pricing-section-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
+.record-workspace-page .compact-order-line .pricing-section-title > b { font-size: 13px; }
+.record-workspace-page .compact-order-line .set-price-summary > div { padding: 8px 10px; gap: 4px; background: transparent; border: 0; border-left: 2px solid #d8e2cf; border-radius: 0; }
+.record-workspace-page .compact-order-line .set-price-summary strong { font-size: 17px; }
+.record-workspace-page .compact-order-line .fixed-rate-empty { margin-top: 0; gap: 5px; }
+.record-workspace-page .compact-order-line .fixed-rate-empty strong { font-size: 17px; }
+.record-workspace-page .set-price-guidance summary { font-size: 12px; color: #64795e; cursor: pointer; }
+.record-workspace-page .set-price-guidance p { margin-top: 6px; }
+.record-workspace-page .order-pack-description { padding: 10px 12px; min-height: 42px; border: 1px solid #dce5dc; border-radius: 7px; background: #f8faf7; color: #596b59; font-size: 12px; line-height: 1.5; }
+.record-workspace-page .compact-order-line .custom-size-head,
+.record-workspace-page .compact-order-line .custom-size-row {
+  grid-template-columns: 44px 100px 120px minmax(260px,1fr) 115px 140px 70px 65px;
+  min-width: 1080px;
+  gap: 10px;
+}
+.record-workspace-page .compact-order-line .custom-pack-label { display: block; color: #77856e; font-size: 10px; margin-top: 4px; font-weight: 400; }
+.record-workspace-page .compact-order-line .custom-size-row > input[type="number"] { padding-left: 8px; padding-right: 8px; }
+.record-workspace-page .modal > .popup-footer { padding: 14px 20px; border-top: 1px solid #dce5dc; background: #fff; }
+@media (max-width: 1000px) {
+  .record-workspace-page .modal .compact-order-line:not(.invoice-line) {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    grid-template-areas: "article remove" "method method" "colour colour" "template template" "quantity total" "pricing pricing" "custom custom" "details details";
+  }
+}
+@media (max-width: 700px) {
+  .record-workspace-page { padding: 12px; }
+  .record-workspace-page .modal > .popup-body { padding: 12px; }
+  .record-workspace-page .modal .compact-order-line:not(.invoice-line) { padding: 12px; grid-template-columns: minmax(0,1fr) 42px; grid-template-areas: "article remove" "method method" "colour colour" "template template" "quantity quantity" "total total" "pricing pricing" "custom custom" "details details"; }
+}
+@media (max-width: 720px) {
+  .record-workspace-page .po-lines-head { top: 60px; }
+}

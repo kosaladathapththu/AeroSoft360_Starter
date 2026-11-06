@@ -1,0 +1,24 @@
+.customer-order-context { margin: 0 0 20px; padding: 18px; border: 1px solid #d7e3dc; border-radius: 12px; background: #fff; }
+.customer-context-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; }
+.customer-context-heading small { font-size: 10px; letter-spacing: 1px; color: #69796d; }
+.customer-context-heading h3 { margin: 4px 0 0; font-size: 18px; color: #254839; }
+.customer-order-context button { padding: 8px 12px; border: 1px solid #cddbd0; border-radius: 7px; background: #f4f8f3; color: #325b3c; font: inherit; font-size: 13px; cursor: pointer; }
+.customer-context-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
+.customer-context-metrics > div { padding: 12px; border-radius: 8px; background: #f5f7f4; border-top: 3px solid #6f906d; }
+.customer-context-metrics > div:nth-child(2) { background: #fdf6ef; border-color: #c88b55; }
+.customer-context-metrics > div:nth-child(3) { background: #f5f1fa; border-color: #a48ab3; }
+.customer-context-metrics > div:nth-child(4) { background: #fcf8e9; border-color: #b9a358; }
+.customer-context-metrics span, .customer-context-metrics small { display: block; color: #607064; font-size: 12px; line-height: 1.5; }
+.customer-context-metrics strong { display: block; margin: 5px 0; font-size: 20px; color: #263f30; overflow-wrap: anywhere; }
+.customer-context-metrics em { font-style: normal; font-size: 12px; font-weight: 500; }
+.customer-context-alert { display: grid; gap: 5px; margin-top: 14px; padding: 12px 14px; background: #fff5df; border-left: 4px solid #bd8331; color: #72501c; border-radius: 6px; font-size: 13px; }
+.customer-context-error { color: #9c3932; }
+.customer-context-history > p { font-size: 12px; color: #677369; line-height: 1.6; }
+.customer-context-table { overflow-x: auto; }
+.customer-context-table table { width: 100%; min-width: 780px; border-collapse: collapse; }
+.customer-context-table th, .customer-context-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e1e8df; font-size: 13px; }
+.customer-context-table th { background: #f2f5ef; color: #4c604b; }
+.customer-context-table td small { display: block; margin-top: 4px; color: #718073; }
+.customer-context-table .matching-article { background: #fff8e7; }
+@media(max-width:1000px) { .customer-context-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width:600px) { .customer-context-heading { align-items: start; flex-direction: column; } .customer-context-metrics { grid-template-columns: 1fr; } }

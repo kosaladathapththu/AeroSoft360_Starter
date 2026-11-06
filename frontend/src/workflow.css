@@ -1,0 +1,148 @@
+.workflow-step-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 24px;
+  padding: 4px 0;
+}
+.workflow-step-strip button {
+  display: flex;
+  flex: 1 0 170px;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border: 1px solid #d8e5e9;
+  background: white;
+  border-radius: 12px;
+  padding: 13px;
+  color: #345865;
+  cursor: pointer;
+}
+.workflow-step-strip button.current {
+  background: #e9f7f4;
+  border-color: #078f83;
+}
+.workflow-step-strip i {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #e7f2f2;
+  color: #078579;
+  font-style: normal;
+  font-weight: 700;
+}
+.workflow-step-strip span {
+  display: grid;
+  gap: 5px;
+}
+.workflow-step-strip b {
+  font-size: 14px;
+  line-height: 1.4;
+}
+.dashboard-workflow-card .workflow-step-strip {
+  margin-bottom: 16px;
+}
+.workflow-shortcut-section {
+  border-top: 1px solid #e3ecef;
+  padding-top: 16px;
+}
+.workflow-shortcut-section p {
+  margin: 0 0 12px;
+}
+.workflow-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.workflow-shortcuts button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid #b9d9d7;
+  border-radius: 8px;
+  background: #f0f8f7;
+  color: #087c72;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.workflow-shortcuts button:hover {
+  background: #dff2ee;
+  border-color: #078f83;
+}
+.workflow-setup {
+  margin: 16px 0;
+}
+.workflow-setup > span {
+  margin-right: 4px;
+  color: #607d88;
+  font-size: 13px;
+}
+.workflow-step-strip small {
+  color: #6a828c;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.workflow-success {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  margin: 16px 0;
+  border: 1px solid #b6ded2;
+  border-radius: 10px;
+  background: #e9f8f2;
+}
+.workflow-success button {
+  background: white;
+  border: 1px solid #92cbbd;
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: #086e63;
+  cursor: pointer;
+}
+.workflow-home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+.workflow-home-grid article {
+  background: white;
+  padding: 22px;
+  border: 1px solid #d8e5e9;
+  border-radius: 12px;
+}
+.workflow-home-grid strong {
+  display: block;
+  font-size: 30px;
+  color: #123d47;
+  margin: 12px 0;
+}
+.workflow-home-grid p {
+  line-height: 1.6;
+  color: #607d88;
+}
+.workflow-home-grid button {
+  background: #078f83;
+  color: white;
+  border: 0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+.purchase-draft-line {
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid #d8e5e9;
+  border-radius: 10px;
+  background: #f7fafb;
+}

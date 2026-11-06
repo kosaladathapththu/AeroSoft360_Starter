@@ -1,0 +1,16 @@
+const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), vm = require('node:vm'), ts = require('typescript');
+const helpers = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/order-packs.ts'),'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText, {exports:helpers});
+const items = [{id:1,size_label:'28',quantity:2,unit_price:75},{id:2,size_label:'29',quantity:2,unit_price:75}];
+const article = {sets:[{id:1,status:'active',items:[]},{id:2,status:'inactive',items},{id:3,status:'active',items},{id:4,status:'active',items:items.map(i=>({...i,unit_price:100}))}]};
+const packs=helpers.orderPacks(article);
+assert.equal(packs.length,2,'Empty and inactive packs are excluded');
+assert.equal(packs[0].id,3,'A valid populated pack takes precedence over an empty first pack');
+assert.equal(helpers.orderPacks(undefined).length,0,'Unselected article stays blank');
+assert.equal(helpers.orderPacks({selling_price:1900,sets:[]}).length,0,'Article price alone cannot invent a size pack');
+assert(helpers.packDescription(packs[0]).includes('28, 29'));
+assert(helpers.packDescription(packs[0]).includes('4 pieces / set'));
+assert(helpers.packDescription(packs[0]).includes('300.00'),'Pack total uses original piece rates and quantities');
+assert.notEqual(helpers.packDescription(packs[0]),helpers.packDescription(packs[1]),'Same sizes at different prices are distinguishable');
+assert.equal(article.sets[0].items.length,0,'Source data is not rewritten');
+console.log('9 order pack checks passed.');

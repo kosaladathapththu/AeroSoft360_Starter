@@ -7,4 +7,6 @@
 **/storage/logs/*
 .runtime/
 backend-php80-backup/
+/tmp/
+backend/storage/app/private/database-backups/
 .DS_Store
