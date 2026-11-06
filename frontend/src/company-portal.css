@@ -13,6 +13,7 @@
 .group-portal a { color: inherit; text-decoration: none; }
 .group-portal :is(a, button, input):focus-visible { outline: 3px solid #c19a56; outline-offset: 4px; }
 .group-portal button, .group-portal input { font: inherit; }
+.group-portal fieldset { font-family: inherit; }
 .group-portal h1, .group-portal h2, .group-portal h3 { font-family: "Manrope", "DM Sans", Arial, sans-serif; }
 .group-portal em { font-style: normal; }
 .portal-home { background: radial-gradient(ellipse at 0% 0%, #f0f0df 0, transparent 40%), radial-gradient(ellipse at 100% 15%, #f9e9e3 0, transparent 35%), #faf9f5; }
@@ -123,6 +124,8 @@
   .portal-story-top .portal-logo-surface { width: 180px; height: 86px; }
   .portal-story-copy h1 { font-size: 32px; }
   .portal-company-story { padding: 28px; }
+  .portal-story-copy, .portal-story-bottom { display: none; }
+  .portal-story-top .portal-logo-surface { margin-bottom: 10px; }
   .portal-auth-title { font-size: 25px; }
 }
 @media(prefers-reduced-motion:reduce) {

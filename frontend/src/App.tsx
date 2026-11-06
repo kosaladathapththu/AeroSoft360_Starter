@@ -13,6 +13,7 @@ import ManualOpeningModal from "./ManualOpeningModal";
 import SalesOrderDetails from "./SalesOrderDetails";
 import ReceivableActionModal from "./ReceivableActionModal";
 import FilteredRecords from "./FilteredRecords";
+import InvoicePagination from "./InvoicePagination";
 import { Fragment, FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -617,8 +618,8 @@ export default function App() {
             <RefreshCw />
           </button>
         </header>
-        <section className="content">
-          {page !== "Dashboard" && <WorkflowSteps page={page} go={goToPage} />}
+        <section className={`content ${page === "Invoices" ? "invoice-list-page" : ""}`}>
+          {page !== "Dashboard" && page !== "Invoices" && <WorkflowSteps page={page} go={goToPage} />}
           {page === "Purchasing Overview" ? (
             <PurchasingOverview
               api={API}
@@ -1468,6 +1469,11 @@ function SalesPage({
               </button>
             )}
             {page === "Invoices" && (
+              <button className="secondary-action" hidden={!permissions.includes("accounting.manage")} onClick={() => { setOpeningMessage(""); setManualOpening(true); }}>
+                <Plus /> Opening balance
+              </button>
+            )}
+            {page === "Invoices" && (
               <button className="secondary-action" onClick={() => setPoInvoiceOpen(true)}>
                 <FileText /> Invoice customer PO
               </button>
@@ -1499,7 +1505,7 @@ function SalesPage({
       </div>
       {error && <div className="error">{error}</div>}
       {orderConfirmation}
-      {["Invoices", "Debtors Aging", "Customers"].includes(page) && permissions.includes("accounting.manage") && (
+      {["Debtors Aging", "Customers"].includes(page) && permissions.includes("accounting.manage") && (
         <div className="opening-balance-toolbar">
           <div><b>Customer opening balances</b><small>Add an unpaid balance from before system use.</small></div>
           <button className="primary" type="button" onClick={() => { setOpeningMessage(""); setManualOpening(true); }}><Plus /> New opening balance</button>
@@ -1715,8 +1721,10 @@ function SalesPage({
           </FilteredRecords>
         </div>
       ) : (
-        <FilteredRecords records={rows} title="records" key={page + collectionView}>
+        <FilteredRecords records={rows} title="records" customerSearch={page === "Invoices"} key={page + collectionView}>
           {(filteredRows, filtersActive) => (
+            <InvoicePagination records={filteredRows} enabled={page === "Invoices"}>
+              {(pageRows) => (
             <div
               ref={salesTableRef}
               className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
@@ -1737,7 +1745,7 @@ function SalesPage({
                       <td colSpan={heads[page].length + 1}>No records yet.</td>
                     </tr>
                   ) : (
-                    filteredRows.map((r: any) => (
+                    pageRows.map((r: any) => (
                       <Fragment key={r.id}>
                         <tr>
                           {salesCells(
@@ -1800,9 +1808,10 @@ function SalesPage({
                                 !(page === "Collections" && collectionView === "due") && (
                                   <button
                                     className="icon-action view"
+                                    title={page === "Invoices" ? "View invoice details" : "View details"}
                                     onClick={() => setViewing(r)}
                                   >
-                                    <Eye />
+                                    <Eye />{page === "Invoices" && <span>View</span>}
                                   </button>
                                 )}
                               {page === "Debtors Aging" && permissions.includes("accounting.manage") && (
@@ -1978,11 +1987,11 @@ function SalesPage({
                                   <>
                                     {page === "Invoices" && (
                                       <button
-                                        className="icon-action"
+                                        className="icon-action invoice-print-action"
                                         title="View / print bill"
                                         onClick={() => setBillInvoiceId(Number(r.id))}
                                       >
-                                        <Printer />
+                                        <Printer /><span>Print</span>
                                       </button>
                                     )}
                                     {page === "Invoices" && !r.is_opening_balance && permissions.includes("accounting.manage") && (
@@ -2005,7 +2014,7 @@ function SalesPage({
                                           : setEditingTransaction({ page, row: r })
                                       }
                                     >
-                                      <Pencil />
+                                      <Pencil />{page === "Invoices" && <span>Edit</span>}
                                     </button>
                                     <button
                                       className="icon-action delete"
@@ -2030,7 +2039,7 @@ function SalesPage({
                                         }
                                       }}
                                     >
-                                      <Trash2 />
+                                      <Trash2 />{page === "Invoices" && <span>Delete</span>}
                                     </button>
                                   </>
                                 )}
@@ -2077,6 +2086,8 @@ function SalesPage({
                 </tbody>
               </table>
             </div>
+              )}
+            </InvoicePagination>
           )}
         </FilteredRecords>
       )}
@@ -2822,10 +2833,11 @@ function salesCells(page: string, r: any) {
       <>
         <td className="invoice-reference-cell">
           <b>{invoiceReference(r)}</b>
+          <small className="invoice-list-sale-type">{r.sale_type} sale</small>
           {r.is_opening_balance && <small className="invoice-reference-kind">Opening receivable</small>}
           {Number(r.returned_amount || 0) > 0 && <small className="invoice-return-marker">Returned credit: {money(r.returned_amount)}</small>}
         </td>
-        <td>{r.customer_name}</td>
+        <td><span>{r.customer_name}</span><small className="invoice-list-rep">{r.rep_name || "No salesperson"}</small></td>
         <td>{r.rep_name}</td>
         <td>
           {r.invoice_date}
@@ -4091,14 +4103,6 @@ function SalesCreateModal({
             set.items.some((item: any) => Number(item.unit_price || 0) > 0)),
       ),
   );
-  const defaultInvoiceArticle = invoicableArticles[0] || data.articles?.[0];
-  const defaultInvoiceSet =
-    defaultInvoiceArticle?.sets?.find(
-      (set: any) =>
-        set.status !== "inactive" &&
-        (Number(set.set_price || 0) > 0 ||
-          set.items?.some((item: any) => Number(item.unit_price || 0) > 0)),
-    ) || defaultInvoiceArticle?.sets?.[0];
   const [invoiceLines, setInvoiceLines] = useState<any[]>(
     initial?.lines?.length
       ? [...new Set(initial.lines.map((line: any) => Number(line.article_id)))].map(
@@ -4152,8 +4156,8 @@ function SalesCreateModal({
         )
       : [
           {
-            article_id: Number(defaultInvoiceArticle?.id || 0),
-            set_template_id: Number(defaultInvoiceSet?.id || 0),
+            article_id: 0,
+            set_template_id: 0,
             colour: "",
             sets: 1,
             order_mode: "badge",
@@ -4167,8 +4171,8 @@ function SalesCreateModal({
     setInvoiceLines((lines) => [
       ...lines,
       {
-        article_id: Number(defaultInvoiceArticle?.id || 0),
-        set_template_id: Number(defaultInvoiceSet?.id || 0),
+        article_id: 0,
+        set_template_id: 0,
         colour: "",
         sets: 1,
         order_mode: "badge",
@@ -4551,6 +4555,11 @@ function SalesCreateModal({
         return;
       }
     } else if (type === "invoice") {
+      if (invoiceLines.some((line: any) => !Number(line.article_id))) {
+        showNotice("Choose an article for every invoice item before saving.");
+        setBusy(false);
+        return;
+      }
       if (
         invoiceLines.some((line: any) => {
           const article = data.articles.find(

@@ -176,6 +176,9 @@ export default function PublicSite({ api, onLogin }: { api: string; onLogin: (re
   }, []);
   useEffect(() => {
     document.title = route.view === "home" ? "Supun Group | Business workspaces" : `${route.company.available ? "Sign in" : "Hosting is upcoming"} | ${route.company.name}`;
+    if (route.view === "home" && window.location.hash === "#companies") {
+      document.getElementById("companies")?.scrollIntoView({ block: "start" });
+    }
     return () => { document.title = "AeroSoft360 ERP"; };
   }, [route.view, route.company.id]);
   return route.view === "home" ? <HomePage /> : route.company.available ? <SignInPage key={route.company.id} api={api} onLogin={onLogin} company={route.company} /> : <UpcomingPage key={route.company.id} company={route.company} />;

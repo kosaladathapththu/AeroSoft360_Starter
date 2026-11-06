@@ -2,4 +2,4 @@
 @layer theme, utilities;
 @import "tailwindcss/theme.css" layer(theme) prefix(tw);
 @import "tailwindcss/utilities.css" layer(utilities) source(none) prefix(tw);
-@source "./PublicSite.tsx";
+@source "./CompanyPortal.tsx";

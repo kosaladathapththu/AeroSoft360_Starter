@@ -6,7 +6,7 @@ const ts = require("typescript");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const source = fs.readFileSync(
-  path.join(__dirname, "../src/PublicSite.tsx"),
+  path.join(__dirname, "../src/CompanyPortal.tsx"),
   "utf8",
 );
 const code = ts.transpileModule(source, {
@@ -25,27 +25,36 @@ const home = renderToStaticMarkup(React.createElement(mod.HomePage));
 const login = renderToStaticMarkup(
   React.createElement(mod.SignInPage, { api: "/api", onLogin() {} }),
 );
-assert(
-  home.includes("Many moving parts.") && home.includes("One clear picture."),
-);
-assert((home.match(/href="#login"/g) || []).length >= 3);
-assert(home.includes('id="modules"') && home.includes('id="workflow"'));
-assert(home.includes("Finance &amp; accounts") && home.includes("Inventory"));
+assert(home.includes("One group. Many possibilities.") && home.includes("Choose your workspace"));
+assert(home.includes('id="companies"'));
+assert.equal(mod.portalCompanies.length,4);
+assert.equal(mod.portalCompanies.filter(company=>company.available).length,1);
+for(const company of mod.portalCompanies){
+  assert(home.includes('href="#login/'+company.id+'"'));
+  assert(home.includes('/brands/'+company.logo+'.png'));
+  assert(home.includes(company.name));
+  assert.equal(mod.portalRoute('#login/'+company.id).company.id,company.id);
+  if(!company.available){
+    const upcoming=renderToStaticMarkup(React.createElement(mod.UpcomingPage,{company}));
+    assert(upcoming.includes('Hosting is upcoming'));
+    assert(upcoming.includes(company.name));
+    assert(!upcoming.includes('<form')&&!upcoming.includes('<input'),'Upcoming pages never collect credentials');
+    assert(upcoming.includes('href="#companies"'));
+    const guarded=renderToStaticMarkup(React.createElement(mod.SignInPage,{api:'/api',onLogin(){},company}));
+    assert(guarded.includes('Hosting is upcoming')&&!guarded.includes('<form'));
+  }
+}
+assert.equal(mod.portalRoute('#login').company.id,'ymac','Legacy login link still reaches Y-mac');
+assert.equal(mod.portalRoute('#login/not-a-company').view,'home');
+assert.equal(mod.portalRoute('#companies').view,'home');
 assert(!/LKR|23120293|admin@|Admin@123/.test(home));
-assert(login.includes('type="email"') && login.includes('type="password"'));
-assert(
-  login.toLowerCase().includes('autocomplete="username"') &&
-    login.toLowerCase().includes('autocomplete="current-password"'),
-);
-assert(!login.includes('value="') && !login.includes("Admin@123"));
-assert(
-  login.includes("Back to home") &&
-    login.includes("Contact your system administrator."),
-);
-assert(
-  login.includes("Show password") && login.includes('aria-pressed="false"'),
-);
-console.log("10 public home/login rendering checks passed.");
+assert(login.includes('type="email"')&&login.includes('type="password"'));
+assert(login.toLowerCase().includes('autocomplete="username"')&&login.toLowerCase().includes('autocomplete="current-password"'));
+assert(!login.includes('value="')&&!login.includes('Admin@123'));
+assert(login.includes('Back to home')&&login.includes('Contact your system administrator.'));
+assert(login.includes('Show password')&&login.includes('aria-pressed="false"'));
+assert(login.includes('Y-mac')&&login.includes('AeroSoft360'));
+console.log('Public portal checks passed: four company routes, branded pages, upcoming guards, and Y-mac login.');
 
 // Exercise the real submit handler with isolated hooks and HTTP fixtures.
 async function checkLogin(status, result, expected) {

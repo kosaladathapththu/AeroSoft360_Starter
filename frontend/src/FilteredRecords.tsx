@@ -9,6 +9,7 @@ type Props<T> = {
   records: T[];
   fields?: RecordField[];
   title?: string;
+  customerSearch?: boolean;
   children: (rows: T[], active: boolean) => ReactNode;
 };
 
@@ -17,6 +18,7 @@ export default function FilteredRecords<T extends Record<string, any>>({
   records,
   fields: configuredFields,
   title = "records",
+  customerSearch = false,
   children,
 }: Props<T>) {
   const id = useId();
@@ -45,6 +47,13 @@ export default function FilteredRecords<T extends Record<string, any>>({
     <>
       <section className="record-filters" aria-label={`Search and filter ${title}`}>
         <div className="record-filter-main">
+          {customerSearch && <label className="invoice-customer-search" htmlFor={`${id}-customer`}>
+            Customer
+            <input id={`${id}-customer`} type="search" list={`${id}-customer-names`} placeholder="Search customer name…"
+              value={conditionFor("customer_name").value.replace(/^=/, "")}
+              onChange={(event) => quickPatch("customer_name", { value: event.target.value })} />
+            <datalist id={`${id}-customer-names`}>{Array.from(new Set(records.map((row) => String(row.customer_name || "")).filter(Boolean))).sort().map((name) => <option key={name} value={name} />)}</datalist>
+          </label>}
           <label className="record-search" htmlFor={`${id}-search`}>
             Search {title}
             <span>
