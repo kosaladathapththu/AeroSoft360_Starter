@@ -18,3 +18,22 @@ plan=output.collectionPlan([{id:1,outstanding:.1},{id:2,outstanding:.2}],[1,2],.
 assert.equal(output.collectionPlan(invoices,[],100).unallocated,100);
 assert.equal(output.collectionPlan(invoices,[1],NaN).allocations[0].amount,0);
 console.log('11 customer collection allocation checks passed.');
+// Manual invoice amounts stay exactly as entered, regardless of invoice age.
+const customerInvoices=[{id:1,outstanding:161900},{id:2,outstanding:97000}];
+let manual=output.manualCollectionPlan(customerInvoices,[1,2],180000,{1:'83000',2:'97000'});
+assert.equal(manual.allocations[0].amount,83000);
+assert.equal(manual.allocations[0].remaining,78900);
+assert.equal(manual.allocations[1].remaining,0,'customer can close the newer invoice first');
+assert.equal(manual.total,180000);
+assert.equal(manual.unallocated,0);
+assert.equal(manual.invalid.length,0);
+manual=output.manualCollectionPlan(customerInvoices,[1,2],180000,{1:'83001',2:'97000'});
+assert.equal(manual.unallocated,-1,'over-allocation is visible rather than silently redistributed');
+manual=output.manualCollectionPlan(customerInvoices,[1,2],180000,{1:'80000',2:'97000'});
+assert.equal(manual.unallocated,3000,'remaining collection is visible');
+manual=output.manualCollectionPlan(customerInvoices,[1],180000,{1:'170000'});
+assert.equal(manual.invalid[0],1,'cannot allocate more than invoice balance');
+manual=output.manualCollectionPlan(customerInvoices,[1],180000,{1:''});assert.equal(manual.invalid.length,1,'ticked invoices require a payment');
+manual=output.manualCollectionPlan(customerInvoices,[1],180000,{1:'-1'});assert.equal(manual.invalid.length,1,'negative payment rejected');
+manual=output.manualCollectionPlan([{id:1,outstanding:.3}],[1],.3,{1:'.30'});assert.equal(manual.unallocated,0,'manual cents reconcile');
+console.log('12 manual allocation checks passed.');

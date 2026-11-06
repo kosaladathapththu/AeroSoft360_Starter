@@ -164,3 +164,20 @@ $single = Request::create('/', 'POST', ['invoice_id'=>7,'collector_sales_rep_id'
 $adapted=(new App\Http\Controllers\Api\AccountingSalesController())->receipt($single,$sales,$posting)->getData(true);
 check($adapted['collection']['status']==='held' && (float)$adapted['receipt']['amount']===200.0,'single-invoice cheque caller uses collection holding account');
 check(balance('1000')===1500.0 && balance('1120')===200.0,'single-invoice cheque cannot accidentally post to cash');
+// Cheque commission belongs to the actual clearance period, not the earlier receipt month.
+$earned = new ReflectionMethod(App\Services\Payroll\AttendancePayrollService::class, 'commissionFor');
+$earned->setAccessible(true);
+$payroll = new App\Services\Payroll\AttendancePayrollService();
+action($adapted['collection']['id'],'clear');
+check($earned->invoke($payroll,'Representative','2026-10-01','2026-10-31')===10.0,'payroll excludes uncleared cheque commission from receipt month');
+check($earned->invoke($payroll,'Representative','2026-11-01','2026-11-30')===2.0,'payroll includes eligible cheque commission in clearance month');
+// The customer may close the newer bill and partially pay the older bill.
+invoice(9); invoice(10);
+DB::table('sales_invoices')->where('id',9)->update(['total'=>161900,'outstanding'=>161900]);
+DB::table('sales_invoices')->where('id',10)->update(['total'=>97000,'outstanding'=>97000]);
+$manual=body([9,10]);$manual['amount']=180000;
+$manual['allocations'][0]['amount']=83000;
+$manual['allocations'][1]['amount']=97000;
+receive($manual);
+check((float)DB::table('sales_invoices')->where('id',9)->value('outstanding')===78900.0,'manual allocation leaves chosen LKR 78,900 on the older bill');
+check((float)DB::table('sales_invoices')->where('id',10)->value('outstanding')===0.0,'manual allocation fully closes chosen LKR 97,000 invoice');

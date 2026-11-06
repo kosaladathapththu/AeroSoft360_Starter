@@ -37,3 +37,196 @@
 .shell .collection-invoice-toolbar button:disabled { opacity: .5; cursor: default; }
 .shell .collection-register .primary { border: 1px solid #116947; background: #167652; color: white; border-radius: 7px; padding: 8px 12px; }
 .shell .collection-register .danger { border: 1px solid #d9a69e; background: #fceeea; color: #a13326; border-radius: 7px; padding: 8px 12px; }
+.collection-manual-payment { display: grid; gap: 5px; min-width: 150px; }
+.collection-manual-payment input { width: 150px; min-height: 38px; padding: 8px 10px; font-size: 14px; border: 1px solid #759c8b; border-radius: 6px; background: white; }
+.shell .collection-manual-payment button.secondary { padding: 4px 8px; min-height: 28px; border: 1px solid #b4cdbc; border-radius: 5px; color: #28633f; background: #edf7ef; font-size: 11px; cursor: pointer; }
+.collection-manual-payment input:disabled, .collection-manual-payment button:disabled { opacity: .5; cursor: default; }
+
+/* Collections: one high-contrast forest, slate and amber palette. */
+@media screen {
+  .shell .record-workspace-page:has(.collection-modal) {
+    background: #eef2f0;
+    border-radius: 12px;
+  }
+  .shell .modal.collection-modal {
+    border: 1px solid #b6c6be;
+    border-top: 4px solid #176344;
+    background: #fff;
+    color: #182f29;
+  }
+  .shell .modal.collection-modal > .popup-header {
+    background: #fff;
+    border-bottom: 1px solid #bdcec5;
+  }
+  .shell .modal.collection-modal .popup-header h2 { color: #193e30; }
+  .shell .modal.collection-modal > .popup-body { background: #eef2f0; }
+  .shell .modal.collection-modal > .popup-footer {
+    background: #fff;
+    border-top: 1px solid #bdcec5;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-section,
+  .shell .collection-register.collection-section {
+    background: #fff;
+    border: 1px solid #b8cac0;
+    box-shadow: 0 2px 5px #203c2c0a;
+  }
+  .shell :is(.customer-collection-form, .collection-register) h3 {
+    color: #183d2e;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+  .shell .modal.collection-modal .collection-section label,
+  .shell .collection-register label {
+    color: #283e35;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .shell .customer-collection-form .collection-payment-panel {
+    border-top: 3px solid #176344;
+  }
+  .shell :is(.customer-collection-form, .collection-register) :is(input:not([type=checkbox]):not([type=hidden]), select) {
+    background: #fff;
+    border: 1px solid #859f91;
+    color: #172e24;
+    font-size: 14px;
+    box-shadow: none;
+  }
+  .shell :is(.customer-collection-form, .collection-register) input::placeholder {
+    color: #596b61;
+    opacity: 1;
+  }
+  .shell .customer-collection-form .customer-dropdown-control {
+    background: #fff;
+    border-color: #859f91;
+  }
+  .shell .customer-collection-form .customer-dropdown-control > input {
+    border: 0;
+    background: transparent;
+  }
+  .shell :is(.customer-collection-form, .collection-register) :is(.collection-search-status, .customer-dropdown-help, .collection-table-scroll small) {
+    color: #4c6155;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .shell .customer-collection-form .collection-customer-balance {
+    background: #e1eee5;
+    border: 1px solid #91b49c;
+    border-left: 4px solid #176344;
+    color: #183d2e;
+  }
+  .shell .customer-collection-form .collection-customer-balance small { color: #3e5e49; }
+  .shell :is(.customer-collection-form, .collection-register) .collection-table-scroll {
+    border: 1px solid #9db3a6;
+    background: #fff;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-table-scroll th {
+    background: #294c3e;
+    color: #fff;
+    padding: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    border-bottom: 2px solid #183629;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-table-scroll td {
+    background: #fff;
+    color: #20382b;
+    border-bottom: 1px solid #c3d2c8;
+    font-size: 14px;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-table-scroll tr:nth-child(even) td {
+    background: #f3f6f3;
+  }
+  .shell .customer-collection-form .collection-allocation-table tr.collection-selected-row td {
+    background: #e1f0e5;
+  }
+  .shell .customer-collection-form .collection-allocation-table tr.collection-selected-row td:first-child {
+    box-shadow: inset 4px 0 #16704b;
+  }
+  .shell .customer-collection-form .collection-allocation-table tr.collection-selected-row td:nth-child(6) {
+    background: #fff3d4;
+  }
+  .shell .customer-collection-form .collection-manual-payment {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 155px;
+    max-width: 195px;
+  }
+  .shell .customer-collection-form .collection-manual-payment input:not(:disabled) {
+    width: 100%;
+    background: #fffefa;
+    border: 2px solid #a47b1b;
+    font-weight: 700;
+    color: #332b16;
+  }
+  .shell .customer-collection-form .collection-manual-payment button.secondary {
+    width: 100%;
+    background: #176344;
+    border: 1px solid #104c33;
+    color: #fff;
+    padding: 6px 9px;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .shell .customer-collection-form .collection-manual-payment button.secondary:hover:not(:disabled) {
+    background: #104b32;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-invoice-toolbar button.secondary {
+    background: #fff;
+    color: #214a35;
+    border: 1px solid #648f73;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-invoice-toolbar button.secondary:hover:not(:disabled) {
+    background: #e0eee4;
+    border-color: #285d3b;
+  }
+  .shell :is(.customer-collection-form, .collection-register) button:disabled {
+    opacity: 1;
+    background: #e9eeea;
+    color: #647367;
+    border-color: #c0ccc3;
+    cursor: not-allowed;
+  }
+  .shell .customer-collection-form .collection-manual-payment input:disabled {
+    opacity: 1;
+    background: #edf1ed;
+    border-color: #c0ccc3;
+    color: #647367;
+  }
+  .shell .customer-collection-form .collection-allocation-summary {
+    padding: 14px 16px;
+    border-radius: 8px;
+    gap: 8px 20px;
+  }
+  .shell .customer-collection-form .collection-allocation-summary.needs-allocation {
+    background: #fff1ce;
+    border: 1px solid #c09a40;
+    color: #644509;
+  }
+  .shell .customer-collection-form .collection-allocation-summary.ready {
+    background: #225c40;
+    border: 1px solid #194830;
+    color: #fff;
+  }
+  .shell .customer-collection-form .collection-allocation-summary b { font-size: 16px; }
+  .shell .customer-collection-form .collection-allocation-summary span { color: inherit; }
+  .shell :is(.customer-collection-form, .collection-register) .collection-cheque-panel {
+    background: #fff4df;
+    border-color: #bd944b;
+    color: #614218;
+  }
+  .shell :is(.customer-collection-form, .collection-register) :is(button, input, select):focus-visible {
+    outline: 3px solid #8aa252;
+    outline-offset: 2px;
+  }
+}
+@media screen {
+  .shell .customer-collection-form .collection-manual-payment button.secondary:disabled {
+    background: #e9eeea;
+    color: #647367;
+    border-color: #c0ccc3;
+    opacity: 1;
+  }
+}

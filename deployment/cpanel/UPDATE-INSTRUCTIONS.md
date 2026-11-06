@@ -44,7 +44,7 @@ This release REQUIRES the specific new migration in step 3. It adds collection
 history tables and account 1120 (Cheques in Hand), without rewriting invoices
 or earlier receipts. Stop and resolve any account-code conflict reported by it.
 
-## 3. Clear cached application configuration
+## 3. Install collection tables and clear cached configuration
 
 In cPanel Terminal, use the PHP binary matching the ERP domain:
 
