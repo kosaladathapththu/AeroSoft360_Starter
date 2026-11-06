@@ -895,7 +895,7 @@ function SalesPage({
     } | null>(null),
     [pendingPriceFile, setPendingPriceFile] = useState<File | null>(null),
     [pricePreview, setPricePreview] = useState<any>(null),
-    [collectionView, setCollectionView] = useState<"due" | "history">("due"),
+    [collectionView, setCollectionView] = useState<"due" | "history" | "register">("due"),
     [collectionInvoice, setCollectionInvoice] = useState<any>(null),
     [inventoryQuery, setInventoryQuery] = useState(""),
     [inventoryType, setInventoryType] = useState("all"),
@@ -942,6 +942,7 @@ function SalesPage({
       if (!controller.signal.aborted) setDashboardBusy(false);
     }
   }, [token, dashboardDays]);
+  const [collectionNotice, setCollectionNotice] = useState("");
   const loadSales = useCallback(() => {
     setError("");
     Promise.all([
@@ -988,6 +989,10 @@ function SalesPage({
           "Request failed.",
       );
     await loadSales();
+    if (path === "customer-collections") {
+      setCollectionNotice(`${json.number}: collection saved and invoices allocated.${json.payment_method === "cheque" ? " Cheque pending bank clearance." : ""}`);
+      setCollectionView("register");
+    }
     if (
       method === "POST" &&
       (path === "sales-orders/manual" ||
@@ -1508,6 +1513,7 @@ function SalesPage({
       </div>
       {error && <div className="error">{error}</div>}
       {orderConfirmation}
+      {page === "Collections" && collectionNotice && <div className="success-message" role="status">{collectionNotice}</div>}
       {["Debtors Aging", "Customers"].includes(page) && permissions.includes("accounting.manage") && (
         <div className="opening-balance-toolbar">
           <div><b>Customer opening balances</b><small>Add an unpaid balance from before system use.</small></div>
@@ -1539,10 +1545,10 @@ function SalesPage({
           >
             Payment History <small>{data.receipts.length}</small>
           </button>
+          <button className={collectionView === "register" ? "active" : ""} onClick={() => setCollectionView("register")}>Cheques &amp; collections <small>{(data.customer_collections || []).length}</small></button>
         </div>
       )}
-      {page === "Collections" && <CollectionRegister data={data} canManage={permissions.includes("accounting.manage")} post={post} />}
-      {page === "Inventory Overview" ? (
+      {page === "Collections" && collectionView === "register" ? <CollectionRegister data={data} canManage={permissions.includes("accounting.manage")} post={post} /> : page === "Inventory Overview" ? (
         <div className="inventory-overview">
           <div className="inventory-summary-grid">
             <button
@@ -4682,9 +4688,7 @@ function SalesCreateModal({
         collector_sales_rep_id: Number(f.get("collector_sales_rep_id")),
         payment_account_id: Number(f.get("payment_account_id")) || null,
         receipt_date: f.get("receipt_date"),
-        collection_type: f.get("collection_type"),
         payment_method: f.get("payment_method"),
-        commission_decision: f.get("commission_decision"),
         reference: f.get("reference"),
         amount: Number(f.get("amount")),
       };

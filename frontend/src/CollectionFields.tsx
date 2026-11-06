@@ -44,7 +44,7 @@ export default function CollectionFields({ data, initial, user, busy }: {
     })))} />
     <section className="collection-section">
       <h3>Customer &amp; invoices</h3>
-      <OrderCustomerPicker customers={data.customers || []} selectedId={customerId} select={(id) => {
+      <OrderCustomerPicker help="Search and choose a customer to list all their invoices." customers={data.customers || []} selectedId={customerId} select={(id) => {
         setCustomerId(id); setSelected([]); setCommissionIds([]); setAmount(""); setQuery("");
       }} />
       {customerId > 0 && <div className="collection-customer-balance"><span>Unpaid invoices <small>Pending cheques: {money(pendingAmount)}</small></span><strong>{money(outstanding)}</strong></div>}

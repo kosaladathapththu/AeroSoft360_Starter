@@ -7,7 +7,8 @@ This ZIP updates the application files. Creating it does not deploy anything.
 It contains the new Supun Group portal, four company logos, the separate Y-mac
 login, upcoming pages for the other companies, and the current ERP code.
 This release also includes the latest invoice layout, compact workflow links,
-shared record pagination and the collection invoice/customer search field.
+shared record pagination and customer-first collections with multi-invoice
+allocations, commission selection and dated cheque clearance/return tracking.
 Only Y-mac accepts the existing AeroSoft360 credentials. Other companies do
 not yet have hosted ERP systems or login accounts through this portal.
 
@@ -38,9 +39,10 @@ This update deliberately excludes `.env`, environment templates, database
 SQL files, bootstrap cache contents and the entire runtime storage folder.
 It preserves the live users, passwords, customer records, balances, uploads,
 sessions and application key. Uploading code does not update database data.
-No SQL import, database reset, seeding or key generation is needed for this
-application update. Historical migration files are included as application source;
-do not run migrations just because those files are present.
+Do not import SQL, reset the database, seed data or regenerate APP_KEY.
+This release REQUIRES the specific new migration in step 3. It adds collection
+history tables and account 1120 (Cheques in Hand), without rewriting invoices
+or earlier receipts. Stop and resolve any account-code conflict reported by it.
 
 ## 3. Clear cached application configuration
 
@@ -48,6 +50,7 @@ In cPanel Terminal, use the PHP binary matching the ERP domain:
 
     cd /home/camymarket/aerosoft360
     /opt/cpanel/ea-php82/root/usr/bin/php artisan config:clear
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_06_000001_create_customer_collections.php --force
     /opt/cpanel/ea-php82/root/usr/bin/php artisan route:clear
     /opt/cpanel/ea-php82/root/usr/bin/php artisan view:clear
 
@@ -65,8 +68,10 @@ pool through the server administrator. Do not restart unrelated applications.
 3. Y-mac should open its separate login page. Sign in with an existing account
    and verify the dashboard and customer balances.
 4. Each other company should show “Hosting is upcoming” with no password form.
-5. In Collections, open Record collection. Search by customer name and invoice
-   number, select the intended invoice and verify its outstanding balance.
+5. In Collections, open Record collection. Choose a customer, enter the amount,
+   tick invoices and verify full/partial settlements before saving. Cheques use
+   the Cheques & collections tab for dated clearance or a reasoned return.
+   Pending cheques must not increase available cash. Test in staging first.
    Check invoice entry starts without a preselected article.
 6. Check existing reports, downloads and the database backup function.
 7. Use Ctrl+F5 if the browser displays the previous page. Keep old hashed

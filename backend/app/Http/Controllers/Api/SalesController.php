@@ -175,7 +175,10 @@ class SalesController
             "collection_allocations" => \Illuminate\Support\Facades\Schema::hasTable('customer_collection_lines')
                 ? DB::table('customer_collection_lines as l')->join('sales_invoices as i', 'i.id', '=', 'l.invoice_id')
                     ->leftJoin('sales_representatives as r', 'r.id', '=', 'i.sales_rep_id')
-                    ->select('l.*', 'i.number as invoice_number', 'i.invoice_date', 'i.total as invoice_total', 'r.name as rep_name')->get()
+                    ->join('receipt_allocations as allocation', 'allocation.receipt_id', '=', 'l.receipt_id')
+                    ->join('customer_receipts as receipt', 'receipt.id', '=', 'l.receipt_id')
+                    ->leftJoin('sales_representatives as recipient', 'recipient.id', '=', 'allocation.commission_payee_sales_rep_id')
+                    ->select('l.*', 'i.number as invoice_number', 'i.invoice_date', 'i.total as invoice_total', 'r.name as rep_name', 'allocation.commission_amount', 'allocation.commission_status', 'recipient.name as commission_payee_name', 'receipt.collection_type as settlement_type')->get()
                 : [],
             "opening_accounts" => DB::table("accounts")
                 ->where("type", "equity")

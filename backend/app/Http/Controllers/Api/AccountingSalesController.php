@@ -1513,6 +1513,23 @@ final class AccountingSalesController extends Controller
         SalesController $sales,
         PostingService $posting,
     ): JsonResponse {
+        if ($request->input('payment_method') === 'cheque') {
+            $request->validate(['invoice_id' => 'required|integer|exists:sales_invoices,id']);
+            $invoice = DB::table('sales_invoices')->find($request->input('invoice_id'));
+            $forward = Request::create('/', 'POST', array_merge($request->all(), [
+                'request_key' => $request->input('request_key') ?: (string) \Illuminate\Support\Str::uuid(),
+                'customer_id' => $invoice->customer_id,
+                'allocations' => [[
+                    'invoice_id' => $invoice->id, 'amount' => $request->input('amount'),
+                    'commission_decision' => $request->input('commission_decision', 'cancel'),
+                ]],
+            ]));
+            $forward->setUserResolver($request->getUserResolver());
+            $forward->attributes->set('auth_user', $request->attributes->get('auth_user'));
+            $collection = (new CustomerCollectionController())->store($forward, $sales, $posting)->getData(true);
+            $receiptId = DB::table('customer_collection_lines')->where('collection_id', $collection['id'])->value('receipt_id');
+            return response()->json(['receipt' => DB::table('customer_receipts')->find($receiptId), 'commission' => 0, 'collection' => $collection], 201);
+        }
         return DB::transaction(function () use ($request, $sales, $posting) {
             $response = $sales->receipt($request);
             $result = $response->getData(true);

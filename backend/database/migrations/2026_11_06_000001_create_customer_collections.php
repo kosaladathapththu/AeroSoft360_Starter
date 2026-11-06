@@ -24,6 +24,7 @@ return new class extends Migration {
         Schema::create('customer_collections', function (Blueprint $t) {
             $t->id();
             $t->uuid('request_key')->unique();
+            $t->string('request_fingerprint', 64);
             $t->string('number', 40)->unique();
             $t->foreignId('customer_id')->constrained('customers')->restrictOnDelete();
             $t->foreignId('collector_sales_rep_id')->constrained('sales_representatives')->restrictOnDelete();

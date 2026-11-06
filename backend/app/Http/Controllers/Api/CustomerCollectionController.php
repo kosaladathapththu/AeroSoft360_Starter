@@ -34,9 +34,10 @@ final class CustomerCollectionController
         return DB::transaction(function () use ($data, $sales, $posting, $request) {
             // Serialize submissions for this customer and recheck every invoice under lock.
             DB::table('customers')->where('id', $data['customer_id'])->lockForUpdate()->first();
+            $fingerprint = hash('sha256', json_encode($data));
             $existing = DB::table('customer_collections')->where('request_key', $data['request_key'])->first();
             if ($existing) {
-                abort_unless((int) $existing->customer_id === (int) $data['customer_id'], 422, 'Submission key already used.');
+                abort_unless((int) $existing->customer_id === (int) $data['customer_id'] && hash_equals($existing->request_fingerprint, $fingerprint), 422, 'This submission key already belongs to a different payment. Refresh before recording another collection.');
                 return response()->json($existing);
             }
             $sum = round(collect($data['allocations'])->sum('amount'), 2);
@@ -50,10 +51,16 @@ final class CustomerCollectionController
                 422, 'Choose an active posting account. Cheques require the Cheques in Hand holding account.');
             abort_unless(DB::table('sales_representatives')->where('id', $data['collector_sales_rep_id'])->where('status', 'active')->exists(), 422, 'Choose an active collector.');
             $fields = array_diff_key($data, array_flip(['allocations']));
+            $fields['request_fingerprint'] = $fingerprint;
             $fields['payment_account_id'] = $account->id;
             $fields['status'] = $cheque ? 'held' : 'received';
             if (!$cheque) {
                 $fields['cheque_number'] = $fields['cheque_bank'] = $fields['cheque_date'] = null;
+            }
+            if ($cheque) {
+                abort_if(DB::table('customer_collections')->where('customer_id', $data['customer_id'])
+                    ->where('cheque_number', $data['cheque_number'])->where('cheque_bank', $data['cheque_bank'])
+                    ->whereIn('status', ['held', 'cleared'])->exists(), 422, 'This customer cheque is already recorded. Check the cheque register.');
             }
             $fields['number'] = $data['request_key'];
             $id = DB::table('customer_collections')->insertGetId($fields + ['created_at' => now(), 'updated_at' => now()]);
@@ -110,6 +117,7 @@ final class CustomerCollectionController
             $collection = DB::table('customer_collections')->lockForUpdate()->find($id);
             abort_unless($collection->payment_method === 'cheque', 422, 'Only cheque collections have clearance and return actions.');
             $clear = $data['action'] === 'clear';
+            abort_if(!$clear && mb_strlen(trim($data['reason'] ?? '')) < 3, 422, 'Enter a clear reason for the cheque return.');
             abort_unless($clear ? $collection->status === 'held' : in_array($collection->status, ['held', 'cleared']), 422, 'This cheque has already been processed. Refresh the register.');
             abort_if($data['date'] < ($collection->cleared_date ?? $collection->receipt_date), 422, 'Action date cannot precede receipt or clearance.');
             abort_if($clear && $data['date'] < $collection->cheque_date, 422, 'A post-dated cheque cannot clear before its cheque date.');
@@ -184,7 +192,7 @@ final class CustomerCollectionController
     {
         DB::table('audit_logs')->insert([
             'event' => $event, 'entity_type' => 'customer_collection',
-            'entity_id' => $id, 'payload' => json_encode($data + ['actor_id' => $request->user()?->id]), 'created_at' => now(),
+            'entity_id' => $id, 'payload' => json_encode($data + ['actor_id' => $request->attributes->get('auth_user')?->id ?? $request->user()?->id]), 'created_at' => now(),
         ]);
     }
 }

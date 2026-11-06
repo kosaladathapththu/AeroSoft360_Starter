@@ -35,6 +35,7 @@ export default function PointOfSalePage({
   search: string;
   go: (page: string) => void;
 }) {
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
     [cart, setCart] = useState<any[]>([]),
@@ -229,7 +230,10 @@ export default function PointOfSalePage({
                       sales_rep_id: Number(f.get("sales_rep_id")),
                       invoice_date: f.get("invoice_date"),
                       payment_method: f.get("payment_method"),
-                      payment_account_id: Number(f.get("payment_account_id")),
+                      payment_account_id: Number(f.get("payment_account_id")) || null,
+                      cheque_number: f.get("cheque_number"),
+                      cheque_bank: f.get("cheque_bank"),
+                      cheque_date: f.get("cheque_date"),
                       reference: f.get("reference"),
                       discount,
                       expected_total: total,
@@ -370,7 +374,7 @@ export default function PointOfSalePage({
               </label>
               <label>
                 Payment method
-                <select name="payment_method">
+                <select name="payment_method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
                   <option value="cash">Cash</option>
                   <option value="card">Card</option>
                   <option value="bank_transfer">Bank transfer</option>
@@ -378,9 +382,9 @@ export default function PointOfSalePage({
                 </select>
               </label>
               <label>
-                Deposit to
-                <select name="payment_account_id" required>
-                  <option value="">Choose cash/bank account</option>
+                {paymentMethod === "cheque" ? "Cheque holding account" : "Deposit to"}
+                <select name="payment_account_id" required={paymentMethod !== "cheque"} disabled={paymentMethod === "cheque"}>
+                  <option value="">{paymentMethod === "cheque" ? "1120 - Cheques in Hand" : "Choose cash/bank account"}</option>
                   {data.payment_accounts.map((a: any) => (
                     <option key={a.id} value={a.id}>
                       {displayCode(a)} · {a.name}
@@ -392,6 +396,12 @@ export default function PointOfSalePage({
                 Reference
                 <input name="reference" maxLength={80} />
               </label>
+              {paymentMethod === "cheque" && <div className="collection-cheque-panel">
+                <label>Cheque number<input name="cheque_number" required maxLength={80} /></label>
+                <label>Bank / branch<input name="cheque_bank" required maxLength={160} /></label>
+                <label>Cheque date<input name="cheque_date" type="date" required defaultValue={today()} /></label>
+                <small>Pending clearance, not available cash. Clear or return this cheque from Collections.</small>
+              </div>}
               <div className="pos-totals">
                 <div>
                   <span>Subtotal</span>

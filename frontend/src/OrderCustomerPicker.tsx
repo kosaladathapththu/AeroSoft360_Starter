@@ -4,8 +4,8 @@ import { matchesSearch } from "./search";
 import { displayCode } from "./representative-reference";
 import "./order-customer-picker.css";
 
-export default function OrderCustomerPicker({ customers, selectedId, select }: {
-  customers: any[]; selectedId: number; select: (id: number) => void;
+export default function OrderCustomerPicker({ customers, selectedId, select, help = "Choose a customer to see balances and pending orders." }: {
+  customers: any[]; selectedId: number; select: (id: number) => void; help?: string;
 }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -62,6 +62,6 @@ export default function OrderCustomerPicker({ customers, selectedId, select }: {
       </div>
     </div>}
     </div>
-    <small className="customer-dropdown-help">Choose a customer to see balances and pending orders.</small>
+    <small className="customer-dropdown-help">{help}</small>
   </div>;
 }

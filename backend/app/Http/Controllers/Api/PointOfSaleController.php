@@ -36,7 +36,10 @@ final class PointOfSaleController
             "sales_rep_id" => "required|exists:sales_representatives,id",
             "invoice_date" => "required|date|before_or_equal:today",
             "payment_method" => "required|in:cash,card,bank_transfer,cheque",
-            "payment_account_id" => "required|exists:accounts,id",
+            "payment_account_id" => "required_unless:payment_method,cheque|nullable|exists:accounts,id",
+            "cheque_number" => "required_if:payment_method,cheque|nullable|string|max:80",
+            "cheque_bank" => "required_if:payment_method,cheque|nullable|string|max:160",
+            "cheque_date" => "required_if:payment_method,cheque|nullable|date_format:Y-m-d",
             "reference" => "nullable|string|max:80",
             "discount" => "required|numeric|gte:0",
             "expected_total" => "required|numeric|gt:0",
@@ -62,9 +65,9 @@ final class PointOfSaleController
                     "already_posted" => true,
                 ]);
             }
-            $cash = DB::table("accounts")->find($d["payment_account_id"]);
+            $cash = DB::table("accounts")->find($d["payment_account_id"] ?? 0);
             abort_unless(
-                $cash && AccountPolicy::active($cash) && AccountPolicy::cash($cash),
+                $d["payment_method"] === "cheque" || ($cash && AccountPolicy::active($cash) && AccountPolicy::cash($cash)),
                 422,
                 "Choose an active cash/bank account.",
             );
@@ -114,7 +117,11 @@ final class PointOfSaleController
             $receiptRequest = Request::create("/", "POST", [
                 "invoice_id" => $invoice["id"],
                 "collector_sales_rep_id" => $d["sales_rep_id"],
-                "payment_account_id" => $d["payment_account_id"],
+                "payment_account_id" => $d["payment_account_id"] ?? null,
+                "request_key" => $d["checkout_key"],
+                "cheque_number" => $d["cheque_number"] ?? null,
+                "cheque_bank" => $d["cheque_bank"] ?? null,
+                "cheque_date" => $d["cheque_date"] ?? null,
                 "receipt_date" => $d["invoice_date"],
                 "collection_type" => "final",
                 "payment_method" => $d["payment_method"],

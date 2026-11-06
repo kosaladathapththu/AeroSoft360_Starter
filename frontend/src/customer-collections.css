@@ -31,3 +31,9 @@
 .collection-action-message { padding: 12px; border: 1px solid #a2cbbb; background: #edf8f2; border-radius: 6px; }
 @media(max-width: 1000px) { .collection-input-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media(max-width: 600px) { .collection-input-grid { grid-template-columns: 1fr; } .collection-customer-balance { align-items: flex-start; flex-direction: column; gap: 6px; } }
+.collection-customer-balance small { display: block; font-size: 12px; margin-top: 4px; color: #56756a; }
+.shell .collection-invoice-toolbar button.secondary { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 8px 12px; border: 1px solid #abc9bc; border-radius: 7px; background: #eef7f0; color: #256044; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.shell .collection-invoice-toolbar button.secondary:hover { background: #dcefe3; border-color: #4c9271; }
+.shell .collection-invoice-toolbar button:disabled { opacity: .5; cursor: default; }
+.shell .collection-register .primary { border: 1px solid #116947; background: #167652; color: white; border-radius: 7px; padding: 8px 12px; }
+.shell .collection-register .danger { border: 1px solid #d9a69e; background: #fceeea; color: #a13326; border-radius: 7px; padding: 8px 12px; }

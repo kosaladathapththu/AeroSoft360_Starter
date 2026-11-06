@@ -118,12 +118,16 @@ check(DB::table('customer_receipts')->count()===2 && DB::table('customer_collect
 check((float)DB::table('sales_invoices')->where('id',1)->value('outstanding')===0.0 && (float)DB::table('sales_invoices')->where('id',2)->value('outstanding')===500.0,'full and partial settlements calculated correctly');
 check(balance('1000')===1500.0 && balance('5300')===10.0,'cash and only ticked commission posted');
 receive($cash);check(DB::table('customer_collections')->count()===1,'retry does not duplicate payment');
+$changed=$cash;$changed['amount']=1400;reject(fn()=>receive($changed),'reused key cannot silently accept a different payment');
 invoice(3);invoice(4);$cheque=receive(body([3,4],true));
 check(balance('1120')===1500.0 && balance('1000')===1500.0,'held cheque is an asset but does not increase cash');
 check(balance('5300')===10.0,'held cheque does not accrue commission');
 reject(fn()=>action($cheque['id'],'clear','2026-11-02'),'post-dated cheque cannot clear early');
+DB::table('accounting_periods')->update(['status'=>'closed']);reject(fn()=>action($cheque['id'],'clear'),'closed period blocks cheque clearance');DB::table('accounting_periods')->update(['status'=>'open']);
+check(DB::table('customer_collections')->where('id',$cheque['id'])->value('status')==='held','failed clearance retains held state');
 action($cheque['id'],'clear');check(balance('1120')===0.0 && balance('1000')===3000.0 && balance('5300')===20.0,'clearance transfers asset to bank and releases commission');
 reject(fn()=>action($cheque['id'],'clear'),'duplicate clearance rejected');
+DB::table('accounting_periods')->update(['status'=>'closed']);reject(fn()=>action($cheque['id'],'return','2026-11-05'),'closed period blocks cheque return');DB::table('accounting_periods')->update(['status'=>'open']);
 action($cheque['id'],'return','2026-11-05');
 check(balance('1000')===1500.0 && balance('1120')===0.0 && balance('5300')===10.0,'bank return passes through cheque holding and reverses commission');
 check((float)DB::table('sales_invoices')->where('id',3)->value('outstanding')===1000.0 && (float)DB::table('sales_invoices')->where('id',4)->value('outstanding')===1000.0,'returned cheque reopens exact invoice balances');
@@ -155,3 +159,8 @@ check(!App\Services\Accounting\AccountPolicy::cash(DB::table('accounts')->where(
 $ledger=(new App\Http\Controllers\Api\SubledgerController())->ledger(Request::create('/','GET',['kind'=>'customer','id'=>1,'from'=>'2026-01-01','to'=>'2026-11-06']))->getData(true);
 check(abs($ledger['closing']+1500)<0.001,'customer subledger includes dated cheque return reversals');
 echo "Customer collection and cheque lifecycle checks passed.\n";
+// Existing single-invoice/POS callers are routed through the same cheque holding workflow.
+$single = Request::create('/', 'POST', ['invoice_id'=>7,'collector_sales_rep_id'=>1,'receipt_date'=>'2026-10-28', 'payment_method'=>'cheque','amount'=>200,'commission_decision'=>'invoice_salesperson','cheque_number'=>'POS-CHQ','cheque_bank'=>'Test Bank','cheque_date'=>'2026-11-03']);
+$adapted=(new App\Http\Controllers\Api\AccountingSalesController())->receipt($single,$sales,$posting)->getData(true);
+check($adapted['collection']['status']==='held' && (float)$adapted['receipt']['amount']===200.0,'single-invoice cheque caller uses collection holding account');
+check(balance('1000')===1500.0 && balance('1120')===200.0,'single-invoice cheque cannot accidentally post to cash');
