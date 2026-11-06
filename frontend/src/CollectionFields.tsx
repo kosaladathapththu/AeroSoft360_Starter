@@ -14,7 +14,7 @@ export default function CollectionFields({ data, initial, user, busy }: {
   const [customerId, setCustomerId] = useState(Number(initial?.customer_id || 0));
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<number[]>(initial?.id ? [Number(initial.id)] : []);
-  const [invoiceAmounts, setInvoiceAmounts] = useState<Record<number, string>>({});
+  const [invoiceAmounts, setInvoiceAmounts] = useState<Record<number, string>>(() => initial?.id ? { [Number(initial.id)]: Number(initial.outstanding || 0).toFixed(2) } : {});
   const [commissionIds, setCommissionIds] = useState<number[]>([]);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
@@ -40,7 +40,27 @@ export default function CollectionFields({ data, initial, user, busy }: {
   const pendingCollections = (data.customer_collections || []).filter((row: any) => Number(row.customer_id) === customerId && row.status === "held");
   const pendingAmount = pendingCollections.reduce((sum: number, row: any) => sum + Number(row.amount), 0);
   const history = (data.customer_collections || []).filter((row: any) => Number(row.customer_id) === customerId);
-  const toggle = (id: number) => setSelected((old) => old.includes(id) ? old.filter((value) => value !== id) : [...old, id]);
+  const toggle = (id: number) => {
+    if (selected.includes(id)) {
+      setSelected((old) => old.filter((value) => value !== id));
+      return;
+    }
+    const invoice = invoices.find((row: any) => Number(row.id) === id);
+    if (!invoice || Number(invoice.outstanding) <= 0) return;
+    setInvoiceAmounts((old) => ({ ...old, [id]: Number(invoice.outstanding).toFixed(2) }));
+    setSelected((old) => [...old, id]);
+  };
+  const selectAllUnpaid = () => {
+    const unpaid = invoices.filter((row: any) => Number(row.outstanding) > 0);
+    setInvoiceAmounts((old) => {
+      const updated = { ...old };
+      unpaid.forEach((row: any) => {
+        if (!selected.includes(Number(row.id))) updated[Number(row.id)] = Number(row.outstanding).toFixed(2);
+      });
+      return updated;
+    });
+    setSelected(unpaid.map((row: any) => Number(row.id)));
+  };
   return <fieldset className="collection-fields customer-collection-form" disabled={busy}>
     <input type="hidden" name="request_key" value={requestKey} />
     <input type="hidden" name="customer_id" value={customerId || ""} />
@@ -78,11 +98,15 @@ export default function CollectionFields({ data, initial, user, busy }: {
       </section>
       <section className="collection-section">
         <div className="collection-invoice-toolbar"><h3>Choose invoices &amp; enter payment amounts</h3>
-          <button type="button" className="secondary" onClick={() => setSelected(invoices.filter((row: any) => Number(row.outstanding) > 0).map((row: any) => Number(row.id)))}>Select all unpaid</button>
+          <button type="button" className="secondary" onClick={selectAllUnpaid}>Select all unpaid</button>
           <button type="button" className="secondary" onClick={() => { setSelected([]); setInvoiceAmounts({}); setCommissionIds([]); }}>Clear ticks</button>
         </div>
         <label>Search invoices<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Invoice number, date or salesperson" /></label>
-        <p className="collection-search-status">{visible.length} invoices. Tick an invoice, then enter exactly how much to pay toward it. Close invoice fills its full balance. Search does not change your entries.</p>
+        <p className="collection-search-status">{visible.length} invoices. Tick an invoice to fill its full balance, then edit the amount for a part payment. Selecting another invoice keeps your existing entries.</p>
+        <div className={`collection-allocation-summary ${error ? "needs-allocation" : "ready"}`} role="status">
+          <b>Collected: {money(amount)} · Allocated: {money(plan.total)}</b>
+          <span>{error || (method === "cheque" ? "Ready to save. Settlement remains pending cheque clearance." : "Fully allocated. Balances update when you save.")}</span>
+        </div>
         <div className="collection-table-scroll"><table className="collection-allocation-table"><thead><tr><th>Pay</th><th>Invoice / date</th><th>Salesperson</th><th>Bill value</th><th>Outstanding</th><th>This payment</th><th>After payment</th><th>Commission</th></tr></thead><tbody>
           {visible.map((row: any) => {
             const allocation = plan.allocations.find((item) => item.invoice_id === Number(row.id));
@@ -106,7 +130,7 @@ export default function CollectionFields({ data, initial, user, busy }: {
                     }}>Close invoice</button>
                 </div>
               </td>
-              <td>{money(allocation?.remaining ?? row.outstanding)}{allocation && allocation.amount > 0 && <small>{allocation.remaining === 0 ? (method === "cheque" ? "Covered by cheque" : "Fully settled") : "Part payment"}</small>}</td>
+              <td>{money(!error && allocation ? allocation.remaining : row.outstanding)}{allocation && allocation.amount > 0 && <small>{error ? "Adjust allocation before saving" : method === "cheque" ? "Pending cheque clearance" : allocation.remaining === 0 ? "Will settle on save" : "Part payment on save"}</small>}</td>
               <td>{row.is_opening_balance ? <small>Opening balance: none</small> : <label className="collection-commission-check"><input type="checkbox" aria-label={`Commission for ${invoiceReference(row)}`} checked={commissionIds.includes(Number(row.id))} disabled={!selected.includes(Number(row.id))} onChange={(event) => setCommissionIds((old) => event.target.checked ? [...old, Number(row.id)] : old.filter((id) => id !== Number(row.id)))} /> Apply</label>}</td>
             </tr>;
           })}
@@ -125,7 +149,6 @@ export default function CollectionFields({ data, initial, user, busy }: {
           <label>Commission recipient<select value={recipient} onChange={(event) => setRecipient(event.target.value)}><option value="invoice_salesperson">Each invoice salesperson</option><option value="collector">Payment collector</option></select></label>
         </div>
         <p className="collection-search-status">Only ticked commission entries are considered. Existing collection-day and per-piece rules apply; opening balances earn no commission.</p>
-        <div className={`collection-allocation-summary ${error ? "needs-allocation" : "ready"}`} role="status"><b>{allocated.length} invoices allocated · {money(plan.total)}</b><span>{plan.unallocated >= 0 ? `Unallocated: ${money(plan.unallocated)}. ` : ""}{error || (method === "cheque" ? "Ready to record as cheque pending clearance." : "Fully allocated. Ready to save collection.")}</span></div>
       </section>
       <section className="collection-section"><h3>Customer collection history</h3>
         <div className="collection-table-scroll"><table><thead><tr><th>Collection / date</th><th>Method / reference</th><th>Collected by</th><th>Amount</th><th>Status</th><th>Invoices paid</th></tr></thead><tbody>

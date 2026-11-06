@@ -230,3 +230,24 @@
     opacity: 1;
   }
 }
+@media screen {
+  /* Override the older shared form selectors without changing other pages. */
+  .shell .record-workspace-page .modal.collection-modal .customer-collection-form.collection-fields .collection-section :is(input:not([type=checkbox]):not([type=hidden]), select) {
+    border-color: #859f91;
+    background-color: #fff;
+    color: #172e24;
+  }
+  .shell .record-workspace-page .modal.collection-modal .customer-collection-form.collection-fields .collection-section input::placeholder {
+    color: #596b61;
+  }
+  .shell .record-workspace-page .modal.collection-modal .customer-collection-form.collection-fields .collection-allocation-table .collection-manual-payment input:not(:disabled) {
+    border-color: #a47b1b;
+    background-color: #fffefa;
+    color: #332b16;
+  }
+  .shell .record-workspace-page .modal.collection-modal .customer-collection-form.collection-fields .collection-manual-payment input:disabled {
+    background-color: #edf1ed;
+    border-color: #c0ccc3;
+    color: #647367;
+  }
+}
