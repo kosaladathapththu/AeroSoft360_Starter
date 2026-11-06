@@ -59,6 +59,8 @@ final class SubledgerController
                 ->whereIn("goods_receipt_id", $receipts->keys())
                 ->get()
                 ->keyBy("id");
+        $cheques = $customer && \Illuminate\Support\Facades\Schema::hasTable('customer_collections')
+            ? DB::table('customer_collections')->where('customer_id', $party->id)->get()->keyBy('id') : collect();
         $opening = 0;
         $running = 0;
         $rows = [];
@@ -72,6 +74,10 @@ final class SubledgerController
             if ($customer && $line->source_type === "customer_receipt") {
                 $source = $receipts->get($line->source_id);
                 $page = "Collections";
+            }
+            if ($customer && $line->source_type === 'cheque_return_receivable') {
+                $source = $cheques->get($line->source_id);
+                $page = 'Collections';
             }
             if (!$customer && $line->source_type === "goods_receipt") {
                 $source = $receipts->get($line->source_id);

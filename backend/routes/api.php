@@ -276,6 +276,8 @@ Route::prefix("v1")->group(function (): void {
             AccountingSalesController::class,
             "deleteInvoice",
         ])->middleware("permission:accounting.manage");
+        Route::post("/customer-collections", [\App\Http\Controllers\Api\CustomerCollectionController::class, "store"])->middleware("permission:accounting.manage");
+        Route::post("/customer-collections/{id}/cheque", [\App\Http\Controllers\Api\CustomerCollectionController::class, "transition"])->middleware("permission:accounting.manage");
         Route::post("/customer-receipts", [
             AccountingSalesController::class,
             "receipt",

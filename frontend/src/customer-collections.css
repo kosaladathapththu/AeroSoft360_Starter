@@ -1,0 +1,33 @@
+﻿.customer-collection-form { min-width: 0; }
+.collection-input-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; }
+.collection-input-grid label { margin: 0 !important; display: grid; gap: 6px; align-content: start; }
+.collection-payment-panel { border-top: 3px solid #217d65; }
+.collection-customer-balance, .collection-allocation-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; background: #eaf6ef; border: 1px solid #b3d6c2; border-radius: 8px; margin-top: 14px; color: #20513f; }
+.collection-customer-balance strong { font-size: 20px; }
+.collection-invoice-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.collection-invoice-toolbar h3 { margin: 0 auto 0 0; }
+.collection-invoice-toolbar > input { flex: 1; min-width: 180px; }
+.collection-invoice-toolbar > select { max-width: 290px; }
+.collection-invoice-toolbar label { display: flex; align-items: center; gap: 10px; margin: 0; }
+.collection-cheque-panel { padding: 16px; margin: 16px 0 0; border: 1px solid #e2c392; border-left: 4px solid #b67619; border-radius: 8px; background: #fff9ed; }
+.collection-cheque-panel > b { display: block; margin-bottom: 12px; }
+.collection-cheque-panel p { margin: 10px 0 0; font-size: 12px; color: #79541f; }
+.collection-table-scroll { overflow-x: auto; border: 1px solid #c7d8df; border-radius: 8px; }
+.collection-table-scroll table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.collection-table-scroll th { background: #edf2f4; font-size: 11px; text-transform: uppercase; text-align: left; }
+.collection-table-scroll td, .collection-table-scroll th { padding: 10px 12px; border-bottom: 1px solid #dce5e9; vertical-align: middle; }
+.collection-table-scroll small { display: block; color: #58717e; margin-top: 4px; line-height: 1.4; }
+.collection-allocation-table td:nth-child(4), .collection-allocation-table td:nth-child(5), .collection-allocation-table td:nth-child(6), .collection-allocation-table td:nth-child(7) { white-space: nowrap; }
+.collection-allocation-table input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: #157559; }
+.collection-selected-row { background: #eef8f1 !important; }
+.collection-commission-check { display: flex !important; align-items: center; gap: 7px; margin: 0 !important; white-space: nowrap; }
+.collection-allocation-summary { flex-wrap: wrap; }
+.collection-allocation-summary span { font-size: 13px; }
+.collection-register { margin: 14px 0; }
+.collection-register-rows { max-height: 420px; overflow-y: auto; }
+.collection-register-actions { display: flex; gap: 6px; }
+.collection-register-actions button { padding: 7px 10px; font-size: 12px; }
+.collection-action-panel { margin: 12px 0; }
+.collection-action-message { padding: 12px; border: 1px solid #a2cbbb; background: #edf8f2; border-radius: 6px; }
+@media(max-width: 1000px) { .collection-input-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media(max-width: 600px) { .collection-input-grid { grid-template-columns: 1fr; } .collection-customer-balance { align-items: flex-start; flex-direction: column; gap: 6px; } }

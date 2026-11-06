@@ -283,6 +283,7 @@ final class AccountingSalesController extends Controller
         return DB::transaction(function () use ($data, $id) {
             $allocation = DB::table("receipt_allocations")->find($id);
             abort_unless($allocation, 404, "Commission not found.");
+            abort_if(Schema::hasTable("customer_collection_lines") && DB::table("customer_collection_lines")->where("receipt_id", $allocation->receipt_id)->exists(), 422, "Collection commissions follow their original allocation and cheque clearance. Use an audited manual commission adjustment if needed.");
             DB::table("receipt_allocations")
                 ->where("id", $id)
                 ->update($data + ["updated_at" => now()]);
@@ -300,6 +301,7 @@ final class AccountingSalesController extends Controller
         return DB::transaction(function () use ($id) {
             $allocation = DB::table("receipt_allocations")->find($id);
             abort_unless($allocation, 404, "Commission not found.");
+            abort_if(Schema::hasTable("customer_collection_lines") && DB::table("customer_collection_lines")->where("receipt_id", $allocation->receipt_id)->exists(), 422, "Collection commissions follow their original allocation and cheque clearance. Use an audited manual commission adjustment if needed.");
             DB::table("receipt_allocations")
                 ->where("id", $id)
                 ->update([
@@ -941,6 +943,7 @@ final class AccountingSalesController extends Controller
         return DB::transaction(function () use ($data, $id) {
             $receipt = DB::table("customer_receipts")->find($id);
             abort_unless($receipt, 404, "Collection not found.");
+            abort_if(Schema::hasTable("customer_collection_lines") && DB::table("customer_collection_lines")->where("receipt_id", $id)->exists(), 422, "This receipt belongs to a customer collection. Preserve its allocation history; manage cheques from the collection register.");
             abort_if(
                 (bool) ($receipt->is_opening_balance ?? false),
                 422,
@@ -1047,6 +1050,7 @@ final class AccountingSalesController extends Controller
         return DB::transaction(function () use ($id) {
             $receipt = DB::table("customer_receipts")->find($id);
             abort_unless($receipt, 404, "Collection not found.");
+            abort_if(Schema::hasTable("customer_collection_lines") && DB::table("customer_collection_lines")->where("receipt_id", $id)->exists(), 422, "This receipt belongs to a customer collection. Preserve its allocation history; manage cheques from the collection register.");
             abort_if(
                 (bool) ($receipt->is_opening_balance ?? false),
                 422,

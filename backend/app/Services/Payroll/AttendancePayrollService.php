@@ -216,8 +216,12 @@ class AttendancePayrollService
         }
         $automatic = (float) DB::table("receipt_allocations as a")
             ->join("customer_receipts as r", "r.id", "=", "a.receipt_id")
-            ->where("r.sales_rep_id", $repId)
-            ->whereBetween("r.receipt_date", [$from, $to])
+            ->where("a.commission_payee_sales_rep_id", $repId)
+            ->when(Schema::hasTable('customer_collection_lines'), function ($q) use ($from, $to) {
+                $q->leftJoin('customer_collection_lines as collection_line', 'collection_line.receipt_id', '=', 'r.id')
+                    ->leftJoin('customer_collections as collection', 'collection.id', '=', 'collection_line.collection_id')
+                    ->whereBetween(DB::raw('COALESCE(collection.cleared_date, r.receipt_date)'), [$from, $to]);
+            }, fn($q) => $q->whereBetween('r.receipt_date', [$from, $to]))
             ->where("a.commission_status", "eligible")
             ->sum("a.commission_amount");
         $manual = Schema::hasTable("manual_commissions")

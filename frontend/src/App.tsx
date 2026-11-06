@@ -72,6 +72,7 @@ import { reportSearchCatalog, pageSearchKeywords } from "./search-catalog";
 import GlobalSearchRecords from "./GlobalSearchRecords";
 import "./search.css";
 import CollectionFields from "./CollectionFields";
+import CollectionRegister from "./CollectionRegister";
 import PaymentVouchersPage from "./PaymentVouchersPage";
 import ChartOfAccountsPage from "./ChartOfAccountsPage";
 import CashFlowPage from "./CashFlowPage";
@@ -1540,6 +1541,7 @@ function SalesPage({
           </button>
         </div>
       )}
+      {page === "Collections" && <CollectionRegister data={data} canManage={permissions.includes("accounting.manage")} post={post} />}
       {page === "Inventory Overview" ? (
         <div className="inventory-overview">
           <div className="inventory-summary-grid">
@@ -4669,9 +4671,14 @@ function SalesCreateModal({
         notes: f.get("notes"),
       };
     } else {
-      path = "customer-receipts";
+      path = "customer-collections";
       body = {
-        invoice_id: Number(f.get("invoice_id")),
+        request_key: f.get("request_key"),
+        customer_id: Number(f.get("customer_id")),
+        allocations: JSON.parse(String(f.get("allocations") || "[]")),
+        cheque_number: f.get("cheque_number"),
+        cheque_bank: f.get("cheque_bank"),
+        cheque_date: f.get("cheque_date"),
         collector_sales_rep_id: Number(f.get("collector_sales_rep_id")),
         payment_account_id: Number(f.get("payment_account_id")) || null,
         receipt_date: f.get("receipt_date"),

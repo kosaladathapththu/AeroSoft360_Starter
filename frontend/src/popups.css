@@ -305,6 +305,12 @@
 .collection-section > label:first-of-type {
   margin-top: 0;
 }
+.collection-search-status {
+  margin: 6px 0 12px;
+  color: #526c79;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .collection-section .form-row > label {
   margin-top: 10px;
 }

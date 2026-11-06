@@ -32,7 +32,7 @@ final class DashboardService
             ->get();
         $paid = DB::table("receipt_allocations as a")
             ->join("customer_receipts as r", "r.id", "=", "a.receipt_id")
-            ->where("r.status", "posted")
+            ->when(true, fn($q) => \App\Services\Accounting\ReceiptScope::asOf($q, "r", $asOf))
             ->whereDate("r.receipt_date", "<=", $asOf)
             ->select("a.invoice_id")
             ->selectRaw("SUM(a.amount) as amount")
@@ -85,7 +85,7 @@ final class DashboardService
         );
         $receipts = DB::table("customer_receipts as r")
             ->join("customers as c", "c.id", "=", "r.customer_id")
-            ->where("r.status", "posted")
+            ->when(true, fn($q) => \App\Services\Accounting\ReceiptScope::asOf($q, "r", $asOf))
             ->where("r.is_opening_balance", false)
             ->whereBetween("r.receipt_date", [$from, $asOf])
             ->select(

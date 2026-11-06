@@ -6,6 +6,8 @@ Account: /home/camymarket
 This ZIP updates the application files. Creating it does not deploy anything.
 It contains the new Supun Group portal, four company logos, the separate Y-mac
 login, upcoming pages for the other companies, and the current ERP code.
+This release also includes the latest invoice layout, compact workflow links,
+shared record pagination and the collection invoice/customer search field.
 Only Y-mac accepts the existing AeroSoft360 credentials. Other companies do
 not yet have hosted ERP systems or login accounts through this portal.
 
@@ -37,7 +39,7 @@ SQL files, bootstrap cache contents and the entire runtime storage folder.
 It preserves the live users, passwords, customer records, balances, uploads,
 sessions and application key. Uploading code does not update database data.
 No SQL import, database reset, seeding or key generation is needed for this
-portal update. Historical migration files are included as application source;
+application update. Historical migration files are included as application source;
 do not run migrations just because those files are present.
 
 ## 3. Clear cached application configuration
@@ -63,8 +65,11 @@ pool through the server administrator. Do not restart unrelated applications.
 3. Y-mac should open its separate login page. Sign in with an existing account
    and verify the dashboard and customer balances.
 4. Each other company should show “Hosting is upcoming” with no password form.
-5. Check existing reports, downloads and the database backup function.
-6. Use Ctrl+F5 if the browser displays the previous page. Keep old hashed
+5. In Collections, open Record collection. Search by customer name and invoice
+   number, select the intended invoice and verify its outstanding balance.
+   Check invoice entry starts without a preselected article.
+6. Check existing reports, downloads and the database backup function.
+7. Use Ctrl+F5 if the browser displays the previous page. Keep old hashed
    assets temporarily so already open browser sessions continue to work.
 
 If checks fail, restore the previous application files from your backup.
