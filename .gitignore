@@ -8,5 +8,6 @@
 .runtime/
 backend-php80-backup/
 /tmp/
+/output/hosting/
 backend/storage/app/private/database-backups/
 .DS_Store
