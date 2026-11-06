@@ -4,12 +4,14 @@ import { financeCsv, financeToday } from "./finance-utils";
 import { dateRangePreset, filterRecords, recordFields, RecordCondition, RecordField } from "./record-filters";
 import "./record-filters.css";
 import { displayReferenceValue } from "./representative-reference";
+import ScreenPagination from "./ScreenPagination";
 
 type Props<T> = {
   records: T[];
   fields?: RecordField[];
   title?: string;
   customerSearch?: boolean;
+  paginate?: boolean;
   children: (rows: T[], active: boolean) => ReactNode;
 };
 
@@ -19,6 +21,7 @@ export default function FilteredRecords<T extends Record<string, any>>({
   fields: configuredFields,
   title = "records",
   customerSearch = false,
+  paginate = true,
   children,
 }: Props<T>) {
   const id = useId();
@@ -267,7 +270,7 @@ export default function FilteredRecords<T extends Record<string, any>>({
             .join("; ")}
         </p>
       )}
-      {children(rows, active)}
+      {paginate ? <ScreenPagination title={title} selection={JSON.stringify([query, conditions, rows.map((row) => row.id ?? row.number ?? row.code)])}>{children(rows, active)}</ScreenPagination> : children(rows, active)}
       {!rows.length && records.length > 0 && (
         <p className="record-filter-empty" role="status">
           No matching {title}. Change your search or reset the filters.

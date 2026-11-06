@@ -131,6 +131,10 @@ console.log("20 record filtering checks passed.");
 // Render the real reusable panel without a browser or business database.
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
+const pagination = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, "../src/ScreenPagination.tsx"), "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 },
+}).outputText, { exports: pagination, require: (file) => file.endsWith(".css") ? {} : require(file) });
 const panel = {};
 vm.runInNewContext(
   ts.transpileModule(fs.readFileSync(path.join(__dirname, "../src/FilteredRecords.tsx"), "utf8"), {
@@ -143,7 +147,7 @@ vm.runInNewContext(
   {
     exports: panel,
     require: (file) =>
-      file === "./record-filters" || file === "./representative-reference"
+      file === "./ScreenPagination" ? pagination : file === "./record-filters" || file === "./representative-reference"
         ? load(file.replace("./", ""))
         : file === "./finance-utils"
           ? { financeCsv() {} }

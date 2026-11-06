@@ -11,9 +11,6 @@
   .invoice-list-page .invoice-customer-search { flex: 0 1 260px; min-width: 180px; display: grid; gap: 3px; font-size: 11px; color: #355d56; }
   .invoice-list-page .record-filter-main { align-items: end; }
   .invoice-list-page .record-filters .record-search { font-size: 11px; gap: 3px; }
-  .invoice-list-page .heading .heading-actions > button:first-child { background: #7c4aaf; border-color: #7c4aaf; color: #fff; }
-  .invoice-list-page .heading .heading-actions > button:nth-child(2) { background: #b85b24; border-color: #b85b24; color: #fff; }
-  .invoice-list-page .heading .heading-actions > button:last-child { background: #087e6d; border-color: #087e6d; color: #fff; }
   .invoice-list-page .record-filters .record-filter-main > button:first-of-type { background: #dff0fb; color: #175e84; border-color: #9cc8df; }
   .invoice-list-page .record-filters .record-filter-main > button:last-of-type { background: #e5f1dc; color: #386321; border-color: #b7d49f; }
   .invoice-list-page .invoice-table-card .row-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }

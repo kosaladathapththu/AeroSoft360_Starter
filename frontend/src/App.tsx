@@ -14,6 +14,7 @@ import SalesOrderDetails from "./SalesOrderDetails";
 import ReceivableActionModal from "./ReceivableActionModal";
 import FilteredRecords from "./FilteredRecords";
 import InvoicePagination from "./InvoicePagination";
+import "./invoice-entry.css";
 import { Fragment, FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -79,6 +80,7 @@ import "./layout-fixes.css";
 import "./form-defaults.css";
 import "./compact-layout.css";
 import "./workspace-entry.css";
+import "./system-colours.css";
 
 const PublicSite = lazy(() => import("./PublicSite"));
 const API =
@@ -619,7 +621,7 @@ export default function App() {
           </button>
         </header>
         <section className={`content ${page === "Invoices" ? "invoice-list-page" : ""}`}>
-          {page !== "Dashboard" && page !== "Invoices" && <WorkflowSteps page={page} go={goToPage} />}
+          {page !== "Dashboard" && <WorkflowSteps page={page} go={goToPage} />}
           {page === "Purchasing Overview" ? (
             <PurchasingOverview
               api={API}
@@ -1721,7 +1723,7 @@ function SalesPage({
           </FilteredRecords>
         </div>
       ) : (
-        <FilteredRecords records={rows} title="records" customerSearch={page === "Invoices"} key={page + collectionView}>
+        <FilteredRecords records={rows} title="records" paginate={page !== "Invoices"} customerSearch={page === "Invoices"} key={page + collectionView}>
           {(filteredRows, filtersActive) => (
             <InvoicePagination records={filteredRows} enabled={page === "Invoices"}>
               {(pageRows) => (
@@ -6113,7 +6115,8 @@ function SalesCreateModal({
                       )?.quantity || 0,
                     );
                   return (
-                    <div className="invoice-item-card" key={index}>
+                    <div className={`invoice-item-card simple-invoice-item ${article ? "has-article" : "empty-article"}`} key={index}>
+                      <div className="invoice-item-title"><b>Item {index + 1}</b><small>{article ? `${displayCode(article)} — ${article.name}` : "Select an article below"}</small></div>
                       <div className="invoice-item-header">
                         <label>
                           Article
@@ -6443,6 +6446,9 @@ function SalesCreateModal({
                             <strong>{stockForSize(item.size_label)} pcs</strong>
                           </span>
                         ))}
+                      </div>
+                      <div className="invoice-item-summary">
+                        <div><small>Item total</small><strong>{money(line.order_mode === "custom" ? customTotal : Number(line.sets || 0) * setPrice)}</strong></div>
                       </div>
                     </div>
                   );

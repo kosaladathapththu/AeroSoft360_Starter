@@ -1,0 +1,82 @@
+/* Shared screen palette for ERP pages and entry forms. Public brands and print
+   documents retain their own colours. Shape, spacing and permissions are unchanged. */
+@media screen {
+  .shell .content > .workflow-step-strip { display: flex; gap: 6px; margin: 0 0 10px; padding: 0; }
+  .shell .content > .workflow-step-strip button { --step-ink: #683ca0; --step-fill: #f0e7fc; --step-border: #ceb5ec; flex: 1 1 0; min-width: 0; min-height: 32px; padding: 5px 8px; gap: 6px; border: 1px solid var(--step-border); border-radius: 6px; background: var(--step-fill); color: var(--step-ink); }
+  .shell .content > .workflow-step-strip button:nth-child(2) { --step-ink: #235f91; --step-fill: #e5f0fc; --step-border: #adcde9; }
+  .shell .content > .workflow-step-strip button:nth-child(3) { --step-ink: #925617; --step-fill: #fff0d9; --step-border: #e5c28c; }
+  .shell .content > .workflow-step-strip button:nth-child(4) { --step-ink: #116e72; --step-fill: #dcf1f1; --step-border: #99cccc; }
+  .shell .content > .workflow-step-strip button:nth-child(5) { --step-ink: #2a7145; --step-fill: #e3f3e6; --step-border: #a7d2b3; }
+  .shell .content > .workflow-step-strip button.current { border-color: var(--step-ink); box-shadow: inset 0 -2px var(--step-ink); }
+  .shell .content > .workflow-step-strip i { width: 20px; height: 20px; flex: 0 0 20px; font-size: 10px; background: #fff9; color: var(--step-ink); }
+  .shell .content > .workflow-step-strip b { font-size: 10px; line-height: 1.2; color: inherit; }
+  .shell .content > .workflow-step-strip small { display: none; }
+  @media(max-width:700px) {
+    .shell .content > .workflow-step-strip { overflow-x: auto; }
+    .shell .content > .workflow-step-strip button { flex: 0 0 142px; }
+  }
+  .shell {
+    --action-green: #11745c;
+    --action-green-hover: #0a5a46;
+    --action-border: #afc6cc;
+    --field-ink: #243f4b;
+    --field-muted: #5a727b;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) :is(.primary, button.approve) {
+    background: var(--action-green); border-color: var(--action-green); color: #fff;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) :is(.primary, button.approve):hover:not(:disabled) {
+    background: var(--action-green-hover); border-color: var(--action-green-hover);
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) .secondary-action {
+    background: #eef4f6; border-color: #afc6cc; color: #315b6b;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) .secondary-action:has(> .lucide-plus) {
+    background: #e2f0e8; border-color: #a0c9b5; color: #256448;
+  }
+  /* Both semantic classes and existing icon classes cover legacy action buttons. */
+  .shell :is(.content, .record-workspace-page, .backdrop) button:is(.view, :has(> .lucide-eye)) {
+    background: #eee5fa; border: 1px solid #c4ace7; color: #603095;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) button:is(.edit, :has(> .lucide-pencil), :has(> .lucide-square-pen)) {
+    background: #fff0cc; border: 1px solid #dbb767; color: #805008;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) button:is(.download, .invoice-print-action, :has(> .lucide-printer), :has(> .lucide-download), :has(> .lucide-file-down)) {
+    background: #e1effa; border: 1px solid #a3c5e1; color: #205e89;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) button:is(.delete, .danger, :has(> .lucide-trash-2), :has(> .lucide-trash)) {
+    background: #fbe3e7; border: 1px solid #e1a3ad; color: #a32e40;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) button:has(> .lucide-filter) {
+    background: #e6eefb; border: 1px solid #adc2e1; color: #365d94;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) button:has(> .lucide-rotate-ccw) {
+    background: #f0f3f5; border: 1px solid #bdcbd1; color: #536a75;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) button:is(.icon-action, .secondary-action):hover:not(:disabled) {
+    filter: brightness(.95); box-shadow: 0 2px 4px #233d491c;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) button:disabled {
+    cursor: not-allowed; opacity: .48; box-shadow: none; filter: none;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) .secondary-action:disabled > svg:not(.lucide-loader-circle):not(.lucide-loader-2) { animation: none; }
+  .shell :is(.content, .record-workspace-page, .backdrop) :is(button, input, select, textarea):focus-visible {
+    outline: 3px solid #78b6a3; outline-offset: 2px;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not([type="color"]), select, textarea
+  ) {
+    border-color: #99b4bf; background-color: #fff; color: var(--field-ink);
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) :is(input, textarea)::placeholder { color: #71858e; opacity: 1; }
+  .shell :is(.content, .record-workspace-page, .backdrop) :is(input, select, textarea):is(:disabled, [readonly]) {
+    background-color: #edf2f5; border-color: #c8d6dc; color: #536b77;
+  }
+  .shell :is(.content, .record-workspace-page, .backdrop) :is(input[type="checkbox"], input[type="radio"]) { accent-color: var(--action-green); }
+  .shell .table-card thead th { background: #e2ecee; color: #284b59; border-bottom-color: #b1c8cf; }
+  .shell .table-card tbody tr:nth-child(even) td { background-color: #f3f7f8; }
+  .shell .table-card tbody tr:hover td { background-color: #e6f2ed; }
+  .shell .status:is(.paid, .active, .confirmed, .eligible, .posted) { background: #e0f1e6; color: #256544; }
+  .shell .status:is(.unpaid, .part_paid, .pending, .draft) { background: #fff1d1; color: #80570f; }
+  .shell .status:is(.overdue, .cancelled, .inactive, .rejected) { background: #fbe4e7; color: #a43343; }
+}
