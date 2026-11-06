@@ -1,6 +1,7 @@
 import DashboardOverview from "./DashboardOverview";
 import CustomerOrderContext from "./CustomerOrderContext";
 import OrderCustomerPicker from "./OrderCustomerPicker";
+import { orderPacks, packDescription } from "./order-packs";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import DatabaseBackupPage from "./DatabaseBackupPage";
@@ -4063,6 +4064,22 @@ function SalesCreateModal({
           },
         ]),
   ]);
+  useEffect(() => {
+    if (initial) return;
+    setPoLines((lines) => {
+      let changed = false;
+      const next = lines.map((line) => {
+        if (!line.article_id) return line;
+        const packs = orderPacks(data.articles.find((article: any) => Number(article.id) === Number(line.article_id)));
+        if (packs.some((pack) => Number(pack.id) === Number(line.set_template_id))) return line;
+        const packId = Number(packs[0]?.id || 0);
+        if (Number(line.set_template_id) === packId) return line;
+        changed = true;
+        return { ...line, set_template_id: packId, set_item_id: Number(packs[0]?.items?.[0]?.id || 0) };
+      });
+      return changed ? next : lines;
+    });
+  }, [data.articles, poLines, initial]);
   const invoicableArticles = (data.articles || []).filter(
     (article: any) =>
       article.status !== "inactive" &&
@@ -5369,6 +5386,8 @@ function SalesCreateModal({
                     const selectableItems = (selectedArticle?.sets || [])
                       .filter((set: any) => set.status !== "inactive")
                       .flatMap((set: any) => set.items.map((item: any) => ({ ...item, set_name: set.name })));
+                    const packs = orderPacks(selectedArticle);
+                    const selectedPack = packs.find((pack) => Number(pack.id) === Number(line.set_template_id));
                     const selectedSizeCount = Object.values(line.custom_sizes || {}).filter(
                       (quantity: any) => Number(quantity) > 0,
                     ).length;
@@ -5382,9 +5401,7 @@ function SalesCreateModal({
                               selectedId={Number(line.article_id)}
                               listId={`po-article-options-${index}`}
                               onSelect={(article) => {
-                                const set = article?.sets?.find(
-                                  (s: any) => s.status !== "inactive",
-                                );
+                                const set = orderPacks(article)[0];
                                 setPoLines((lines) =>
                                   lines.map((x, i) =>
                                     i === index
@@ -5515,7 +5532,7 @@ function SalesCreateModal({
                             />
                           )}
                         </label>
-                        <RateFields
+                        {line.order_mode !== "custom" && <RateFields
                           articlePrice={selectedArticle?.selling_price}
                           readOnly={line.order_mode !== "custom"}
                           givenRates={line.given_rates}
@@ -5537,39 +5554,16 @@ function SalesCreateModal({
                               ),
                             )
                           }
-                        />
+                        />}
                         <label className="order-template-field">
-                          {line.order_mode === "badge" ? "Set template" : "Selected sizes"}
+                          {line.order_mode === "badge" ? "Sizes in one set" : "Selected sizes"}
                           {line.order_mode === "badge" ? (
-                            <select
-                              value={line.set_template_id}
-                              onChange={(e) =>
-                                setPoLines((lines) =>
-                                  lines.map((x, i) =>
-                                    i === index
-                                      ? { ...x, set_template_id: Number(e.target.value) }
-                                      : x,
-                                  ),
-                                )
-                              }
-                              required
-                            >
-                              {data.articles
-                                .find((a: any) => Number(a.id) === Number(line.article_id))
-                                ?.sets.filter((s: any) => s.status !== "inactive")
-                                .map((set: any) => (
-                                  <option value={set.id} key={set.id}>
-                                    {set.name} ({set.pieces} pcs · {money(set.set_price)})
-                                  </option>
-                                ))}
-                            </select>
-                          ) : (
-                            <div className="custom-size-summary">
-                              {selectedSizeCount
-                                ? `${selectedSizeCount} size${selectedSizeCount === 1 ? "" : "s"} selected`
-                                : "Select sizes below"}
-                            </div>
-                          )}
+                            packs.length > 1 ? <select value={line.set_template_id}
+                              onChange={(event) => setPoLines((lines) => lines.map((value, i) => i === index ? { ...value, set_template_id: Number(event.target.value) } : value))} required>
+                              <option value="0" disabled>Choose a size pack</option>
+                              {packs.map((pack) => <option value={pack.id} key={pack.id}>{packDescription(pack)}</option>)}
+                            </select> : <div className="order-pack-description">{selectedPack ? packDescription(selectedPack) : "No size breakdown configured. Use Customize if sizes are available."}</div>
+                          ) : <div className="custom-size-summary">{selectedSizeCount} sizes selected</div>}
                         </label>
                         {line.order_mode === "badge" ? (
                           <label className="order-quantity-field">
@@ -5628,9 +5622,10 @@ function SalesCreateModal({
                               <b>Size</b>
                               <b>Item code</b>
                               <b>Colour quantities</b>
-                              <b>Price</b>
+                              <b>Fixed / piece</b>
+                              <b>Given / piece (LKR)</b>
                               <b>Available</b>
-                              <b>Size total</b>
+                              <b>Pieces</b>
                             </div>
                             {selectableItems.map((item: any) => {
                               const quantity = Number(line.custom_sizes?.[item.id] || 0);
@@ -5689,7 +5684,7 @@ function SalesCreateModal({
                                       )
                                     }
                                   />
-                                  <b>{item.size_label}</b>
+                                  <span><b>{item.size_label}</b><small className="custom-pack-label">{item.set_name}</small></span>
                                   <span>{item.item_code || "—"}</span>
                                   <div className="size-colour-options">
                                     {itemColours.length ? (
@@ -5781,7 +5776,20 @@ function SalesCreateModal({
                                       <small>No colour specified</small>
                                     )}
                                   </div>
-                                  <span><small>Fixed: {money(fixedItemRate(line, item))}</small><br /><b>Given: {money(givenItemRate(line, item))}</b></span>
+                                  <b>{money(fixedItemRate(line, item))}</b>
+                                  <input
+                                    aria-label={`Given price for size ${item.size_label} / ${item.item_code || item.id}`}
+                                    type="number" min="0" step="0.01"
+                                    value={line.given_rates?.[item.id] ?? ""}
+                                    placeholder="Use fixed price"
+                                    onChange={(event) => setPoLines((lines) => lines.map((value, i) => {
+                                      if (i !== index) return value;
+                                      const given = { ...value.given_rates };
+                                      if (event.target.value === "") delete given[item.id];
+                                      else given[item.id] = Number(event.target.value);
+                                      return { ...value, given_rates: given, custom_rate: null };
+                                    }))}
+                                  />
                                   <span>
                                     {Number(
                                       (data.finished_stock || []).find(
