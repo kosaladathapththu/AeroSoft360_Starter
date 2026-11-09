@@ -899,6 +899,7 @@ function SalesPage({
     [collectionView, setCollectionView] = useState<"due" | "history" | "register">("due"),
     [collectionInvoice, setCollectionInvoice] = useState<any>(null),
     [savedCollectionId, setSavedCollectionId] = useState<number | null>(null),
+    [collectionAction, setCollectionAction] = useState<{ id: number; type: string } | null>(null),
     [inventoryQuery, setInventoryQuery] = useState(""),
     [inventoryType, setInventoryType] = useState("all"),
     [inventoryCategory, setInventoryCategory] = useState("all"),
@@ -1276,6 +1277,15 @@ function SalesPage({
     Commissions: "commission",
     "Finished Goods Stock": "finished_stock",
   };
+  const openReceiptCollection = (receipt: any, type: string): boolean => {
+    if (page !== "Collections" || collectionView !== "history") return false;
+    const allocation = (data.collection_allocations || []).find((line: any) => Number(line.receipt_id) === Number(receipt.id));
+    if (!allocation) return false;
+    setError("");
+    setCollectionAction({ id: Number(allocation.collection_id), type });
+    setCollectionView("register");
+    return true;
+  };
   const heads: any = {
     Customers: ["Customer", "Phone", "Credit terms", "Credit limit", "Status"],
     Salespersons: ["Representative", "Manager", "Channel", "Default rate", "Status"],
@@ -1316,11 +1326,8 @@ function SalesPage({
         : [
             "Receipt",
             "Customer",
-            "Invoice salesperson",
-            "Cash collector",
-            "Date",
-            "Collection type",
-            "Method",
+            "Salesperson / collector",
+            "Date / method",
             "Amount",
           ],
     "Debtors Aging": [
@@ -1551,7 +1558,7 @@ function SalesPage({
           <button className={collectionView === "register" ? "active" : ""} onClick={() => setCollectionView("register")}>Cheques &amp; collections <small>{(data.customer_collections || []).length}</small></button>
         </div>
       )}
-      {page === "Collections" && collectionView === "register" ? <CollectionRegister data={data} savedId={savedCollectionId} consumeSaved={() => setSavedCollectionId(null)} canManage={permissions.includes("accounting.manage")} post={post} /> : page === "Inventory Overview" ? (
+      {page === "Collections" && collectionView === "register" ? <CollectionRegister data={data} savedId={savedCollectionId} consumeSaved={() => setSavedCollectionId(null)} requestedAction={collectionAction} consumeAction={() => setCollectionAction(null)} canManage={permissions.includes("accounting.manage")} post={post} /> : page === "Inventory Overview" ? (
         <div className="inventory-overview">
           <div className="inventory-summary-grid">
             <button
@@ -1740,7 +1747,7 @@ function SalesPage({
               {(pageRows) => (
             <div
               ref={salesTableRef}
-              className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
+              className={`table-card sales-table-card ${page === "Collections" && collectionView === "history" ? "collection-history-table" : ""} ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
             >
               {page === "Invoices" && <p className="invoice-table-help">Scroll horizontally to see received amounts, outstanding balances, status and actions.</p>}
               <table>
@@ -1836,7 +1843,7 @@ function SalesPage({
                                   <button
                                     className="icon-action view"
                                     title={page === "Invoices" ? "View invoice details" : "View details"}
-                                    onClick={() => setViewing(r)}
+                                    onClick={() => { if (!openReceiptCollection(r, "view")) setViewing(r); }}
                                   >
                                     <Eye />{page === "Invoices" && <span>View</span>}
                                   </button>
@@ -2035,6 +2042,7 @@ function SalesPage({
                                     <button
                                       className="icon-action edit"
                                       title={`Edit ${page}`}
+                                      disabled={page === "Collections" && r.status === "returned"}
                                       onClick={() =>
                                         page === "Invoices"
                                           ? setEditingMaster({ type: "invoice", row: r })
@@ -2046,7 +2054,9 @@ function SalesPage({
                                     <button
                                       className="icon-action delete"
                                       title={`Delete ${page}`}
+                                      disabled={page === "Collections" && r.status === "returned"}
                                       onClick={async () => {
+                                        if (openReceiptCollection(r, "void")) return;
                                         if (
                                           !confirm(
                                             `Delete ${r.number}? Related posted records will be checked first.`,
@@ -2883,13 +2893,11 @@ function salesCells(page: string, r: any) {
       <>
         <td>
           <b>{invoiceReference(r)}</b>
+          <small>{r.status === "returned" ? "Reversed / returned" : (r.collection_type || "regular").replaceAll("_", " ")}</small>
         </td>
         <td>{r.customer_name}</td>
-        <td>{r.invoice_rep_name}</td>
-        <td>{r.collector_name || r.invoice_rep_name}</td>
-        <td>{r.receipt_date}</td>
-        <td>{(r.collection_type || "regular").replaceAll("_", " ")}</td>
-        <td>{r.payment_method.replaceAll("_", " ")}</td>
+        <td>{r.invoice_rep_name || "Not assigned"}<small>Collector: {r.collector_name || "Not assigned"}</small></td>
+        <td>{r.receipt_date}<small>{r.payment_method.replaceAll("_", " ")}</small></td>
         <td>{money(r.amount)}</td>
       </>
     );
