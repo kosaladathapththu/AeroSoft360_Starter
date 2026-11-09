@@ -2672,3 +2672,8 @@ aside .user:hover {
 .inventory-record-page { background:white; border:1px solid #bdcec7; border-radius:12px; }
 .inventory-record-page .popup-body { max-height:none; overflow:visible; }
 .inventory-record-page .popup-header,.inventory-record-page .popup-footer { position:static; }
+
+.inventory-record-page { padding:20px; }
+.inventory-record-page .popup-header { padding:0 0 16px; }
+.inventory-record-page .popup-body { padding:16px 0; }
+.inventory-record-page .popup-footer { padding:12px 0 0; }

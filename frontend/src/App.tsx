@@ -1373,8 +1373,9 @@ function SalesPage({
         colours:[...new Set((article.sets || []).flatMap((set: any) => (set.items || []).filter((item: any) => String(item.size_label) === size).flatMap((item: any) => splitColours(item.colours || ""))))]};
     });
     return {id:"finished-article-"+article.id,record_id:article.id,article_code:article.code,article_name:article.name,
-      inventory_kind:"finished",type:"Finished goods",item:article.code+" ? "+article.name,
+      inventory_kind:"finished",type:"Finished goods",item:article.code+" / "+article.name,
       category:article.category || "Uncategorized",quantity:details.reduce((sum:number,item:any)=>sum+item.quantity,0),
+      item_codes:(article.sets || []).flatMap((set:any)=>(set.items || []).map((item:any)=>item.item_code || "")).join(" "),
       unit:"pcs",details,variant:details.length ? details.length+" sizes" : "Sizes not configured",size_labels:sizes.join(", ")};
   });
   const inventoryRows =
@@ -1403,7 +1404,7 @@ function SalesPage({
       (inventoryCategory === "all" || item.category === inventoryCategory) &&
       matchesSearch(item, search) &&
       (!query ||
-        `${item.item} ${item.category} ${item.variant} ${item.size_labels || ""} ${item.type}`
+        `${item.item} ${item.category} ${item.variant} ${item.size_labels || ""} ${item.item_codes || ""} ${item.type}`
           .toLowerCase()
           .includes(query))
     );

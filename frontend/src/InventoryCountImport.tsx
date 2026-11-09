@@ -32,8 +32,8 @@ export default function InventoryCountImport({api,token}: {api:string;token:stri
     </div>
     <small>Stock is tracked per article and size across colours. Configure missing sizes in Pricing List first. Raw material differences also post inventory adjustment journals.</small>
     {message&&<p role="status">{message}</p>}
-    {busy&&<p role="status">Processing?</p>}
-    {rows.length>0&&<><h3>Review {rows.length} stock counts</h3><div style={{maxHeight:360,overflow:"auto"}}><table><thead><tr>{["Article","Size","Current","New quantity","Change"].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.code+":"+row.size}><td>{row.code} ? {row.name}</td><td>{row.size}</td><td>{row.expected}</td><td><b>{row.quantity}</b></td><td>{row.difference>0?"+":""}{row.difference}</td></tr>)}</tbody></table></div>
+    {busy&&<p role="status">Processing...</p>}
+    {rows.length>0&&<><h3>Review {rows.length} stock counts</h3><div style={{maxHeight:360,overflow:"auto"}}><table><thead><tr>{["Article","Size","Current","New quantity","Change"].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.code+":"+row.size}><td>{row.code} / {row.name}</td><td>{row.size}</td><td>{row.expected}</td><td><b>{row.quantity}</b></td><td>{row.difference>0?"+":""}{row.difference}</td></tr>)}</tbody></table></div>
       <label>Reason for update<input value={reason} maxLength={255} onChange={e=>setReason(e.target.value)} placeholder="Physical stock count / opening inventory"/></label>
       <button type="button" disabled={busy||reason.trim().length<3} onClick={async()=>{
         setBusy(true);setMessage("");try{const result=await financeRequest(api,token,"inventory-count/apply",{rows:rows.map(({code,size,expected,quantity,kind,unit_cost})=>({code,size,expected,quantity,kind,unit_cost})),reason,import_key:key},"POST");setMessage(result.message);setRows([]);}catch(error){setMessage((error as Error).message);}finally{setBusy(false);}

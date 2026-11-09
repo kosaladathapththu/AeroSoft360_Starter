@@ -13,7 +13,7 @@ foreach ([
  'finished_goods_stock'=>['article_id','size_label','quantity','created_at','updated_at'],
  'finished_goods_movements'=>['article_id','size_label','movement_type','quantity','source_type','source_id','event_key','occurred_at','created_at','updated_at'],
  'stock_import_batches'=>['import_key','payload_hash','rows','created_at'], 'audit_logs'=>['event','entity_type','entity_id','payload','created_at'],
- 'materials'=>['code','name'],'stock_balances'=>['material_id','batch_number','quantity','unit_cost']
+ 'materials'=>['code','name'],'stock_balances'=>['material_id','batch_number','quantity','unit_cost','updated_at']
 ] as $name=>$columns) Schema::create($name,function($t)use($columns){$t->id();foreach($columns as $column)$t->string($column)->nullable();});
 DB::table('articles')->insert(['id'=>1,'code'=>'001-A','name'=>'Test shoe']);
 DB::table('article_set_templates')->insert(['id'=>1,'article_id'=>1]);
