@@ -4706,6 +4706,7 @@ function SalesCreateModal({
         payment_method: f.get("payment_method"),
         reference: f.get("reference"),
         amount: Number(f.get("amount")),
+        deduct_card_charge: f.get("deduct_card_charge") === "on",
       };
     }
     try {

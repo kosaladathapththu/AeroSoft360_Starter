@@ -51,6 +51,8 @@ In cPanel Terminal, use the PHP binary matching the ERP domain:
     cd /home/camymarket/aerosoft360
     /opt/cpanel/ea-php82/root/usr/bin/php artisan config:clear
     /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_06_000001_create_customer_collections.php --force
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_09_000001_group_cheques_under_current_assets.php --force
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_09_000002_add_card_collection_charges.php --force
     /opt/cpanel/ea-php82/root/usr/bin/php artisan route:clear
     /opt/cpanel/ea-php82/root/usr/bin/php artisan view:clear
 

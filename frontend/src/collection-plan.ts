@@ -11,6 +11,13 @@ export function collectionPlan(invoices: any[], selected: number[], amount: numb
   return { allocations, unallocated: remaining / 100 };
 }
 
+/** Available funds for one invoice, retaining amounts already assigned to other invoices. */
+export function availableInvoicePayment(id: number, due: number, selected: number[], amount: number, entered: Record<number, string>) {
+  const cents = (value: number) => Number.isFinite(value) ? Math.max(0, Math.round(value * 100)) : 0;
+  const used = selected.filter(value => value !== id).reduce((sum, value) => sum + cents(Number(entered[value] || 0)), 0);
+  return Math.min(cents(due), Math.max(0, cents(amount) - used)) / 100;
+}
+
 /** Manual entries are preserved; invalid amounts are reported rather than silently capped. */
 export function manualCollectionPlan(
   invoices: any[],

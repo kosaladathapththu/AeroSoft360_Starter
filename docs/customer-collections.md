@@ -1,11 +1,11 @@
-﻿# Customer collections and dated cheques
+# Customer collections and dated cheques
 
 ## Record a customer payment
 
 1. Open Sales > Collections > Record collection.
 2. Search for and select the customer. Their invoices appear together, oldest first, with invoice dates, salespeople, original bill values and unpaid balances. Settled invoices are shown but cannot be ticked for payment.
 3. Enter the total collected, collection date, payment method and collector.
-4. Tick the invoices covered by that payment. Each newly ticked invoice starts with its full outstanding balance in This payment; edit it for a part payment. Ticking another invoice preserves amounts already entered. Close invoice fills the full unpaid balance for that invoice. Your amounts are not redistributed when the collected total changes. Each row shows the remaining balance and full/partial settlement. Use Selected balances to fill all ticked balances, or explicitly choose Auto-fill oldest first as a shortcut. All invoice payments must add up to the amount collected. For example, from LKR 180,000 you may close a LKR 97,000 invoice and pay LKR 83,000 toward another invoice, regardless of their dates.
+4. Enter the collected total first. Ticking an invoice fills the smaller of its unpaid balance and the remaining collected money. Available for this invoice shows the available limit; Pay amount is editable. Reducing one payment frees money for other invoices without changing existing entries. For LKR 50,000, pay LKR 28,000 to close the first invoice, then allocate the remaining LKR 22,000 to any other invoice, or split it as LKR 10,000 and LKR 12,000. Pay full balance / Use remaining fills only available funds. All allocations must equal the collected total before saving.
 5. Tick Apply in the Commission column only where commission is intended. Choose each invoice's salesperson or the collector as recipient. Existing per-piece and collection-day rules apply; opening balances never earn commission. Eligibility is assessed on the original collection date. A cheque's commission is not released before clearing.
 6. Save. The whole collection and all allocations post together. Any invalid invoice, excess amount or closed accounting period rejects the entire collection. Repeated submission of the same request does not duplicate it.
 
@@ -61,3 +61,15 @@ Stop if account 1120 is already used for another purpose. Resolve the conflict b
 `backend/tests/verify_customer_collections.php` uses an isolated SQLite database to check full/partial payments, idempotency, ownership, stale balances, amount matching, holding-account isolation, early/duplicate clearance, bank/uncleared returns, commission reversal, dated aging, subledger reconciliation and atomic rollback.
 
 `frontend/tests/verify-collection-plan.cjs` checks deterministic oldest-first allocations, cent arithmetic, settled invoices and unallocated money. Browser checks use synthetic customers/invoices and intercept submissions; no real collection is created for verification.
+
+## Optional card processing charge
+
+In Record collection, choose Card and optionally tick "Deduct 3% bank charge".
+The default is unticked. Invoice allocations always use the gross customer payment.
+When ticked, the server calculates the fee once for the whole collection, rounded
+to two decimals. It posts a separate balanced journal: debit 5500 Bank Charges
+(expense), credit the selected receiving account. Together with the gross receipt,
+this records the net cash/bank increase without leaving a false customer debt.
+Collection history and the register retain the fee and show net received. Retrying
+the same request does not post the charge twice. Cash, transfers and cheques cannot
+use this deduction. Existing collections are not retrospectively charged.

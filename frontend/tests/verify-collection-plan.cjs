@@ -37,3 +37,11 @@ manual=output.manualCollectionPlan(customerInvoices,[1],180000,{1:''});assert.eq
 manual=output.manualCollectionPlan(customerInvoices,[1],180000,{1:'-1'});assert.equal(manual.invalid.length,1,'negative payment rejected');
 manual=output.manualCollectionPlan([{id:1,outstanding:.3}],[1],.3,{1:'.30'});assert.equal(manual.unallocated,0,'manual cents reconcile');
 console.log('12 manual allocation checks passed.');
+const available = output.availableInvoicePayment;
+assert.equal(available(1,28000,[],50000,{}),28000);
+assert.equal(available(2,39500,[1],50000,{1:'28000'}),22000,'second invoice only gets remaining collection');
+assert.equal(available(3,23000,[1,2],50000,{1:'28000',2:'10000'}),12000,'editing second allocation releases money for third');
+assert.equal(available(2,39500,[1,2],50000,{1:'28000',2:'22000'}),22000,'current row retains its own available amount');
+assert.equal(available(3,23000,[1,2],50000,{1:'28000',2:'22000'}),0,'no extra money invented');
+assert.equal(available(1,1,[],.3,{}),.3,'available uses cents');
+console.log('6 remaining payment checks passed.');

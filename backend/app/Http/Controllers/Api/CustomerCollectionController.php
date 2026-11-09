@@ -21,6 +21,7 @@ final class CustomerCollectionController
             'payment_method' => 'required|in:cash,bank_transfer,card,cheque',
             'payment_account_id' => 'nullable|integer|exists:accounts,id',
             'amount' => 'required|numeric|min:0.01|decimal:0,2',
+            'deduct_card_charge' => 'sometimes|boolean',
             'reference' => 'nullable|string|max:80',
             'cheque_number' => 'required_if:payment_method,cheque|nullable|string|max:80',
             'cheque_bank' => 'required_if:payment_method,cheque|nullable|string|max:160',
@@ -31,6 +32,7 @@ final class CustomerCollectionController
             'allocations.*.commission_decision' => 'required|in:invoice_salesperson,collector,cancel',
         ]);
         abort_unless(Schema::hasTable('customer_collections'), 422, 'Install the customer collections migration before posting.');
+        abort_if(!empty($data['deduct_card_charge']) && $data['payment_method'] !== 'card', 422, 'Bank charge deduction is only available for card payments.');
         return DB::transaction(function () use ($data, $sales, $posting, $request) {
             // Serialize submissions for this customer and recheck every invoice under lock.
             DB::table('customers')->where('id', $data['customer_id'])->lockForUpdate()->first();
@@ -50,7 +52,14 @@ final class CustomerCollectionController
                 ($cheque ? ($account->type === 'asset' && !$account->is_cash_account) : AccountPolicy::cash($account)),
                 422, 'Choose an active posting account. Cheques require the Cheques in Hand holding account.');
             abort_unless(DB::table('sales_representatives')->where('id', $data['collector_sales_rep_id'])->where('status', 'active')->exists(), 422, 'Choose an active collector.');
-            $fields = array_diff_key($data, array_flip(['allocations']));
+            $charge = !empty($data['deduct_card_charge']) ? round((float) $data['amount'] * 0.03, 2) : 0;
+            if ($charge > 0) {
+                $expense = DB::table('accounts')->where('code', '5500')->first();
+                abort_unless($expense && $expense->type === 'expense' && $expense->is_postable && AccountPolicy::active($expense), 422, 'An active Bank Charges expense account (5500) is required.');
+            }
+            $fields = array_diff_key($data, array_flip(['allocations', 'deduct_card_charge']));
+            $fields['bank_charge_rate'] = !empty($data['deduct_card_charge']) ? 3 : 0;
+            $fields['bank_charge_amount'] = $charge;
             $fields['request_fingerprint'] = $fingerprint;
             $fields['payment_account_id'] = $account->id;
             $fields['status'] = $cheque ? 'held' : 'received';
@@ -96,7 +105,12 @@ final class CustomerCollectionController
                 $this->commissionLines($lines, $cheque ? 0 : (float) $result['commission']);
                 $posting->post('customer_receipt', $receipt->id, $data['receipt_date'], "$number / customer collection" . ($cheque ? ' (cheque pending clearance)' : ''), $lines);
             }
-            $this->audit('customer_collection.posted', $id, $data, $request);
+            if ($charge > 0) {
+                $posting->post('card_collection_charge', $id, $data['receipt_date'], "$number / 3% card bank charge", [
+                    $this->line('5500', $charge, 0), $this->line($account->code, 0, $charge),
+                ]);
+            }
+            $this->audit('customer_collection.posted', $id, $data + ['bank_charge_amount' => $charge], $request);
             return response()->json(DB::table('customer_collections')->find($id), 201);
         });
     }

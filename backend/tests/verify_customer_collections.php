@@ -92,6 +92,7 @@ DB::table('sales_representatives')->insert(['id'=>1,'name'=>'Representative','st
 DB::table('commission_settings')->insert(['max_collection_days'=>100]);
 DB::table('accounting_periods')->insert(['starts_on'=>'2026-01-01','ends_on'=>'2026-12-31','status'=>'open']);
 (require __DIR__.'/../database/migrations/2026_11_06_000001_create_customer_collections.php')->up();
+(require __DIR__.'/../database/migrations/2026_11_09_000002_add_card_collection_charges.php')->up();
 $controller = new App\Http\Controllers\Api\CustomerCollectionController();
 $sales = new SalesController();
 $posting = new App\Services\Accounting\PostingService();
@@ -181,3 +182,20 @@ $manual['allocations'][1]['amount']=97000;
 receive($manual);
 check((float)DB::table('sales_invoices')->where('id',9)->value('outstanding')===78900.0,'manual allocation leaves chosen LKR 78,900 on the older bill');
 check((float)DB::table('sales_invoices')->where('id',10)->value('outstanding')===0.0,'manual allocation fully closes chosen LKR 97,000 invoice');
+
+invoice(11); invoice(12);
+$card = body([11,12]); $card['payment_method']='card'; $card['deduct_card_charge']=true;
+$beforeBank=balance('1000'); $beforeExpense=balance('5500');
+$charged=receive($card);
+check((float)$charged['bank_charge_amount']===45.0 && (float)$charged['bank_charge_rate']===3.0,'card charge calculated server-side at 3 percent of gross collection');
+check(balance('1000')-$beforeBank===1455.0 && balance('5500')-$beforeExpense===45.0,'card bank receives net and charges debit expense');
+check((float)DB::table('sales_invoices')->where('id',11)->value('outstanding')===0.0 && (float)DB::table('sales_invoices')->where('id',12)->value('outstanding')===500.0,'bank charge does not reduce customer invoice settlement');
+$beforeRetry=balance('5500'); receive($card);
+check(balance('5500')===$beforeRetry,'card retry does not duplicate expense');
+invoice(13); invoice(14); $noFee=body([13,14]); $noFee['payment_method']='card'; $noFee['deduct_card_charge']=false;
+$beforeBank=balance('1000'); $beforeExpense=balance('5500'); receive($noFee);
+check(balance('1000')-$beforeBank===1500.0 && balance('5500')===$beforeExpense,'unticked card charge receives full amount without expense');
+$notCard=body([13,14]); $notCard['deduct_card_charge']=true;
+reject(fn()=>receive($notCard),'card charge rejected for non-card payment');
+$journal=DB::table('journal_entries')->where('source_type','card_collection_charge')->first();
+check((float)DB::table('journal_lines')->where('journal_entry_id',$journal->id)->sum('debit')===(float)DB::table('journal_lines')->where('journal_entry_id',$journal->id)->sum('credit'),'card charge journal balances');
