@@ -73,3 +73,34 @@ this records the net cash/bank increase without leaving a false customer debt.
 Collection history and the register retain the fee and show net received. Retrying
 the same request does not post the charge twice. Cash, transfers and cheques cannot
 use this deduction. Existing collections are not retrospectively charged.
+# Collection receipt actions
+
+The **Cheques & collections** register has View and Print actions for every collection.
+Users with accounting management permission can Edit or Delete active collections.
+These are inline workspace views, not popup forms.
+
+After **Record payment**, the saved settlement receipt opens automatically. Click
+**Print / PDF** to print it or save a PDF. It includes the company header and footer,
+customer, collection reference/date/method, optional collector, cheque information,
+gross payment, business bank charge and net funds. Each allocated invoice shows its
+bill total, payment, balance before/after and full/partial settlement. Purchased
+article, size, colour, quantity, fixed rate, invoice rate and line total are listed
+under the relevant invoice. Opening receivables without item details say so explicitly.
+
+New payments save invoice item and settlement balance snapshots. Historical payments
+without snapshots show unavailable historical balances honestly and list current
+invoice balances separately; current balances must not be mistaken for the balance
+at the original payment date.
+
+An edit requires a reason. Saving posts a reversal today and a replacement payment
+today in one database transaction, linked to the original collection. Existing
+allocations are prefilled and can be changed. A failed replacement rolls back the
+reversal. A repeated request does not create another payment. A corrected cheque
+starts pending clearance again. The customer remains the same.
+
+Delete requires a reason and reverses the payment rather than erasing financial
+history. It restores invoice debt and reverses cash/bank, cheque clearance, bank
+charges and commission as applicable. The original remains labelled **void** and
+can still be viewed or printed. Returned cheques cannot be edited or deleted again.
+Closed accounting periods block reversals. Historical aging retains the original
+receipt until the effective reversal date; the customer ledger includes the reversal.

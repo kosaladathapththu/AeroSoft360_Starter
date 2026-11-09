@@ -317,3 +317,30 @@
 }
 .shell .customer-collection-form .simple-allocation-table :is(th,td):first-child { width: 42px; white-space: nowrap; }
 .shell .customer-collection-form .simple-allocation-table tr.collection-selected-row td:nth-child(7) { background: #f0f6f2; }
+/* Collection actions and settlement documents share the full workspace. */
+.collection-register-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.collection-register-actions button { border-radius: 7px; padding: 8px 12px; font-weight: 700; border: 1px solid transparent; cursor: pointer; }
+.collection-register-actions .collection-view-button { background: #eee5ff; color: #5c298b; border-color: #cdb0e7; }
+.collection-register-actions .collection-edit-button { background: #fff0c9; color: #795000; border-color: #d7ac4c; }
+.collection-register-actions .danger { background: #ffe4e7; color: #a42339; border-color: #df9eaa; }
+.collection-receipt { background: white; border: 1px solid #c2d5cc; border-radius: 12px; padding: 22px; }
+.collection-receipt-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+.collection-receipt-toolbar h2 { font-size: 22px; margin: 0; }
+.collection-receipt-content { color: #203e34; line-height: 1.6; }
+.collection-receipt-content table { width: 100%; table-layout: auto; border-collapse: collapse; font-size: 13px; }
+.collection-receipt-content th, .collection-receipt-content td { padding: 10px; text-align: left; border: 1px solid #c6d6cd; overflow-wrap: anywhere; }
+.collection-receipt-content th { background: #244d3d; color: white; }
+.collection-receipt-content h3 { margin-top: 26px; }
+.collection-receipt-totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
+.collection-receipt-totals span { background: #edf5ee; border: 1px solid #b9cfc0; padding: 14px; border-radius: 8px; }
+.collection-receipt-totals b { display: block; font-size: 20px; }
+.collection-receipt-invoice { margin: 20px 0; padding-top: 8px; border-top: 2px solid #b9cfc0; }
+.collection-correction-reason { display: grid; gap: 8px; margin: 18px 0; font-weight: 700; }
+.collection-correction-reason textarea { min-height: 75px; padding: 12px; border: 1px solid #8aa899; border-radius: 8px; }
+@media (max-width: 700px) { .collection-receipt { padding: 12px; } .collection-receipt-totals { grid-template-columns: 1fr; } }
+
+.collection-register-actions .collection-print-button { background: #dff0ff; color: #18567c; border-color: #9fc2db; }
+.collection-receipt-toolbar button { padding: 10px 16px; border-radius: 8px; border: 1px solid #9db8ab; font: inherit; font-weight: 700; cursor: pointer; }
+.collection-receipt-toolbar .secondary { background: #edf4ef; color: #244d3d; }
+.collection-receipt-content p { margin: 10px 0; min-height: 0; }
+.collection-receipt-content h2 { margin: 0 0 12px; }

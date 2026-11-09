@@ -898,6 +898,7 @@ function SalesPage({
     [pricePreview, setPricePreview] = useState<any>(null),
     [collectionView, setCollectionView] = useState<"due" | "history" | "register">("due"),
     [collectionInvoice, setCollectionInvoice] = useState<any>(null),
+    [savedCollectionId, setSavedCollectionId] = useState<number | null>(null),
     [inventoryQuery, setInventoryQuery] = useState(""),
     [inventoryType, setInventoryType] = useState("all"),
     [inventoryCategory, setInventoryCategory] = useState("all"),
@@ -991,6 +992,7 @@ function SalesPage({
       );
     await loadSales();
     if (path === "customer-collections") {
+      setSavedCollectionId(Number(json.id));
       setCollectionNotice(`${json.number}: collection saved and invoices allocated.${json.payment_method === "cheque" ? " Cheque pending bank clearance." : ""}`);
       setCollectionView("register");
     }
@@ -1549,7 +1551,7 @@ function SalesPage({
           <button className={collectionView === "register" ? "active" : ""} onClick={() => setCollectionView("register")}>Cheques &amp; collections <small>{(data.customer_collections || []).length}</small></button>
         </div>
       )}
-      {page === "Collections" && collectionView === "register" ? <CollectionRegister data={data} canManage={permissions.includes("accounting.manage")} post={post} /> : page === "Inventory Overview" ? (
+      {page === "Collections" && collectionView === "register" ? <CollectionRegister data={data} savedId={savedCollectionId} consumeSaved={() => setSavedCollectionId(null)} canManage={permissions.includes("accounting.manage")} post={post} /> : page === "Inventory Overview" ? (
         <div className="inventory-overview">
           <div className="inventory-summary-grid">
             <button

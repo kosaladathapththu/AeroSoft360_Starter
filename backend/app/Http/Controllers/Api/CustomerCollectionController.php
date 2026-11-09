@@ -101,10 +101,7 @@ final class CustomerCollectionController
                     'planned_commission_status' => $receiptAllocation->commission_status,
                     'balance_before' => $invoice->outstanding,
                     'balance_after' => round((float) $invoice->outstanding - (float) $allocation['amount'], 2),
-                    'invoice_snapshot' => json_encode([
-                        'total' => $invoice->total,
-                        'lines' => DB::table('sales_invoice_lines')->where('sales_invoice_id', $invoice->id)->get(),
-                    ]),
+                    'invoice_snapshot' => json_encode((array) $invoice + ['lines' => $this->invoiceItems($invoice->id)]),
                 ]);
                 if ($cheque) {
                     DB::table('receipt_allocations')->where('receipt_id', $receipt->id)->update([
@@ -269,6 +266,16 @@ final class CustomerCollectionController
             $this->audit('customer_collection.voided', $id, ['reason' => trim($request->input('reason')), 'date' => $date], $request);
             return response()->json(DB::table('customer_collections')->find($id));
         });
+    }
+
+    private function invoiceItems(int $invoiceId)
+    {
+        $query = DB::table('sales_invoice_lines as l')->where('l.sales_invoice_id', $invoiceId);
+        if (Schema::hasTable('articles')) {
+            $query->leftJoin('articles as a', 'a.id', '=', 'l.article_id')
+                ->select('l.*', 'a.code as article_code', 'a.name as article_name');
+        }
+        return $query->get();
     }
 
     private function line(string $account, float $debit, float $credit): array

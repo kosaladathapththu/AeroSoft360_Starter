@@ -93,6 +93,7 @@ DB::table('commission_settings')->insert(['max_collection_days'=>100]);
 DB::table('accounting_periods')->insert(['starts_on'=>'2026-01-01','ends_on'=>'2026-12-31','status'=>'open']);
 (require __DIR__.'/../database/migrations/2026_11_06_000001_create_customer_collections.php')->up();
 (require __DIR__.'/../database/migrations/2026_11_09_000002_add_card_collection_charges.php')->up();
+(require __DIR__.'/../database/migrations/2026_11_09_000004_add_collection_corrections.php')->up();
 $controller = new App\Http\Controllers\Api\CustomerCollectionController();
 $sales = new SalesController();
 $posting = new App\Services\Accounting\PostingService();
@@ -220,3 +221,43 @@ check(DB::table('customer_receipts')->whereIn('id',DB::table('customer_collectio
 invoice(17); invoice(18); $missingCollector=body([17,18]); $missingCollector['collector_sales_rep_id']=null;
 $missingCollector['allocations'][0]['commission_decision']='collector';
 reject(fn()=>receive($missingCollector),'collector commission requires an assigned collector');
+
+// Corrections reverse every accounting leg atomically and retain original receipts.
+Illuminate\Support\Carbon::setTestNow('2026-11-09 12:00:00');
+invoice(19); invoice(20); $editable=body([19,20]); $editable['payment_method']='card'; $editable['deduct_card_charge']=true;
+$bankBefore=balance('1000'); $feeBefore=balance('5500'); $commissionBefore=balance('5300');
+$record=receive($editable);
+$snapshot=DB::table('customer_collection_lines')->where('collection_id',$record['id'])->first();
+check((float)$snapshot->balance_before===1000.0 && (float)$snapshot->balance_after===0.0 && json_decode($snapshot->invoice_snapshot,true)!==null,'receipt stores immutable before/after balances and invoice items');
+$voidRequest=Request::create('/','POST',['reason'=>'Incorrect payment entered']);
+$controller->voidPayment($voidRequest,$record['id'],$posting);
+check(balance('1000')===$bankBefore && balance('5500')===$feeBefore && balance('5300')===$commissionBefore,'deletion reverses net cash, bank charge and commission');
+check((float)DB::table('sales_invoices')->find(19)->outstanding===1000.0 && (float)DB::table('sales_invoices')->find(20)->outstanding===1000.0,'deletion restores exact invoice balances');
+$journalCount=DB::table('journal_entries')->count(); $controller->voidPayment($voidRequest,$record['id'],$posting);
+check(DB::table('journal_entries')->count()===$journalCount,'repeated deletion does not double reverse');
+$historical=DB::table('customer_receipts as r'); App\Services\Accounting\ReceiptScope::asOf($historical,'r','2026-11-08');
+check($historical->whereIn('r.id',DB::table('customer_collection_lines')->where('collection_id',$record['id'])->pluck('receipt_id'))->count()===2,'voided receipt remains in historical aging before reversal');
+invoice(21); invoice(22); $oldBody=body([21,22]); $old=receive($oldBody);
+$replacement=$oldBody; $replacement['request_key']=(string)Illuminate\Support\Str::uuid(); $replacement['receipt_date']='2026-11-09'; $replacement['reason']='Correct allocated invoice amounts';
+$replacement['allocations'][0]['amount']=600; $replacement['allocations'][1]['amount']=900;
+$corrected=$controller->correct(Request::create('/','POST',$replacement),$old['id'],$sales,$posting)->getData(true);
+check($corrected['replaces_collection_id']===$old['id'] && DB::table('customer_collections')->find($old['id'])->status==='void','edit retains reversed original and links replacement');
+check((float)DB::table('sales_invoices')->find(21)->outstanding===400.0 && (float)DB::table('sales_invoices')->find(22)->outstanding===100.0,'edited allocations update exact replacement balances');
+$count=DB::table('customer_collections')->count();
+$retry=$controller->correct(Request::create('/','POST',$replacement),$old['id'],$sales,$posting)->getData(true);
+check($retry['id']===$corrected['id'] && DB::table('customer_collections')->count()===$count,'correction retry is idempotent');
+invoice(23); invoice(24); $badBody=body([23,24]); $bad=receive($badBody); $badBody['request_key']=(string)Illuminate\Support\Str::uuid(); $badBody['receipt_date']='2026-11-09'; $badBody['reason']='Bad correction'; $badBody['amount']=1;
+reject(fn()=>$controller->correct(Request::create('/','POST',$badBody),$bad['id'],$sales,$posting),'invalid replacement rejected');
+check(DB::table('customer_collections')->find($bad['id'])->status==='received' && (float)DB::table('sales_invoices')->find(23)->outstanding===0.0,'failed correction rolls back original reversal');
+reject(fn()=>$controller->voidPayment(Request::create('/','POST',['reason'=>' ']),$bad['id'],$posting),'deletion requires a meaningful reason');
+
+// A cleared cheque must reverse both bank transfer and deferred commission.
+invoice(25); invoice(26); $clearedBody=body([25,26],true); $clearedBody['cheque_number']='VOID-TEST-25';
+$bankBefore=balance('1000'); $holdingBefore=balance('1120'); $commissionBefore=balance('5300');
+$cleared=receive($clearedBody); action($cleared['id'],'clear','2026-11-09');
+$controller->voidPayment(Request::create('/','POST',['reason'=>'Duplicate cleared cheque']),$cleared['id'],$posting);
+check(balance('1000')===$bankBefore && balance('1120')===$holdingBefore && balance('5300')===$commissionBefore,'deleting cleared cheque reverses bank, holding account and released commission');
+DB::table('accounting_periods')->update(['status'=>'closed']);
+reject(fn()=>$controller->voidPayment($voidRequest,$bad['id'],$posting),'closed period blocks payment deletion');
+check(DB::table('customer_collections')->find($bad['id'])->status==='received','closed period failure preserves original payment');
+DB::table('accounting_periods')->update(['status'=>'open']);

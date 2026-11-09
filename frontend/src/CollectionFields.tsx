@@ -15,12 +15,12 @@ export default function CollectionFields({ data, initial, user, busy, correction
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<number[]>(correction ? correction.allocations.map((line: any) => Number(line.invoice_id)) : initial?.id ? [Number(initial.id)] : []);
   const [invoiceAmounts, setInvoiceAmounts] = useState<Record<number, string>>(() => correction ? Object.fromEntries(correction.allocations.map((line: any) => [Number(line.invoice_id), String(line.amount)])) : initial?.id ? { [Number(initial.id)]: Number(initial.outstanding || 0).toFixed(2) } : {});
-  const [commissionIds, setCommissionIds] = useState<number[]>(correction ? correction.allocations.filter((line: any) => Number(line.planned_commission) > 0).map((line: any) => Number(line.invoice_id)) : []);
+  const [commissionIds, setCommissionIds] = useState<number[]>(correction ? correction.allocations.filter((line: any) => line.commission_decision ? line.commission_decision !== "cancel" : Number(line.planned_commission) > 0).map((line: any) => Number(line.invoice_id)) : []);
   const [amount, setAmount] = useState(correction ? String(correction.amount) : "");
   const [method, setMethod] = useState(correction?.payment_method || "cash");
   const [deductCardCharge, setDeductCardCharge] = useState(Number(correction?.bank_charge_amount || 0) > 0);
   const cardCharge = method === "card" && deductCardCharge ? Math.round(Number(amount || 0) * 3) / 100 : 0;
-  const [recipient, setRecipient] = useState("invoice_salesperson");
+  const [recipient, setRecipient] = useState(correction?.allocations.some((line: any) => line.commission_decision === "collector") ? "collector" : "invoice_salesperson");
   const [requestKey] = useState(() => crypto.randomUUID());
   const amountInput = useRef<HTMLInputElement>(null);
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Colombo" });
