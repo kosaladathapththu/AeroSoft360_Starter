@@ -286,3 +286,9 @@
 }
 .collection-history > summary { cursor: pointer; font-weight: 700; color: #214a35; }
 .collection-history[open] > summary { margin-bottom: 12px; }
+
+/* Before customer selection, use the full width and show the next action clearly. */
+.shell .modal.collection-modal .customer-collection-form:not(:has(.collection-payment-panel)) { grid-template-columns: minmax(0, 1fr); }
+.shell .modal.collection-modal .customer-collection-form:not(:has(.collection-payment-panel)) > .collection-section { grid-column: 1 / -1; }
+.shell .modal.collection-modal .customer-collection-form:not(:has(.collection-payment-panel)) .customer-dropdown-help { display: block; font-size: 13px; margin-top: 10px; }
+.shell .modal.collection-modal:not(:has(.collection-payment-panel)) .popup-footer .primary { display: none; }
