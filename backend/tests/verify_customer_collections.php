@@ -199,3 +199,16 @@ $notCard=body([13,14]); $notCard['deduct_card_charge']=true;
 reject(fn()=>receive($notCard),'card charge rejected for non-card payment');
 $journal=DB::table('journal_entries')->where('source_type','card_collection_charge')->first();
 check((float)DB::table('journal_lines')->where('journal_entry_id',$journal->id)->sum('debit')===(float)DB::table('journal_lines')->where('journal_entry_id',$journal->id)->sum('credit'),'card charge journal balances');
+
+// Imported records or deleted gaps must not make numbering repeat a used number.
+DB::table('journal_entries')->insert(['number'=>'JV-2610-9999','source_type'=>'numbering_fixture','source_id'=>1]);
+$numbered=$posting->post('numbering_test',1,'2026-10-28','Numbering regression',[
+    ['account_code'=>'1000','debit'=>10,'credit'=>0], ['account_code'=>'1100','debit'=>0,'credit'=>10],
+]);
+check(DB::table('journal_entries')->where('id',$numbered)->value('number')==='JV-2610-10000','journal number follows highest existing suffix rather than row count');
+check($posting->post('numbering_test',1,'2026-10-28','Retry',[])===$numbered,'journal retry returns original posting');
+$journalCount=DB::table('journal_entries')->count();
+reject(fn()=>$posting->post('invalid_account_test',1,'2026-10-28','Must roll back',[
+    ['account_code'=>'1000','debit'=>10,'credit'=>0], ['account_code'=>'MISSING','debit'=>0,'credit'=>10],
+]),'invalid posting account rejected');
+check(DB::table('journal_entries')->count()===$journalCount,'failed journal posting rolls back header and lines');
