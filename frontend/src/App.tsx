@@ -4700,7 +4700,7 @@ function SalesCreateModal({
         cheque_number: f.get("cheque_number"),
         cheque_bank: f.get("cheque_bank"),
         cheque_date: f.get("cheque_date"),
-        collector_sales_rep_id: Number(f.get("collector_sales_rep_id")),
+        collector_sales_rep_id: Number(f.get("collector_sales_rep_id")) || null,
         payment_account_id: Number(f.get("payment_account_id")) || null,
         receipt_date: f.get("receipt_date"),
         payment_method: f.get("payment_method"),

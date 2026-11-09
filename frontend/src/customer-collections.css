@@ -292,3 +292,28 @@
 .shell .modal.collection-modal .customer-collection-form:not(:has(.collection-payment-panel)) > .collection-section { grid-column: 1 / -1; }
 .shell .modal.collection-modal .customer-collection-form:not(:has(.collection-payment-panel)) .customer-dropdown-help { display: block; font-size: 13px; margin-top: 10px; }
 .shell .modal.collection-modal:not(:has(.collection-payment-panel)) .popup-footer .primary { display: none; }
+
+/* Keep the allocation task visually quiet: six essential columns and three totals. */
+.shell .customer-collection-form .collection-allocation-summary { background: #f0f6f2; border: 1px solid #bfd2c5; color: #254c37; border-radius: 7px; margin: 12px 0; }
+.shell .customer-collection-form .collection-allocation-summary.ready { background: #f0f6f2; color: #254c37; }
+.shell .customer-collection-form .collection-allocation-summary.needs-allocation { background: #fff7e4; color: #725113; }
+.shell .customer-collection-form .collection-allocation-summary > span { flex: 1; font-size: 11px; }
+.shell .customer-collection-form .collection-allocation-summary b { display: block; margin-top: 4px; font-size: 16px; }
+.shell .customer-collection-form .simple-allocation-table :is(th,td) { width: auto; white-space: normal; }
+.shell .customer-collection-form .simple-allocation-table :is(th,td):nth-child(2) { width: 26%; }
+.shell .customer-collection-form .simple-allocation-table :is(th,td):nth-child(3) { width: 15%; }
+.shell .customer-collection-form .simple-allocation-table :is(th,td):nth-child(5) { width: 18%; }
+.shell .customer-collection-form .simple-allocation-table :is(th,td):nth-child(7) { width: 12%; }
+.shell .customer-collection-form .simple-allocation-table tr.collection-selected-row td { background: #f0f6f2; }
+.shell .customer-collection-form .simple-allocation-table tr.collection-selected-row td.collection-pay-cell { background: #fff8e9; }
+.shell .customer-collection-form .collection-invoice-toolbar h3 { margin-right: auto; }
+.collection-commission-options { margin-top: 12px; font-size: 12px; color: #40604e; }
+.collection-commission-options > summary { cursor: pointer; }
+@media screen and (min-width:1100px) {
+  .shell .customer-collection-form .simple-allocation-table :is(th,td) { padding: 12px 9px; font-size: 13px; }
+  .shell .customer-collection-form .simple-allocation-table th { font-size: 11px; }
+  .shell .customer-collection-form .collection-invoice-search { max-width: 520px; }
+  .shell .customer-collection-form .collection-allocation-summary { padding: 10px 14px; }
+}
+.shell .customer-collection-form .simple-allocation-table :is(th,td):first-child { width: 42px; white-space: nowrap; }
+.shell .customer-collection-form .simple-allocation-table tr.collection-selected-row td:nth-child(7) { background: #f0f6f2; }

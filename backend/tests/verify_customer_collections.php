@@ -212,3 +212,11 @@ reject(fn()=>$posting->post('invalid_account_test',1,'2026-10-28','Must roll bac
     ['account_code'=>'1000','debit'=>10,'credit'=>0], ['account_code'=>'MISSING','debit'=>0,'credit'=>10],
 ]),'invalid posting account rejected');
 check(DB::table('journal_entries')->count()===$journalCount,'failed journal posting rolls back header and lines');
+
+invoice(15); invoice(16); $unassigned=body([15,16]); unset($unassigned['collector_sales_rep_id']);
+$optional=receive($unassigned);
+check($optional['collector_sales_rep_id']===null,'collection accepts an omitted collector without inventing one');
+check(DB::table('customer_receipts')->whereIn('id',DB::table('customer_collection_lines')->where('collection_id',$optional['id'])->pluck('receipt_id'))->whereNotNull('collector_sales_rep_id')->count()===0,'linked receipts preserve unassigned collector');
+invoice(17); invoice(18); $missingCollector=body([17,18]); $missingCollector['collector_sales_rep_id']=null;
+$missingCollector['allocations'][0]['commission_decision']='collector';
+reject(fn()=>receive($missingCollector),'collector commission requires an assigned collector');

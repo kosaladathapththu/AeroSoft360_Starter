@@ -27,7 +27,7 @@ return new class extends Migration {
             $t->string('request_fingerprint', 64);
             $t->string('number', 40)->unique();
             $t->foreignId('customer_id')->constrained('customers')->restrictOnDelete();
-            $t->foreignId('collector_sales_rep_id')->constrained('sales_representatives')->restrictOnDelete();
+            $t->foreignId('collector_sales_rep_id')->nullable()->constrained('sales_representatives')->restrictOnDelete();
             $t->foreignId('payment_account_id')->constrained('accounts')->restrictOnDelete();
             $t->date('receipt_date');
             $t->string('payment_method', 20);

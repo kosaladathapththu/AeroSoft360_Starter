@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { displayCode } from "./representative-reference";
 import { invoiceReference } from "./invoice-reference";
 import { matchesSearch } from "./search";
-import { availableInvoicePayment, collectionPlan, manualCollectionPlan } from "./collection-plan";
+import { availableInvoicePayment, manualCollectionPlan } from "./collection-plan";
 import OrderCustomerPicker from "./OrderCustomerPicker";
 import "./customer-collections.css";
 
@@ -29,6 +29,7 @@ export default function CollectionFields({ data, initial, user, busy }: {
   const visible = invoices.filter((row: any) => matchesSearch([invoiceReference(row), row.number, row.rep_name, row.invoice_date], query));
   const plan = manualCollectionPlan(invoices, selected, Number(amount), invoiceAmounts);
   const allocated = plan.allocations.filter((row) => row.amount > 0);
+  const hasCommission = invoices.some((row: any) => !row.is_opening_balance);
   const outstanding = invoices.reduce((sum: number, row: any) => sum + Number(row.outstanding || 0), 0);
   const error = !customerId ? "Choose a customer."
     : !selected.length ? "Tick the invoices you want to pay."
@@ -87,7 +88,7 @@ export default function CollectionFields({ data, initial, user, busy }: {
           <label>Amount collected (LKR)<input ref={amountInput} name="amount" type="number" min="0.01" step="0.01" value={amount} required placeholder="Enter total collected" onChange={(event) => setAmount(event.target.value)} /></label>
           <label>Collection date<input name="receipt_date" type="date" max={today} defaultValue={today} required /></label>
           <label>Payment method<select name="payment_method" value={method} onChange={(event) => setMethod(event.target.value)}><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="card">Card</option><option value="cheque">Cheque</option></select></label>
-          <label>Collected by<select name="collector_sales_rep_id" defaultValue={user?.sales_rep_id || ""} required><option value="" disabled>Choose collector</option>{reps.map((rep: any) => <option key={rep.id} value={rep.id}>{rep.name} - {displayCode(rep)}</option>)}</select></label>
+          <label>Collected by (optional)<select name="collector_sales_rep_id" defaultValue={user?.sales_rep_id || ""} required={recipient === "collector" && commissionIds.some(id => selected.includes(id))}><option value="">Not assigned</option>{reps.map((rep: any) => <option key={rep.id} value={rep.id}>{rep.name} - {displayCode(rep)}</option>)}</select></label>
           {method !== "cheque" ? <label>Receive into<select name="payment_account_id" required defaultValue=""><option value="" disabled>Choose cash / bank account</option>{(data.payment_accounts || []).map((account: any) => <option key={account.id} value={account.id}>{account.code} - {account.name}</option>)}</select><small>For a cheque, choose Cheque as the payment method.</small></label> : <label>Receive into<input value="1120 - Cheques in Hand" readOnly /><small>Current Assets · transferred to your bank only after clearance.</small></label>}
           <label>Reference (optional)<input name="reference" maxLength={80} placeholder="Payment reference or note" /></label>
         </div>
@@ -107,25 +108,25 @@ export default function CollectionFields({ data, initial, user, busy }: {
         </div>}
       </section>
       <section className="collection-section">
-        <div className="collection-invoice-toolbar"><h3>Choose invoices &amp; enter payment amounts</h3>
-          <button type="button" className="secondary" disabled={plan.unallocated <= 0} onClick={selectAllUnpaid}>Allocate remaining oldest first</button>
-          <button type="button" className="secondary" onClick={() => { setSelected([]); setInvoiceAmounts({}); setCommissionIds([]); }}>Clear ticks</button>
+        <div className="collection-invoice-toolbar"><h3>Invoice payments</h3>
+          <button type="button" className="secondary" disabled={plan.unallocated <= 0} onClick={selectAllUnpaid}>Auto allocate</button>
+          <button type="button" className="secondary" disabled={!selected.length} onClick={() => { setSelected([]); setInvoiceAmounts({}); setCommissionIds([]); }}>Clear selection</button>
         </div>
-        <label>Search invoices<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Invoice number, date or salesperson" /></label>
-        <p className="collection-search-status">{visible.length} invoices. Tick an invoice to use only the remaining collected money. Edit Pay amount to split it across other invoices. Existing amounts stay unchanged.</p>
+        <label className="collection-invoice-search">Search invoices<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Invoice number, date or salesperson" /></label>
         <div className={`collection-allocation-summary ${error ? "needs-allocation" : "ready"}`} role="status">
-          <b>Collected: {money(amount)} · Allocated: {money(plan.total)}</b>
-          <b>Remaining to allocate: {money(Math.max(0, plan.unallocated))}</b>
-          <span>{error || (method === "cheque" ? "Ready to save. Settlement remains pending cheque clearance." : "Fully allocated. Balances update when you save.")}</span>
+          <span>Collected <b>{money(amount)}</b></span>
+          <span>Allocated <b>{money(plan.total)}</b></span>
+          <span>Remaining <b>{money(Math.max(0, plan.unallocated))}</b></span>
         </div>
-        <div className="collection-table-scroll"><table className="collection-allocation-table"><thead><tr><th>Pay</th><th>Invoice / date</th><th>Salesperson</th><th>Bill value</th><th>Outstanding</th><th>Available for this invoice</th><th>Pay amount (LKR)</th><th>After payment</th><th>Commission</th></tr></thead><tbody>
+        {error && selected.length > 0 && <p className="collection-search-status" role="status">{error}</p>}
+        <div className="collection-table-scroll"><table className="collection-allocation-table simple-allocation-table"><thead><tr><th>Pay</th><th>Invoice</th><th>Outstanding</th><th>Available</th><th>Pay amount (LKR)</th><th>Balance after</th>{hasCommission && <th>Commission</th>}</tr></thead><tbody>
           {visible.map((row: any) => {
             const allocation = plan.allocations.find((item) => item.invoice_id === Number(row.id));
             const available = availableInvoicePayment(Number(row.id), Number(row.outstanding), selected, Number(amount), invoiceAmounts);
             return <tr key={row.id} className={selected.includes(Number(row.id)) ? "collection-selected-row" : ""}>
               <td><input type="checkbox" aria-label={`Pay ${invoiceReference(row)}`} checked={selected.includes(Number(row.id))} disabled={Number(row.outstanding) <= 0 || (!selected.includes(Number(row.id)) && available <= 0)} onChange={() => toggle(Number(row.id))} /></td>
-              <td><b>{invoiceReference(row)}</b><small>{row.invoice_date}</small>{Number(row.outstanding) <= 0 && <small>{(data.collection_allocations || []).some((line: any) => Number(line.invoice_id) === Number(row.id) && pendingCollections.some((cheque: any) => Number(cheque.id) === Number(line.collection_id))) ? "Covered by pending cheque" : "Settled"}</small>}</td>
-              <td>{row.rep_name || "Unassigned"}</td><td>{money(row.total)}</td><td>{money(row.outstanding)}</td><td>{money(available)}</td><td>
+              <td><b>{invoiceReference(row)}</b><small>{row.invoice_date} · {row.rep_name || "Unassigned"}</small>{Number(row.outstanding) <= 0 && <small>{(data.collection_allocations || []).some((line: any) => Number(line.invoice_id) === Number(row.id) && pendingCollections.some((cheque: any) => Number(cheque.id) === Number(line.collection_id))) ? "Covered by pending cheque" : "Settled"}</small>}</td>
+              <td>{money(row.outstanding)}{Number(row.total) !== Number(row.outstanding) && <small>Bill: {money(row.total)}</small>}</td><td>{money(available)}</td><td className="collection-pay-cell">
                 <div className="collection-manual-payment">
                   <input type="number" min="0.01" max={available} step="0.01"
                     aria-label={`Payment for ${invoiceReference(row)}`}
@@ -137,24 +138,19 @@ export default function CollectionFields({ data, initial, user, busy }: {
                 </div>
               </td>
               <td>{money(!error && allocation ? allocation.remaining : row.outstanding)}{allocation && allocation.amount > 0 && <small>{error ? "Adjust allocation before saving" : method === "cheque" ? "Pending cheque clearance" : allocation.remaining === 0 ? "Will settle on save" : "Part payment on save"}</small>}</td>
-              <td>{row.is_opening_balance ? <small>Opening balance: none</small> : <label className="collection-commission-check"><input type="checkbox" aria-label={`Commission for ${invoiceReference(row)}`} checked={commissionIds.includes(Number(row.id))} disabled={!selected.includes(Number(row.id))} onChange={(event) => setCommissionIds((old) => event.target.checked ? [...old, Number(row.id)] : old.filter((id) => id !== Number(row.id)))} /> Apply</label>}</td>
+              {hasCommission && <td>{row.is_opening_balance ? <small>Not applicable</small> : <label className="collection-commission-check"><input type="checkbox" aria-label={`Commission for ${invoiceReference(row)}`} checked={commissionIds.includes(Number(row.id))} disabled={!selected.includes(Number(row.id))} onChange={(event) => setCommissionIds((old) => event.target.checked ? [...old, Number(row.id)] : old.filter((id) => id !== Number(row.id)))} /> Apply</label>}</td>}
             </tr>;
           })}
-          {!visible.length && <tr><td colSpan={9}>No matching invoices for this customer.</td></tr>}
+          {!visible.length && <tr><td colSpan={hasCommission ? 7 : 6}>No matching invoices for this customer.</td></tr>}
         </tbody></table></div>
-        <div className="collection-invoice-toolbar">
-          <button type="button" className="secondary" disabled={!selected.length || Number(amount) <= 0} onClick={() => {
-            const automatic = collectionPlan(invoices, selected, Number(amount));
-            setInvoiceAmounts(Object.fromEntries(automatic.allocations.map((row) => [row.invoice_id, row.amount > 0 ? row.amount.toFixed(2) : ""])));
-            setSelected(automatic.allocations.filter((row) => row.amount > 0).map((row) => row.invoice_id));
-          }}>Auto-fill oldest first</button>
+        {hasCommission && <details className="collection-commission-options"><summary>Commission settings</summary><div className="collection-invoice-toolbar">
           <label>Commission recipient<select value={recipient} onChange={(event) => setRecipient(event.target.value)}><option value="invoice_salesperson">Each invoice salesperson</option><option value="collector">Payment collector</option></select></label>
         </div>
-        <p className="collection-search-status">Only ticked commission entries are considered. Existing collection-day and per-piece rules apply; opening balances earn no commission.</p>
+        <p className="collection-search-status">Applies only to ticked commission entries. Existing eligibility rules apply.</p></details>}
       </section>
       <details className="collection-section collection-history"><summary>Customer collection history ({history.length})</summary>
         <div className="collection-table-scroll"><table><thead><tr><th>Collection / date</th><th>Method / reference</th><th>Collected by</th><th>Amount</th><th>Status</th><th>Invoices paid</th></tr></thead><tbody>
-          {history.map((row: any) => <tr key={row.id}><td><b>{row.number}</b><small>{row.receipt_date}</small></td><td>{row.payment_method}<small>{row.cheque_number || row.reference}</small></td><td>{row.collector_name}</td><td>{money(row.amount)}{Number(row.bank_charge_amount) > 0 && <small>Bank charge (3%): {money(row.bank_charge_amount)}<br />Net received: {money(Number(row.amount) - Number(row.bank_charge_amount))}</small>}</td><td>{row.status}<small>{row.cheque_date ? `Cheque date: ${row.cheque_date}` : ""}</small></td><td>{(data.collection_allocations || []).filter((line: any) => Number(line.collection_id) === Number(row.id)).map((line: any) => <small key={line.id}>{invoiceReference({number: line.invoice_number})}: {money(line.amount)}</small>)}</td></tr>)}
+          {history.map((row: any) => <tr key={row.id}><td><b>{row.number}</b><small>{row.receipt_date}</small></td><td>{row.payment_method}<small>{row.cheque_number || row.reference}</small></td><td>{row.collector_name || "Not assigned"}</td><td>{money(row.amount)}{Number(row.bank_charge_amount) > 0 && <small>Bank charge (3%): {money(row.bank_charge_amount)}<br />Net received: {money(Number(row.amount) - Number(row.bank_charge_amount))}</small>}</td><td>{row.status}<small>{row.cheque_date ? `Cheque date: ${row.cheque_date}` : ""}</small></td><td>{(data.collection_allocations || []).filter((line: any) => Number(line.collection_id) === Number(row.id)).map((line: any) => <small key={line.id}>{invoiceReference({number: line.invoice_number})}: {money(line.amount)}</small>)}</td></tr>)}
           {!history.length && <tr><td colSpan={6}>No new customer collections recorded yet. Earlier individual receipts remain in Payment History.</td></tr>}
         </tbody></table></div>
       </details>

@@ -16,7 +16,7 @@ final class CustomerCollectionController
         $data = $request->validate([
             'request_key' => 'required|uuid',
             'customer_id' => 'required|integer|exists:customers,id',
-            'collector_sales_rep_id' => 'required|integer|exists:sales_representatives,id',
+            'collector_sales_rep_id' => 'nullable|integer|exists:sales_representatives,id',
             'receipt_date' => 'required|date_format:Y-m-d|before_or_equal:today',
             'payment_method' => 'required|in:cash,bank_transfer,card,cheque',
             'payment_account_id' => 'nullable|integer|exists:accounts,id',
@@ -33,6 +33,8 @@ final class CustomerCollectionController
         ]);
         abort_unless(Schema::hasTable('customer_collections'), 422, 'Install the customer collections migration before posting.');
         abort_if(!empty($data['deduct_card_charge']) && $data['payment_method'] !== 'card', 422, 'Bank charge deduction is only available for card payments.');
+        $data['collector_sales_rep_id'] = $data['collector_sales_rep_id'] ?? null;
+        abort_if(!$data['collector_sales_rep_id'] && collect($data['allocations'])->contains('commission_decision', 'collector'), 422, 'Choose a collector when assigning commission to the payment collector.');
         return DB::transaction(function () use ($data, $sales, $posting, $request) {
             // Serialize submissions for this customer and recheck every invoice under lock.
             DB::table('customers')->where('id', $data['customer_id'])->lockForUpdate()->first();
@@ -51,7 +53,9 @@ final class CustomerCollectionController
             abort_unless($account && AccountPolicy::active($account) && $account->is_postable &&
                 ($cheque ? ($account->type === 'asset' && !$account->is_cash_account) : AccountPolicy::cash($account)),
                 422, 'Choose an active posting account. Cheques require the Cheques in Hand holding account.');
-            abort_unless(DB::table('sales_representatives')->where('id', $data['collector_sales_rep_id'])->where('status', 'active')->exists(), 422, 'Choose an active collector.');
+            if ($data['collector_sales_rep_id']) {
+                abort_unless(DB::table('sales_representatives')->where('id', $data['collector_sales_rep_id'])->where('status', 'active')->exists(), 422, 'Choose an active collector.');
+            }
             $charge = !empty($data['deduct_card_charge']) ? round((float) $data['amount'] * 0.03, 2) : 0;
             if ($charge > 0) {
                 $expense = DB::table('accounts')->where('code', '5500')->first();
