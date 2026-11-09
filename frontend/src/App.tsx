@@ -2044,7 +2044,7 @@ function SalesPage({
                                       title={`Edit ${page}`}
                                       disabled={page === "Collections" && r.status === "returned"}
                                       onClick={() =>
-                                        page === "Invoices"
+                                        openReceiptCollection(r, "edit") ? undefined : page === "Invoices"
                                           ? setEditingMaster({ type: "invoice", row: r })
                                           : setEditingTransaction({ page, row: r })
                                       }
