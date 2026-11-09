@@ -38,6 +38,23 @@ applyCount([array_merge($row,['quantity'=>0])]);check(DB::table('finished_goods_
 DB::table('materials')->insert(['id'=>1,'code'=>'RAW-1','name'=>'Test material']);
 DB::table('stock_balances')->insert(['material_id'=>1,'batch_number'=>'B1','quantity'=>5,'unit_cost'=>10]);
 check(rejected([['kind'=>'raw','code'=>'RAW-1','size'=>'B1','expected'=>5,'quantity'=>6,'unit_cost'=>12]]),'Existing batch cost protected');
+foreach ([
+ 'stock_adjustments'=>['number','material_id','batch_number','adjustment_date','adjustment_type','quantity','unit_cost','reason','total','status','created_at','updated_at'],
+ 'stock_movements'=>['material_id','batch_number','movement_type','quantity','unit_cost','source_type','source_id','event_key','occurred_at','created_at'],
+ 'accounting_periods'=>['starts_on','ends_on','status'],
+ 'accounts'=>['code','is_postable','is_active'],
+ 'journal_entries'=>['number','accounting_period_id','source_type','source_id','posting_date','description','status','posted_at','created_at','updated_at'],
+ 'journal_lines'=>['journal_entry_id','account_id','debit','credit','description','created_at','updated_at']
+] as $name=>$columns) Schema::create($name,function($t)use($columns){$t->id();foreach($columns as $column)$t->string($column)->nullable();});
+DB::table('accounting_periods')->insert(['starts_on'=>date('Y').'-01-01','ends_on'=>date('Y').'-12-31','status'=>'open']);
+foreach(['1300','5000'] as $code) DB::table('accounts')->insert(['code'=>$code,'is_postable'=>1,'is_active'=>1]);
+applyCount([['kind'=>'raw','code'=>'RAW-1','size'=>'B1','expected'=>5,'quantity'=>8,'unit_cost'=>10]]);
+check(DB::table('stock_balances')->value('quantity')==8,'Raw count replaces balance');
+check(DB::table('stock_movements')->sum('quantity')==3,'Raw movement uses difference');
+check(DB::table('journal_lines')->sum('debit')==30 && DB::table('journal_lines')->sum('credit')==30,'Raw journal balances at adjustment value');
+DB::table('accounting_periods')->update(['status'=>'closed']);
+check(rejected([['kind'=>'raw','code'=>'RAW-1','size'=>'B1','expected'=>8,'quantity'=>10,'unit_cost'=>10]]),'Closed period rejects raw adjustment');
+check(DB::table('stock_balances')->value('quantity')==8,'Failed journal rolls back raw balance');
 $response=$controller->template(new Request());ob_start();$response->sendContent();$bytes=ob_get_clean();
 check(substr($bytes,0,2)==='PK','Real XLSX template');
 $file=tempnam(sys_get_temp_dir(),'count');file_put_contents($file,$bytes);
