@@ -75,7 +75,7 @@ final class SubledgerController
                 $source = $receipts->get($line->source_id);
                 $page = "Collections";
             }
-            if ($customer && $line->source_type === 'cheque_return_receivable') {
+            if ($customer && in_array($line->source_type, ['cheque_return_receivable', 'collection_void'])) {
                 $source = $cheques->get($line->source_id);
                 $page = 'Collections';
             }

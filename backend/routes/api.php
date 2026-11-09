@@ -278,6 +278,8 @@ Route::prefix("v1")->group(function (): void {
         ])->middleware("permission:accounting.manage");
         Route::post("/customer-collections", [\App\Http\Controllers\Api\CustomerCollectionController::class, "store"])->middleware("permission:accounting.manage");
         Route::post("/customer-collections/{id}/cheque", [\App\Http\Controllers\Api\CustomerCollectionController::class, "transition"])->middleware("permission:accounting.manage");
+        Route::post("/customer-collections/{id}/void", [\App\Http\Controllers\Api\CustomerCollectionController::class, "voidPayment"])->middleware("permission:accounting.manage");
+        Route::post("/customer-collections/{id}/correct", [\App\Http\Controllers\Api\CustomerCollectionController::class, "correct"])->middleware("permission:accounting.manage");
         Route::post("/customer-receipts", [
             AccountingSalesController::class,
             "receipt",

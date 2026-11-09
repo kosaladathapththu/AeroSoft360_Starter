@@ -99,6 +99,12 @@ final class CustomerCollectionController
                     'collection_id' => $id, 'invoice_id' => $invoice->id, 'receipt_id' => $receipt->id,
                     'amount' => $allocation['amount'], 'planned_commission' => $result['commission'],
                     'planned_commission_status' => $receiptAllocation->commission_status,
+                    'balance_before' => $invoice->outstanding,
+                    'balance_after' => round((float) $invoice->outstanding - (float) $allocation['amount'], 2),
+                    'invoice_snapshot' => json_encode([
+                        'total' => $invoice->total,
+                        'lines' => DB::table('sales_invoice_lines')->where('sales_invoice_id', $invoice->id)->get(),
+                    ]),
                 ]);
                 if ($cheque) {
                     DB::table('receipt_allocations')->where('receipt_id', $receipt->id)->update([
@@ -189,6 +195,78 @@ final class CustomerCollectionController
                 ]);
             }
             $this->audit('customer_cheque.' . $data['action'], $id, $data, $request);
+            return response()->json(DB::table('customer_collections')->find($id));
+        });
+    }
+
+    /** A correction is an atomic reversal plus a new, independently numbered payment. */
+    public function correct(Request $request, int $id, SalesController $sales, PostingService $posting): JsonResponse
+    {
+        $request->validate(['reason' => 'required|string|min:3|max:500']);
+        return DB::transaction(function () use ($request, $id, $sales, $posting) {
+            $old = DB::table('customer_collections')->find($id);
+            abort_unless($old, 404, 'Collection not found.');
+            DB::table('customers')->where('id', $old->customer_id)->lockForUpdate()->first();
+            $replacement = DB::table('customer_collections')->where('replaces_collection_id', $id)->first();
+            if ($replacement) {
+                abort_unless($replacement->request_key === $request->input('request_key'), 422, 'This collection has already been corrected.');
+                return $this->store($request, $sales, $posting);
+            }
+            abort_unless((int) $request->input('customer_id') === (int) $old->customer_id, 422, 'A correction must keep the same customer.');
+            abort_if($request->input('receipt_date') !== now()->toDateString(), 422, 'Post a correction on today’s date to preserve historical balances.');
+            $this->voidPayment($request, $id, $posting);
+            $response = $this->store($request, $sales, $posting);
+            $new = $response->getData(true);
+            DB::table('customer_collections')->where('id', $new['id'])->update(['replaces_collection_id' => $id]);
+            $this->audit('customer_collection.corrected', $id, ['replacement_id' => $new['id'], 'reason' => trim($request->input('reason'))], $request);
+            return response()->json(DB::table('customer_collections')->find($new['id']));
+        });
+    }
+
+    public function voidPayment(Request $request, int $id, PostingService $posting): JsonResponse
+    {
+        $request->validate(['reason' => 'required|string|min:3|max:500']);
+        abort_if(mb_strlen(trim($request->input('reason'))) < 3, 422, 'Enter a clear reason.');
+        return DB::transaction(function () use ($request, $id, $posting) {
+            $customer = DB::table('customer_collections')->where('id', $id)->value('customer_id');
+            abort_unless($customer, 404, 'Collection not found.');
+            DB::table('customers')->where('id', $customer)->lockForUpdate()->first();
+            $collection = DB::table('customer_collections')->lockForUpdate()->find($id);
+            if ($collection->status === 'void') return response()->json($collection);
+            abort_unless(in_array($collection->status, ['received', 'held', 'cleared']), 422, 'Returned collections cannot be deleted or edited.');
+            $date = now()->toDateString();
+            abort_if($date < ($collection->cleared_date ?? $collection->receipt_date), 422, 'Cannot reverse a future payment.');
+            $allocations = DB::table('customer_collection_lines')->where('collection_id', $id)->orderBy('invoice_id')->get();
+            $journals = DB::table('journal_entries')->where('status', 'posted')->where(function ($query) use ($allocations, $id) {
+                $query->where(function ($q) use ($allocations) {
+                    $q->where('source_type', 'customer_receipt')->whereIn('source_id', $allocations->pluck('receipt_id'));
+                })->orWhere(function ($q) use ($id) {
+                    $q->whereIn('source_type', ['card_collection_charge', 'cheque_clearance'])->where('source_id', $id);
+                });
+            })->pluck('id');
+            $original = DB::table('journal_lines as l')->join('accounts as a', 'a.id', '=', 'l.account_id')
+                ->whereIn('l.journal_entry_id', $journals)->get(['a.code', 'l.debit', 'l.credit']);
+            abort_if($original->isEmpty(), 422, 'Original accounting entries are missing; the payment cannot be reversed.');
+            $posting->post('collection_void', $id, $date, "$collection->number / reversal: " . trim($request->input('reason')),
+                $original->map(fn ($line) => $this->line($line->code, (float) $line->credit, (float) $line->debit))->all());
+            foreach ($allocations as $line) {
+                $invoice = DB::table('sales_invoices')->lockForUpdate()->find($line->invoice_id);
+                $received = round((float) $invoice->received_amount - (float) $line->amount, 2);
+                abort_if($received < -0.001, 422, 'Invoice balances have changed inconsistently. Review before reversing.');
+                $outstanding = max(0, round((float) $invoice->total - $received - (float) ($invoice->returned_amount ?? 0), 2));
+                DB::table('sales_invoices')->where('id', $invoice->id)->update([
+                    'received_amount' => max(0, $received), 'outstanding' => $outstanding,
+                    'status' => $outstanding < 0.01 ? 'paid' : ($received > 0 ? 'part_paid' : 'unpaid'), 'updated_at' => now(),
+                ]);
+                DB::table('customer_receipts')->where('id', $line->receipt_id)->update(['status' => 'returned', 'updated_at' => now()]);
+                DB::table('receipt_allocations')->where('receipt_id', $line->receipt_id)->update([
+                    'commission_amount' => 0, 'commission_status' => 'collection_void', 'updated_at' => now(),
+                ]);
+            }
+            DB::table('customer_collections')->where('id', $id)->update([
+                'status' => 'void', 'returned_date' => $date, 'void_reason' => trim($request->input('reason')), 'updated_at' => now(),
+            ]);
+            $this->audit('customer_collection.voided', $id, ['reason' => trim($request->input('reason')), 'date' => $date], $request);
             return response()->json(DB::table('customer_collections')->find($id));
         });
     }
