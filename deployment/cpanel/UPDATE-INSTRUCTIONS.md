@@ -12,6 +12,18 @@ allocations, commission selection and dated cheque clearance/return tracking.
 Only Y-mac accepts the existing AeroSoft360 credentials. Other companies do
 not yet have hosted ERP systems or login accounts through this portal.
 
+## Update-only package: preserve live records
+
+This package includes the latest inventory overview, Excel stock-count templates,
+preview and count updates, article/item searches, and collection corrections and
+receipt improvements. It contains application code and compiled website assets only.
+Local test customers, stock counts, payments and other checking records are not included.
+No database dump, seeders, uploaded workbook or local environment is packaged.
+The inventory feature requires no new migration. The specific collection migrations
+below are needed only if not already installed; Laravel skips recorded migrations.
+Do not run database seeders, migrate:fresh, or import a local SQL/database file.
+Your existing live business records and passwords remain in the hosted database.
+
 ## 1. Back up before replacing files
 
 Download a fresh database backup from the live system. In cPanel, back up the
@@ -78,7 +90,12 @@ pool through the server administrator. Do not restart unrelated applications.
    Pending cheques must not increase available cash. Test in staging first.
    Check invoice entry starts without a preselected article.
 6. Check existing reports, downloads and the database backup function.
-7. Use Ctrl+F5 if the browser displays the previous page. Keep old hashed
+7. Open Inventory Overview: all articles should appear, including unassigned stock.
+   The temporary stock-fill button must be gone. Edit stock opens an inline page.
+   In Bulk Inventory Import, download an Excel template and inspect its Instructions
+   sheet. Download and preview do not change balances. Apply only verified real counts.
+   Raw material count changes require an open accounting period and post journals.
+8. Use Ctrl+F5 if the browser displays the previous page. Keep old hashed
    assets temporarily so already open browser sessions continue to work.
 
 If checks fail, restore the previous application files from your backup.
