@@ -1,3 +1,4 @@
+import ItemSearchSelect from "./ItemSearchSelect";
 import DashboardOverview from "./DashboardOverview";
 import CustomerOrderContext from "./CustomerOrderContext";
 import OrderCustomerPicker from "./OrderCustomerPicker";
@@ -1363,43 +1364,19 @@ function SalesPage({
       "Unit",
     ],
   };
-  const groupedFinishedStock = Object.values(
-    (data.finished_stock || []).reduce((groups: any, item: any) => {
-      const key = String(item.article_id);
-      if (!groups[key])
-        groups[key] = {
-          ...item,
-          id: `finished-article-${item.article_id}`,
-          record_id: item.article_id,
-          inventory_kind: "finished",
-          type: "Finished goods",
-          item: `${item.article_code} — ${item.article_name}`,
-          category: item.category || "Uncategorized",
-          quantity: 0,
-          unit: "pcs",
-          details: [],
-        };
-      const article = (data.articles || []).find(
-        (entry: any) => Number(entry.id) === Number(item.article_id),
-      );
-      const colours = [
-        ...new Set(
-          (article?.sets || []).flatMap((set: any) =>
-            (set.items || [])
-              .filter((setItem: any) => String(setItem.size_label) === String(item.size_label))
-              .flatMap((setItem: any) => splitColours(setItem.colours || "")),
-          ),
-        ),
-      ] as string[];
-      groups[key].details.push({ ...item, colours });
-      groups[key].quantity += Number(item.quantity || 0);
-      groups[key].variant = `${groups[key].details.length} sizes`;
-      groups[key].size_labels = groups[key].details
-        .map((entry: any) => entry.size_label)
-        .join(", ");
-      return groups;
-    }, {}),
-  ) as any[];
+  const groupedFinishedStock = (data.articles || []).map((article: any) => {
+    const stocked = (data.finished_stock || []).filter((item: any) => Number(item.article_id) === Number(article.id));
+    const sizes = [...new Set([...(article.sets || []).flatMap((set: any) => (set.items || []).map((item: any) => String(item.size_label))), ...stocked.map((item: any) => String(item.size_label))])];
+    const details = sizes.map((size: any) => {
+      const stock = stocked.find((item: any) => String(item.size_label) === size);
+      return {...stock, id: stock?.id || "new-"+article.id+"-"+size, size_label:size, quantity:Number(stock?.quantity || 0),
+        colours:[...new Set((article.sets || []).flatMap((set: any) => (set.items || []).filter((item: any) => String(item.size_label) === size).flatMap((item: any) => splitColours(item.colours || ""))))]};
+    });
+    return {id:"finished-article-"+article.id,record_id:article.id,article_code:article.code,article_name:article.name,
+      inventory_kind:"finished",type:"Finished goods",item:article.code+" ? "+article.name,
+      category:article.category || "Uncategorized",quantity:details.reduce((sum:number,item:any)=>sum+item.quantity,0),
+      unit:"pcs",details,variant:details.length ? details.length+" sizes" : "Sizes not configured",size_labels:sizes.join(", ")};
+  });
   const inventoryRows =
     page === "Inventory Overview"
       ? [
@@ -1437,6 +1414,7 @@ function SalesPage({
   const rawQuantity = inventoryRows
     .filter((item: any) => item.type === "Raw materials")
     .reduce((sum: number, item: any) => sum + item.quantity, 0);
+  if (inventoryRecord) return <InventoryRecordModal record={inventoryRecord} close={() => setInventoryRecord(null)} save={post} fail={setError} />;
   return (
     <>
       <div className="heading">
@@ -1602,20 +1580,7 @@ function SalesPage({
               <button type="button" onClick={() => go("Raw Material Stock")}>
                 Raw materials
               </button>
-              <button
-                type="button"
-                className="temporary-stock-button"
-                onClick={async () => {
-                  if (!confirm("Set every finished-goods size balance to 50 pieces?")) return;
-                  try {
-                    await post("finished-stock/temporary-fill");
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                }}
-              >
-                Set all to 50 temporarily
-              </button>
+              <button type="button" onClick={() => go("Bulk Inventory Import")}>Excel import / update</button>
             </div>
           </div>
           <div className="inventory-filters">
@@ -2293,14 +2258,6 @@ function SalesPage({
           <RecordView page={page} row={viewing} close={() => setViewing(null)}
             onReturn={page === "Invoices" && !viewing.is_opening_balance && permissions.includes("accounting.manage") ? () => { setViewing(null); go("Sales Returns", {invoiceId: Number(viewing.id)}); } : undefined} />
         ))}
-      {inventoryRecord && (
-        <InventoryRecordModal
-          record={inventoryRecord}
-          close={() => setInventoryRecord(null)}
-          save={post}
-          fail={setError}
-        />
-      )}
       {pricePreview && (
         <div className="backdrop" onMouseDown={() => !priceImporting && setPricePreview(null)}>
           <div
@@ -2434,25 +2391,22 @@ function InventoryRecordModal({
   fail: (message: string) => void;
 }) {
   const row = record.row;
+  const [localError,setLocalError]=useState("");
+  const [updateKey]=useState(()=>crypto.randomUUID());
   return (
-    <div className="backdrop" onMouseDown={close}>
+    <section className="inventory-record-page">
       <form
-        className="modal inventory-record-modal"
+        className="inventory-record-form"
         onMouseDown={(event) => event.stopPropagation()}
         onSubmit={async (event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);
           try {
-            if (row.inventory_kind === "finished")
-              await Promise.all(
-                (row.details || []).map((detail: any) =>
-                  save(
-                    `finished-stock/${detail.id}`,
-                    { quantity: Number(form.get(`quantity_${detail.id}`)) },
-                    "PUT",
-                  ),
-                ),
-              );
+            if (row.inventory_kind === "finished") {
+              if (!row.details.length) throw new Error("Configure article sizes in Pricing List before assigning stock.");
+              await save("inventory-count/apply", {import_key:updateKey,reason:form.get("reason"),
+                rows:row.details.map((detail:any)=>({code:row.article_code,size:String(detail.size_label),expected:Number(detail.quantity),quantity:Number(form.get("quantity_"+detail.id))}))});
+            }
             else {
               await save(
                 `stock/${row.record_id}`,
@@ -2467,12 +2421,10 @@ function InventoryRecordModal({
             }
             close();
           } catch (error) {
-            fail((error as Error).message);
+            setLocalError((error as Error).message);
           }
         }}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Business record dialog"
+
       >
         <div className="popup-header">
           <button type="button" className="close" onClick={close} aria-label="Close dialog">
@@ -2482,6 +2434,7 @@ function InventoryRecordModal({
           <h2>{record.mode === "view" ? row.item : `Edit ${row.item}`}</h2>
         </div>
         <div className="popup-body">
+          {localError && <p role="alert" className="error">{localError}</p>}
           <div className="inventory-detail-grid inventory-summary-details">
             <div>
               <small>Inventory type</small>
@@ -2502,12 +2455,14 @@ function InventoryRecordModal({
               <b>{row.article_code || row.code}</b>
             </div>
           </div>
+          {record.mode === "edit" && row.inventory_kind === "finished" && <label>Reason for stock update<input name="reason" required minLength={3} maxLength={255} placeholder="Physical stock count / opening inventory" /></label>}
+          {row.inventory_kind === "finished" && !row.details.length && <p role="status">No sizes configured. Add article sizes in Pricing List before assigning quantities.</p>}
           {row.inventory_kind === "finished" ? (
             <div className="inventory-size-details">
               <div className="inventory-size-head">
                 <b>Size</b>
                 <b>Colours</b>
-                <b>Stock record</b>
+                <b>Assignment</b>
                 <b>Available quantity</b>
               </div>
               {(row.details || []).map((detail: any) => (
@@ -2525,13 +2480,13 @@ function InventoryRecordModal({
                       <small>No colour specified</small>
                     )}
                   </div>
-                  <span>#{detail.id}</span>
+                  <span>{String(detail.id).startsWith("new-") ? "Not assigned" : "Assigned"}</span>
                   {record.mode === "edit" ? (
                     <input
                       name={`quantity_${detail.id}`}
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="1"
                       defaultValue={detail.quantity}
                       required
                     />
@@ -2604,7 +2559,7 @@ function InventoryRecordModal({
           </div>
         </div>
       </form>
-    </div>
+    </section>
   );
 }
 function SalesTransactionEditModal({
@@ -5141,7 +5096,7 @@ function SalesCreateModal({
               <div className="form-row">
                 <label>
                   Article
-                  <select
+                  <ItemSearchSelect
                     name="article_id"
                     value={inventoryArticleId}
                     onChange={(event) => setInventoryArticleId(Number(event.target.value))}
@@ -5152,7 +5107,7 @@ function SalesCreateModal({
                         {displayCode(article)} — {article.name}
                       </option>
                     ))}
-                  </select>
+                  </ItemSearchSelect>
                 </label>
                 <label>
                   Size
@@ -7379,7 +7334,7 @@ function CreateModal({
           <div className="form-row">
             <label>
               Material
-              <select name="material_id" required defaultValue="">
+              <ItemSearchSelect name="material_id" required defaultValue="">
                 <option value="" disabled>
                   Select material
                 </option>
@@ -7388,7 +7343,7 @@ function CreateModal({
                     {displayCode(material)} — {material.name}
                   </option>
                 ))}
-              </select>
+              </ItemSearchSelect>
             </label>
             <label>
               Batch number

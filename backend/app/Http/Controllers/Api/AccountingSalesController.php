@@ -1630,22 +1630,6 @@ final class AccountingSalesController extends Controller
         ]);
     }
 
-    public function temporaryFillFinishedStock(): JsonResponse
-    {
-        $updated = DB::table("finished_goods_stock")->update([
-            "quantity" => 50,
-            "updated_at" => now(),
-        ]);
-        $this->audit("finished_goods_stock.temporary_fill", "finished_goods_stock", 0, [
-            "quantity" => 50,
-            "records" => $updated,
-        ]);
-        return response()->json([
-            "message" => "Every finished-goods stock record was set to 50 pieces.",
-            "records" => $updated,
-        ]);
-    }
-
     private function audit(string $event, string $type, int $id, array $payload): void
     {
         DB::table("audit_logs")->insert([

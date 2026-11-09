@@ -1,3 +1,5 @@
+import ItemSearchSelect from "./ItemSearchSelect";
+import InventoryCountImport from "./InventoryCountImport";
 import { displayCode, displayReferenceValue } from "./representative-reference";
 import { createPortal } from "react-dom";
 import OrderCustomerPicker from "./OrderCustomerPicker";
@@ -582,7 +584,7 @@ export default function BusinessWorkflowsPage({
             )}
             {page === "Bulk Inventory Import" && (
               <BulkImport
-                canManage={can("stock.manage")}
+                api={api} token={token} canManage={can("stock.manage")}
                 busy={busy}
                 save={(body: any) => mutate("bulk-stock-import", body)}
               />
@@ -1174,7 +1176,7 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
         <div className="workflow-quote-line" key={index}>
           <label>
             Article / size
-            <select
+            <ItemSearchSelect
               required
               value={line.set_item_id}
               onChange={(e) => {
@@ -1193,7 +1195,7 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
                   {displayCode(i)} · {i.name} · Size {i.size_label} · {money(i.unit_price)}
                 </option>
               ))}
-            </select>
+            </ItemSearchSelect>
           </label>
           <label>
             Colour
@@ -1646,14 +1648,14 @@ function MasterData({ page, data, canManage, busy, save }: any) {
             <h2>Link classifications to an article</h2>
             <label>
               Article
-              <select value={article} onChange={(e) => setArticle(e.target.value)}>
+              <ItemSearchSelect value={article} onChange={(e) => setArticle(e.target.value)}>
                 <option value="">Select article</option>
                 {data.articles.map((a: any) => (
                   <option key={a.id} value={a.id}>
                     {displayCode(a)} · {a.name}
                   </option>
                 ))}
-              </select>
+              </ItemSearchSelect>
             </label>
             {selected && (
               <SimpleForm
@@ -1711,12 +1713,14 @@ function MasterData({ page, data, canManage, busy, save }: any) {
   );
 }
 
-function BulkImport({ canManage, busy, save }: any) {
+function BulkImport({ api, token, canManage, busy, save }: any) {
   const [rows, setRows] = useState<any[]>([]),
     [error, setError] = useState(""),
     [key, setKey] = useState("");
   return (
     <>
+      {canManage && <InventoryCountImport api={api} token={token} />}
+      <h2>Raw materials / stock additions (CSV)</h2>
       <p className="report-note">
         Import positive stock additions by existing material or article code. Raw additions post the
         existing inventory adjustment journal; finished additions use the existing size-based stock
@@ -1920,7 +1924,7 @@ function Subledger({
         )}
         <label className="ledger-party-field">
           {stock ? "Product" : "Party"}
-          <select
+          <ItemSearchSelect
             value={id}
             onChange={(e) => {
               setId(e.target.value);
@@ -1933,7 +1937,7 @@ function Subledger({
                 {displayCode(o)} · {o.name}
               </option>
             ))}
-          </select>
+          </ItemSearchSelect>
         </label>
         {stock && (
           <label>

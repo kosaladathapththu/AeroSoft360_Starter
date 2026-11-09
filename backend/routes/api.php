@@ -102,6 +102,9 @@ Route::prefix("v1")->group(function (): void {
             \App\Http\Controllers\Api\BusinessWorkflowController::class,
             "stopRecurring",
         ])->middleware("permission:accounting.manage");
+        Route::get('/inventory-count/template', [\App\Http\Controllers\Api\InventoryCountController::class, 'template'])->middleware('permission:stock.manage');
+        Route::post('/inventory-count/preview', [\App\Http\Controllers\Api\InventoryCountController::class, 'preview'])->middleware('permission:stock.manage');
+        Route::post('/inventory-count/apply', [\App\Http\Controllers\Api\InventoryCountController::class, 'apply'])->middleware('permission:stock.manage');
         Route::post("/bulk-stock-import", [
             \App\Http\Controllers\Api\BusinessWorkflowController::class,
             "bulkStock",
@@ -327,10 +330,6 @@ Route::prefix("v1")->group(function (): void {
         Route::delete("/finished-stock/{id}", [
             AccountingSalesController::class,
             "deleteFinishedStock",
-        ])->middleware("permission:stock.manage");
-        Route::post("/finished-stock/temporary-fill", [
-            AccountingSalesController::class,
-            "temporaryFillFinishedStock",
         ])->middleware("permission:stock.manage");
         Route::get("/sales/aging", [SalesController::class, "aging"])->middleware(
             "permission:workspace.view",

@@ -1757,12 +1757,7 @@ aside .user:hover {
   font-weight: 700;
   cursor: pointer;
 }
-.inventory-manage-links .temporary-stock-button {
-  grid-column: 1 / -1;
-  border-color: #e1bd6a;
-  background: #fff8e8;
-  color: #815b08;
-}
+
 .inventory-filters {
   display: grid;
   grid-template-columns: minmax(320px, 1.6fr) minmax(190px, 0.7fr) minmax(190px, 0.7fr);
@@ -2667,3 +2662,13 @@ aside .user:hover {
     flex-wrap: wrap;
   }
 }
+
+.inventory-count-import p { line-height:1.6; max-width:90ch; }
+.inventory-count-import label { display:grid; gap:6px; }
+.inventory-count-import table { width:100%; }
+
+.item-search-select { display:grid; gap:8px; min-width:0; }
+.item-search-select input, .item-search-select select { width:100%; min-width:0; }
+.inventory-record-page { background:white; border:1px solid #bdcec7; border-radius:12px; }
+.inventory-record-page .popup-body { max-height:none; overflow:visible; }
+.inventory-record-page .popup-header,.inventory-record-page .popup-footer { position:static; }
