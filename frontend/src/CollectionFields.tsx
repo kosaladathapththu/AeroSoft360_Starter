@@ -8,17 +8,17 @@ import "./customer-collections.css";
 
 const money = (value: unknown) => `LKR ${Number(value || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function CollectionFields({ data, initial, user, busy }: {
-  data: any; initial?: any; user?: any; busy: boolean;
+export default function CollectionFields({ data, initial, user, busy, correction }: {
+  data: any; initial?: any; user?: any; busy: boolean; correction?: any;
 }) {
-  const [customerId, setCustomerId] = useState(Number(initial?.customer_id || 0));
+  const [customerId, setCustomerId] = useState(Number(correction?.customer_id || initial?.customer_id || 0));
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<number[]>(initial?.id ? [Number(initial.id)] : []);
-  const [invoiceAmounts, setInvoiceAmounts] = useState<Record<number, string>>(() => initial?.id ? { [Number(initial.id)]: Number(initial.outstanding || 0).toFixed(2) } : {});
-  const [commissionIds, setCommissionIds] = useState<number[]>([]);
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState("cash");
-  const [deductCardCharge, setDeductCardCharge] = useState(false);
+  const [selected, setSelected] = useState<number[]>(correction ? correction.allocations.map((line: any) => Number(line.invoice_id)) : initial?.id ? [Number(initial.id)] : []);
+  const [invoiceAmounts, setInvoiceAmounts] = useState<Record<number, string>>(() => correction ? Object.fromEntries(correction.allocations.map((line: any) => [Number(line.invoice_id), String(line.amount)])) : initial?.id ? { [Number(initial.id)]: Number(initial.outstanding || 0).toFixed(2) } : {});
+  const [commissionIds, setCommissionIds] = useState<number[]>(correction ? correction.allocations.filter((line: any) => Number(line.planned_commission) > 0).map((line: any) => Number(line.invoice_id)) : []);
+  const [amount, setAmount] = useState(correction ? String(correction.amount) : "");
+  const [method, setMethod] = useState(correction?.payment_method || "cash");
+  const [deductCardCharge, setDeductCardCharge] = useState(Number(correction?.bank_charge_amount || 0) > 0);
   const cardCharge = method === "card" && deductCardCharge ? Math.round(Number(amount || 0) * 3) / 100 : 0;
   const [recipient, setRecipient] = useState("invoice_salesperson");
   const [requestKey] = useState(() => crypto.randomUUID());
@@ -88,9 +88,9 @@ export default function CollectionFields({ data, initial, user, busy }: {
           <label>Amount collected (LKR)<input ref={amountInput} name="amount" type="number" min="0.01" step="0.01" value={amount} required placeholder="Enter total collected" onChange={(event) => setAmount(event.target.value)} /></label>
           <label>Collection date<input name="receipt_date" type="date" max={today} defaultValue={today} required /></label>
           <label>Payment method<select name="payment_method" value={method} onChange={(event) => setMethod(event.target.value)}><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="card">Card</option><option value="cheque">Cheque</option></select></label>
-          <label>Collected by (optional)<select name="collector_sales_rep_id" defaultValue={user?.sales_rep_id || ""} required={recipient === "collector" && commissionIds.some(id => selected.includes(id))}><option value="">Not assigned</option>{reps.map((rep: any) => <option key={rep.id} value={rep.id}>{rep.name} - {displayCode(rep)}</option>)}</select></label>
-          {method !== "cheque" ? <label>Receive into<select name="payment_account_id" required defaultValue=""><option value="" disabled>Choose cash / bank account</option>{(data.payment_accounts || []).map((account: any) => <option key={account.id} value={account.id}>{account.code} - {account.name}</option>)}</select><small>For a cheque, choose Cheque as the payment method.</small></label> : <label>Receive into<input value="1120 - Cheques in Hand" readOnly /><small>Current Assets · transferred to your bank only after clearance.</small></label>}
-          <label>Reference (optional)<input name="reference" maxLength={80} placeholder="Payment reference or note" /></label>
+          <label>Collected by (optional)<select name="collector_sales_rep_id" defaultValue={correction?.collector_sales_rep_id || user?.sales_rep_id || ""} required={recipient === "collector" && commissionIds.some(id => selected.includes(id))}><option value="">Not assigned</option>{reps.map((rep: any) => <option key={rep.id} value={rep.id}>{rep.name} - {displayCode(rep)}</option>)}</select></label>
+          {method !== "cheque" ? <label>Receive into<select name="payment_account_id" required defaultValue={correction?.payment_account_id || ""}><option value="" disabled>Choose cash / bank account</option>{(data.payment_accounts || []).map((account: any) => <option key={account.id} value={account.id}>{account.code} - {account.name}</option>)}</select><small>For a cheque, choose Cheque as the payment method.</small></label> : <label>Receive into<input value="1120 - Cheques in Hand" readOnly /><small>Current Assets · transferred to your bank only after clearance.</small></label>}
+          <label>Reference (optional)<input name="reference" defaultValue={correction?.reference || ""} maxLength={80} placeholder="Payment reference or note" /></label>
         </div>
         {method === "card" && <div className="collection-cheque-panel">
           <label className="collection-commission-check"><input type="checkbox" name="deduct_card_charge" checked={deductCardCharge} onChange={event => setDeductCardCharge(event.target.checked)} /> Deduct 3% bank charge — paid by our business</label>
@@ -100,9 +100,9 @@ export default function CollectionFields({ data, initial, user, busy }: {
         {method === "cheque" && <div className="collection-cheque-panel">
           <b>Cheque details</b>
           <div className="collection-input-grid">
-            <label>Cheque number<input name="cheque_number" maxLength={80} required /></label>
-            <label>Cheque bank / branch<input name="cheque_bank" maxLength={160} required /></label>
-            <label>Cheque date<input name="cheque_date" type="date" required defaultValue={today} /></label>
+            <label>Cheque number<input name="cheque_number" defaultValue={correction?.cheque_number || ""} maxLength={80} required /></label>
+            <label>Cheque bank / branch<input name="cheque_bank" defaultValue={correction?.cheque_bank || ""} maxLength={160} required /></label>
+            <label>Cheque date<input name="cheque_date" type="date" required defaultValue={correction?.cheque_date || today} /></label>
           </div>
           <p>Received into 1120 - Cheques in Hand. This is pending clearance, not available cash. Commission is held until clearance. Use the cheque register to clear or return it.</p>
         </div>}
