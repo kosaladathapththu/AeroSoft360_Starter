@@ -291,7 +291,7 @@ export default function App() {
       ],
     },
     {
-      name: "People & Products",
+      name: "Master Data",
       icon: Users,
       items: [
         ["Customers", Building2],
@@ -698,6 +698,7 @@ export default function App() {
                   "Inventory Overview",
                 ].includes(page) ? (
                 <SalesPage
+                  key={`${page}-${workflowContext.version || 0}`}
                   token={token() || ""}
                   page={page}
                   go={goToPage}
@@ -1501,7 +1502,7 @@ function SalesPage({
                   : page === "Finished Goods Stock"
                     ? "Adjust stock"
                     : page === "Invoices"
-                      ? "Create invoice"
+                      ? "New invoice"
                       : page === "Sales Orders"
                         ? "Create sales order"
                         : page === "Pricing List"
@@ -1731,7 +1732,7 @@ function SalesPage({
           </FilteredRecords>
         </div>
       ) : (
-        <FilteredRecords records={rows} title="records" paginate={page !== "Invoices"} customerSearch={page === "Invoices"} key={page + collectionView}>
+        <FilteredRecords records={rows} title="records" minimumRows={page === "Pricing List" ? 5 : 1} paginate={page !== "Invoices"} customerSearch={page === "Invoices"} key={page + collectionView}>
           {(filteredRows, filtersActive) => (
             <InvoicePagination records={filteredRows} enabled={page === "Invoices"}>
               {(pageRows) => (
@@ -1757,7 +1758,19 @@ function SalesPage({
                   ) : (
                     pageRows.map((r: any) => (
                       <Fragment key={r.id}>
-                        <tr>
+                        <tr className={page === "Pricing List" ? "pricing-expand-row" : undefined}
+                          tabIndex={page === "Pricing List" ? 0 : undefined}
+                          aria-expanded={page === "Pricing List" ? expandedPriceArticles.has(r.article_id) : undefined}
+                          onClick={page === "Pricing List" ? () => setExpandedPriceArticles(current => {
+                            const next = new Set(current);
+                            if (next.has(r.article_id)) next.delete(r.article_id); else next.add(r.article_id);
+                            return next;
+                          }) : undefined}
+                          onKeyDown={page === "Pricing List" ? event => {
+                            if (event.target === event.currentTarget && ["Enter", " "].includes(event.key)) {
+                              event.preventDefault(); event.currentTarget.click();
+                            }
+                          } : undefined}>
                           {salesCells(
                             page === "Collections" && collectionView === "due"
                               ? "Collections Due"
@@ -1765,7 +1778,7 @@ function SalesPage({
                             r,
                           )}
                           <td>
-                            <div className="row-actions">
+                            <div className="row-actions" onClick={event => event.stopPropagation()}>
                               {page === "Collections" && collectionView === "due" && (
                                 <button
                                   className="approve"
@@ -1780,6 +1793,8 @@ function SalesPage({
                               {page === "Pricing List" && (
                                 <button
                                   className="icon-action view"
+                                  aria-label={expandedPriceArticles.has(r.article_id) ? "Hide sizes" : "Show sizes"}
+                                  aria-expanded={expandedPriceArticles.has(r.article_id)}
                                   title={
                                     expandedPriceArticles.has(r.article_id)
                                       ? "Hide sizes"

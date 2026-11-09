@@ -3,8 +3,8 @@ import "./screen-pagination.css";
 
 /** Screen-only pagination. Render the full filtered data so report aggregates,
  * exports and print output never accidentally use only the visible page. */
-export default function ScreenPagination({ children, selection, title }: {
-  children: ReactNode; selection: string; title: string;
+export default function ScreenPagination({ children, selection, title, minimumRows = 1 }: {
+  children: ReactNode; selection: string; title: string; minimumRows?: number;
 }) {
   const content = useRef<HTMLDivElement>(null);
   const groups = useRef<HTMLTableRowElement[][]>([]);
@@ -38,7 +38,7 @@ export default function ScreenPagination({ children, selection, title }: {
       const top = table.getBoundingClientRect().top + window.scrollY;
       const header = table.tHead?.getBoundingClientRect().height || 44;
       const footer = (table.tFoot?.getBoundingClientRect().height || 0) + Array.from(table.querySelectorAll("tbody > .report-totals, tbody > [data-pagination-summary]")).reduce((height, row) => height + row.getBoundingClientRect().height, 0);
-      const size = window.innerWidth < 900 ? 5 : Math.max(1, Math.min(20, Math.floor((window.innerHeight - top - header - footer - 80) / rowHeight)));
+      const size = Math.max(minimumRows, window.innerWidth < 900 ? 5 : Math.max(1, Math.min(20, Math.floor((window.innerHeight - top - header - footer - 80) / rowHeight))));
       setCount(next.length);
       setLimit(size);
       const safePage = Math.min(page, Math.max(1, Math.ceil(next.length / size)));
@@ -60,7 +60,7 @@ export default function ScreenPagination({ children, selection, title }: {
       window.removeEventListener("resize", schedule);
       groups.current.forEach((rows) => rows.forEach((row) => row.removeAttribute("data-screen-page-hidden")));
     };
-  }, [children, selection, page]);
+  }, [children, selection, page, minimumRows]);
 
   const pages = Math.max(1, Math.ceil(count / limit));
   return <div className="screen-record-page">

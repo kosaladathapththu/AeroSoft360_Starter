@@ -1,4 +1,6 @@
 import { displayCode, displayReferenceValue } from "./representative-reference";
+import { createPortal } from "react-dom";
+import OrderCustomerPicker from "./OrderCustomerPicker";
 import FilteredRecords from "./FilteredRecords";
 import { recordFields } from "./record-filters";
 import { matchesSearch } from "./search";
@@ -623,6 +625,7 @@ export default function BusinessWorkflowsPage({
       )}
       {modal && (
         <WorkflowModal
+          pageMode={quotes}
           title={
             modal.kind === "quote"
               ? modal.row
@@ -916,15 +919,18 @@ export function WorkflowTable({
   values,
   columns,
   actions,
+  minimumRows = 1,
 }: {
   values: any[];
   columns: Column[];
   actions?: (row: any) => ReactNode;
+  minimumRows?: number;
 }) {
   const availableFields = recordFields(values);
   return (
     <FilteredRecords
       records={values}
+      minimumRows={minimumRows}
       title="records"
       key={columns.map(([key]) => key).join(",")}
       fields={columns.map(([key, label, type]) => ({
@@ -994,12 +1000,31 @@ export function WorkflowModal({
   children,
   busy,
   close,
+  pageMode = false,
 }: {
   title: string;
   children: ReactNode;
   busy: boolean;
   close: () => void;
+  pageMode?: boolean;
 }) {
+  const heading = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (pageMode) { heading.current?.focus(); window.scrollTo({ top: 0 }); }
+  }, [pageMode]);
+  if (pageMode) {
+    const content = <div className="record-workspace-page" ref={heading} tabIndex={-1}>
+      <section className="modal workflow-modal quotation-workspace" aria-label={title}>
+        <div className="popup-header">
+          <button type="button" className="workspace-entry-back secondary" disabled={busy} onClick={close}>Back to quotations</button>
+          <h2>{title}</h2>
+        </div>
+        <div className="popup-body workflow-modal-content">{children}</div>
+      </section>
+    </div>;
+    const target = document.getElementById("workspace-entry-root");
+    return target ? createPortal(content, target) : content;
+  }
   return (
     <div
       className="backdrop"
@@ -1069,6 +1094,7 @@ export function SimpleForm({
 }
 
 function QuoteForm({ data, initial, user, busy, save }: any) {
+  const [customerId, setCustomerId] = useState(Number(initial?.customer_id || 0));
   const [lines, setLines] = useState<any[]>(
     initial?.lines || [{ set_item_id: "", quantity: 1, rate: 0, colour: "" }],
   );
@@ -1080,7 +1106,7 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
       label="Save quotation"
       submit={(f) =>
         save({
-          customer_id: Number(f.get("customer_id")),
+          customer_id: customerId,
           sales_rep_id: Number(f.get("sales_rep_id")),
           quotation_date: f.get("quotation_date"),
           valid_until: f.get("valid_until"),
@@ -1092,19 +1118,8 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
       }
     >
       <div className="form-row">
-        <label>
-          Customer
-          <select name="customer_id" required defaultValue={initial?.customer_id || ""}>
-            <option value="" disabled>
-              Choose customer
-            </option>
-            {data.customers.map((c: any) => (
-              <option key={c.id} value={c.id}>
-                {displayCode(c)} — {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <OrderCustomerPicker customers={data.customers || []} selectedId={customerId}
+          select={setCustomerId} help="Search by customer name, code or phone, then choose a customer." />
         <label>
           Salesperson
           <select
@@ -1606,34 +1621,27 @@ function MasterData({ page, data, canManage, busy, save }: any) {
   const [article, setArticle] = useState("");
   const selected = data.articles.find((a: any) => a.id === Number(article));
   return (
-    <>
-      <p className="report-note">
-        Shared product classifications are used by the existing article/pricing records. Existing
-        category and unit values are retained. Assign classifications below without changing prices
-        or stock.
-      </p>
+    <div className="simple-master-data">
+      {canManage && <section className="master-create-bar">
+        <SimpleForm busy={busy} label={`Add ${kind}`} submit={async f => {
+          await save("catalog-terms", { kind, name: f.get("name") });
+        }}>
+          <label>{page === "Categories" ? "Category name" : `New ${kind}`}
+            <input name="name" required maxLength={kind === "unit" ? 20 : 80} placeholder={`Enter ${kind} name`} />
+          </label>
+        </SimpleForm>
+      </section>}
       <WorkflowTable
-        values={data.terms.filter((t: any) => t.kind === kind)}
+        minimumRows={5}
+        values={data.terms.filter((t: any) => t.kind === kind).map((t: any) => ({...t, status: Number(t.active) ? "Active" : "Inactive"}))}
         columns={[
           ["name", page],
-          ["active", "Active"],
+          ["status", "Status"],
         ]}
       />
       {canManage && (
-        <div className="master-data-panels">
-          <section className="master-data-panel">
-            <h2>Add {kind}</h2>
-            <SimpleForm
-              busy={busy}
-              label={`Add ${kind}`}
-              submit={(f) => save("catalog-terms", { kind, name: f.get("name") })}
-            >
-              <label>
-                New {kind}
-                <input name="name" required maxLength={kind === "unit" ? 20 : 80} />
-              </label>
-            </SimpleForm>
-          </section>
+        <details className="master-link-details">
+          <summary>Assign classifications to an article</summary>
           <section className="master-data-panel">
             <h2>Link classifications to an article</h2>
             <label>
@@ -1697,9 +1705,9 @@ function MasterData({ page, data, canManage, busy, save }: any) {
               </SimpleForm>
             )}
           </section>
-        </div>
+        </details>
       )}
-    </>
+    </div>
   );
 }
 

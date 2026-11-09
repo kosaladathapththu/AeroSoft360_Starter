@@ -12,6 +12,7 @@ type Props<T> = {
   title?: string;
   customerSearch?: boolean;
   paginate?: boolean;
+  minimumRows?: number;
   children: (rows: T[], active: boolean) => ReactNode;
 };
 
@@ -22,6 +23,7 @@ export default function FilteredRecords<T extends Record<string, any>>({
   title = "records",
   customerSearch = false,
   paginate = true,
+  minimumRows = 1,
   children,
 }: Props<T>) {
   const id = useId();
@@ -270,7 +272,7 @@ export default function FilteredRecords<T extends Record<string, any>>({
             .join("; ")}
         </p>
       )}
-      {paginate ? <ScreenPagination title={title} selection={JSON.stringify([query, conditions, rows.map((row) => row.id ?? row.number ?? row.code)])}>{children(rows, active)}</ScreenPagination> : children(rows, active)}
+      {paginate ? <ScreenPagination title={title} minimumRows={minimumRows} selection={JSON.stringify([query, conditions, rows.map((row) => row.id ?? row.number ?? row.code)])}>{children(rows, active)}</ScreenPagination> : children(rows, active)}
       {!rows.length && records.length > 0 && (
         <p className="record-filter-empty" role="status">
           No matching {title}. Change your search or reset the filters.
