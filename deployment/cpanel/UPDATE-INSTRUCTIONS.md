@@ -16,7 +16,9 @@ not yet have hosted ERP systems or login accounts through this portal.
 
 This package includes the latest inventory overview, Excel stock-count templates,
 preview and count updates, article/item searches, and collection corrections and
-receipt improvements. It contains application code and compiled website assets only.
+receipt improvements. It also includes the redesigned Purchasing Overview, full-page
+purchase entry forms and the complete Inventory Overview list without pagination.
+It contains application code and compiled website assets only.
 Local test customers, stock counts, payments and other checking records are not included.
 No database dump, seeders, uploaded workbook or local environment is packaged.
 The inventory feature requires no new migration. The specific collection migrations

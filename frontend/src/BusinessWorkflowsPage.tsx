@@ -1720,7 +1720,7 @@ function BulkImport({ api, token, canManage, busy, save }: any) {
   return (
     <>
       {canManage && <InventoryCountImport api={api} token={token} />}
-      <h2>Raw materials / stock additions (CSV)</h2>
+      <details className="stock-import-advanced"><summary>Advanced: add stock using CSV</summary><h2>Stock additions (CSV)</h2>
       <p className="report-note">
         Import positive stock additions by existing material or article code. Raw additions post the
         existing inventory adjustment journal; finished additions use the existing size-based stock
@@ -1803,6 +1803,7 @@ function BulkImport({ api, token, canManage, busy, save }: any) {
           )}
         </SimpleForm>
       )}
+      </details>
     </>
   );
 }

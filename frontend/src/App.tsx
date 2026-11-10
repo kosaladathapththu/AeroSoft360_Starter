@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 import "./styles.css";
 import "./actions.css";
+import "./inventory-overview.css";
 import "./reports.css";
 import PointOfSalePage from "./PointOfSalePage";
 import SerialWarrantyPage from "./SerialWarrantyPage";
@@ -622,7 +623,7 @@ export default function App() {
             <RefreshCw />
           </button>
         </header>
-        <section className={`content ${page === "Invoices" ? "invoice-list-page" : ""}`}>
+        <section className={`content ${page === "Invoices" ? "invoice-list-page" : page === "Inventory Overview" ? "inventory-overview-page" : ""}`}>
           {page !== "Dashboard" && <WorkflowSteps page={page} go={goToPage} />}
           {page === "Purchasing Overview" ? (
             <PurchasingOverview
@@ -903,7 +904,6 @@ function SalesPage({
     [collectionInvoice, setCollectionInvoice] = useState<any>(null),
     [savedCollectionId, setSavedCollectionId] = useState<number | null>(null),
     [collectionAction, setCollectionAction] = useState<{ id: number; type: string } | null>(null),
-    [inventoryQuery, setInventoryQuery] = useState(""),
     [inventoryType, setInventoryType] = useState("all"),
     [inventoryCategory, setInventoryCategory] = useState("all"),
     [inventoryRecord, setInventoryRecord] = useState<{ mode: "view" | "edit"; row: any } | null>(
@@ -1400,15 +1400,11 @@ function SalesPage({
       : [];
   const inventoryCategories = [...new Set(inventoryRows.map((item: any) => item.category))].sort();
   const visibleInventoryRows = inventoryRows.filter((item: any) => {
-    const query = inventoryQuery.trim().toLowerCase();
+
     return (
       (inventoryType === "all" || item.type === inventoryType) &&
       (inventoryCategory === "all" || item.category === inventoryCategory) &&
-      matchesSearch(item, search) &&
-      (!query ||
-        `${item.item} ${item.category} ${item.variant} ${item.size_labels || ""} ${item.item_codes || ""} ${item.type}`
-          .toLowerCase()
-          .includes(query))
+      matchesSearch(item, search)
     );
   });
   const finishedQuantity = inventoryRows
@@ -1422,7 +1418,7 @@ function SalesPage({
     <>
       <div className="heading">
         <div>
-          <span>SALES OPERATIONS</span>
+          <span>{page === "Inventory Overview" ? "INVENTORY & STOCK CONTROL" : "SALES OPERATIONS"}</span>
           <h1>{page}</h1>
           <p>
             {page === "Inventory Overview"
@@ -1576,28 +1572,17 @@ function SalesPage({
               </span>
             </button>
             <div className="inventory-manage-links">
-              <small>Stock management</small>
+              <div className="inventory-tools-label"><b>Manage your stock</b><small>View quantities or update from Excel</small></div>
               <button type="button" onClick={() => go("Finished Goods Stock")}>
                 Finished goods
               </button>
               <button type="button" onClick={() => go("Raw Material Stock")}>
                 Raw materials
               </button>
-              <button type="button" onClick={() => go("Bulk Inventory Import")}>Excel import / update</button>
+              <button type="button" onClick={() => go("Bulk Inventory Import")}><FileUp size={18} /> Excel import / update <ChevronRight size={16} /></button>
             </div>
           </div>
           <div className="inventory-filters">
-            <label>
-              Search inventory
-              <div>
-                <Search />
-                <input
-                  value={inventoryQuery}
-                  onChange={(event) => setInventoryQuery(event.target.value)}
-                  placeholder="Article, product, size or batch"
-                />
-              </div>
-            </label>
             <label>
               Inventory type
               <select
@@ -1624,7 +1609,7 @@ function SalesPage({
               </select>
             </label>
           </div>
-          <FilteredRecords records={visibleInventoryRows} title="inventory records">
+          <FilteredRecords records={visibleInventoryRows} title="inventory records" paginate={false}>
             {(filteredRows, filtersActive) => (
               <div className="table-card inventory-table-card">
                 <table>

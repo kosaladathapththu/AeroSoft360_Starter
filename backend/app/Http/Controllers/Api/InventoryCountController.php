@@ -16,41 +16,77 @@ class InventoryCountController
         if ($request->query('kind') === 'raw') return $this->rawTemplate();
         $book = new Spreadsheet();
         $sheet = $book->getActiveSheet();
-        $sheet->setTitle('Stock counts');
-        $sheet->fromArray([['article_code','article_name','size','current_quantity','new_quantity']]);
-        $rows = DB::table('article_set_items as i')
-            ->join('article_set_templates as t','t.id','=','i.set_template_id')
-            ->join('articles as a','a.id','=','t.article_id')
-            ->leftJoin('finished_goods_stock as s',function ($join) {
-                $join->on('s.article_id','=','a.id')->on('s.size_label','=','i.size_label');
-            })->select('a.code','a.name','i.size_label',DB::raw('COALESCE(s.quantity,0) as quantity'))
-            ->distinct()->orderBy('a.code')->orderBy('i.size_label')->get();
-        $line=2;
-        foreach ($rows as $row) {
-            foreach ([$row->code,$row->name,$row->size_label] as $index=>$value) {
-                $sheet->setCellValueExplicit(chr(65+$index).$line,(string)$value,\PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        $sheet->setTitle('Article counts');
+        $current = $book->createSheet();
+        $current->setTitle('Current stock');
+        $baseline = $book->createSheet();
+        $baseline->setTitle('Import baseline');
+        $baseline->fromArray([['article_code', 'size', 'current_quantity']]);
+
+        $items = DB::table('article_set_items as i')
+            ->join('article_set_templates as t', 't.id', '=', 'i.set_template_id')
+            ->join('articles as a', 'a.id', '=', 't.article_id')
+            ->leftJoin('finished_goods_stock as s', function ($join) {
+                $join->on('s.article_id', '=', 'a.id')->on('s.size_label', '=', 'i.size_label');
+            })
+            ->select('a.code', 'i.size_label', DB::raw('COALESCE(s.quantity,0) as quantity'))
+            ->distinct()->get();
+        $sizes = $items->pluck('size_label')->map(fn ($size) => (string) $size)->unique()->values()->all();
+        usort($sizes, 'strnatcasecmp');
+        $headers = array_merge(['article_code', 'article_name'], array_map(fn ($size) => 'Size '.$size, $sizes));
+        $sheet->fromArray([$headers]);
+        $current->fromArray([$headers]);
+        $counts = [];
+        $baselineLine = 2;
+        foreach ($items as $item) {
+            $counts[(string) $item->code][(string) $item->size_label] = (float) $item->quantity;
+            $baseline->setCellValueExplicit('A'.$baselineLine, (string) $item->code, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $baseline->setCellValueExplicit('B'.$baselineLine, (string) $item->size_label, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $baseline->setCellValue('C'.$baselineLine++, (float) $item->quantity);
+        }
+        $line = 2;
+        foreach (DB::table('articles')->orderBy('code')->get(['code', 'name']) as $article) {
+            foreach ([$sheet, $current] as $target) {
+                $target->setCellValueExplicit('A'.$line, (string) $article->code, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $target->setCellValueExplicit('B'.$line, (string) $article->name, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             }
-            $sheet->setCellValue('D'.$line,(float)$row->quantity);
+            foreach ($sizes as $index => $size) {
+                $cell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($index + 3).$line;
+                $available = array_key_exists($size, $counts[(string) $article->code] ?? []);
+                $sheet->getStyle($cell)->getFill()->setFillType('solid')->getStartColor()->setRGB($available ? 'FFF2CC' : 'E7E9EC');
+                if ($available) $current->setCellValue($cell, $counts[(string) $article->code][$size]);
+            }
             $line++;
         }
-        $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:E'.max(1,$line-1));
-        foreach (['A'=>22,'B'=>38,'C'=>18,'D'=>22,'E'=>22] as $col=>$width) $sheet->getColumnDimension($col)->setWidth($width);
-        $sheet->getStyle('A1:E1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
-        $sheet->getStyle('A1:E1')->getFill()->setFillType('solid')->getStartColor()->setRGB('245443');
-        $sheet->getStyle('E2:E'.max(2,$line))->getFill()->setFillType('solid')->getStartColor()->setRGB('FFF2CC');
-        $help=$book->createSheet();
+        $lastColumn = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
+        foreach ([$sheet, $current] as $target) {
+            $target->freezePane('C2');
+            $target->setAutoFilter('A1:'.$lastColumn.max(1, $line - 1));
+            $target->getColumnDimension('A')->setWidth(20);
+            $target->getColumnDimension('B')->setWidth(32);
+            for ($column = 3; $column <= count($headers); $column++) {
+                $target->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($column))->setWidth(13);
+            }
+            $target->getStyle('A1:'.$lastColumn.'1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+            $target->getStyle('A1:'.$lastColumn.'1')->getFill()->setFillType('solid')->getStartColor()->setRGB('245443');
+            $target->getRowDimension(1)->setRowHeight(28);
+        }
+        $baseline->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_VERYHIDDEN);
+        $help = $book->createSheet();
         $help->setTitle('Instructions');
-        $help->fromArray([['Fill new_quantity only. Blank leaves stock unchanged. Zero sets stock to zero.'],
-            ['Counts are pieces per article and size, across colours.'],
-            ['Keep article_code, size and current_quantity unchanged. Download a fresh template before each update.'],
-            ['Review the preview before applying. All rows must be valid. Prices and sales remain unchanged.'],
-            ['Configure missing article sizes in Pricing List before assigning stock.']]);
-        $help->getColumnDimension('A')->setWidth(110);
+        $help->fromArray([
+            ['1. Article counts: each article appears once. Enter counted pieces in yellow size cells.'],
+            ['2. Leave a cell blank to keep its stock unchanged. Enter 0 to clear that size.'],
+            ['3. Grey cells are sizes not configured for that article. Do not enter quantities there.'],
+            ['4. Current stock is a reference sheet. Editing it does not update inventory.'],
+            ['5. Save this Excel file, upload it, review changes and save the stock update.'],
+            ['Counts replace stock; they do not add to it. Quantities cover all colours.'],
+            ['Download a fresh template for each count. Configure missing sizes in Pricing List.'],
+        ]);
+        $help->getColumnDimension('A')->setWidth(115);
         $book->setActiveSheetIndex(0);
-        return response()->streamDownload(function () use ($book) {
-            (new Xlsx($book))->save('php://output');
-        },'Article_Stock_Counts.xlsx',['Content-Type'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+        return response()->streamDownload(fn () => (new Xlsx($book))->save('php://output'),
+            'Article_Stock_Counts.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     private function rawTemplate()
@@ -76,12 +112,44 @@ class InventoryCountController
 
     public function preview(Request $request)
     {
-        $request->validate(['file'=>'required|file|max:2048|mimes:xlsx']);
+        $request->validate(['file'=>'required|file|max:2048|mimes:xlsx'], [
+            'file.required' => 'Choose your completed Excel file first.',
+            'file.mimes' => 'Choose an Excel .xlsx file downloaded from this page.',
+            'file.max' => 'Choose an Excel file smaller than 2 MB.',
+        ]);
         $reader=IOFactory::createReader('Xlsx');
         $file=$request->file('file')->getRealPath();
         $info=$reader->listWorksheetInfo($file);
-        abort_if(($info[0]['totalRows']??0)>5001 || ($info[0]['totalColumns']??0)>6,422,'Use the supplied template (maximum 5,000 rows).');
-        $sheet=$reader->load($file)->getSheet(0);
+        abort_if(($info[0]['totalRows']??0)>5001 || ($info[0]['totalColumns']??0)>256,422,'Use the supplied template (maximum 5,000 rows).');
+        $book=$reader->load($file);
+        $sheet=$book->getSheet(0);
+        if ($sheet->getTitle() === 'Article counts') {
+            $baseline = $book->getSheetByName('Import baseline');
+            abort_unless($baseline && $sheet->getCell('A1')->getValue() === 'article_code' && $sheet->getCell('B1')->getValue() === 'article_name', 422, 'Download a fresh article template and keep its headings unchanged.');
+            $expected = [];
+            foreach ($baseline->toArray(null, false, false) as $index => $cells) {
+                if ($index === 0) continue;
+                $expected[(string) $cells[0]][(string) $cells[1]] = $cells[2];
+            }
+            $rows = [];
+            $columns = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($sheet->getHighestDataColumn());
+            for ($line = 2; $line <= $sheet->getHighestDataRow(); $line++) {
+                $code = (string) $sheet->getCell('A'.$line)->getValue();
+                for ($column = 3; $column <= $columns; $column++) {
+                    $letter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($column);
+                    $quantity = $sheet->getCell($letter.$line)->getValue();
+                    if ($quantity === null || $quantity === '') continue;
+                    $heading = (string) $sheet->getCell($letter.'1')->getValue();
+                    $size = substr($heading, 5);
+                    abort_unless(str_starts_with($heading, 'Size ') && array_key_exists($size, $expected[$code] ?? []), 422,
+                        'Cell '.$letter.$line.' is not an available size for article '.$code.'. Use yellow cells only.');
+                    $rows[] = ['code' => $code, 'size' => $size, 'expected' => $expected[$code][$size], 'quantity' => $quantity];
+                }
+            }
+            $request->merge(['rows' => $rows]);
+            $data = $this->validated($request);
+            return response()->json(['rows' => $this->resolve($data['rows'])]);
+        }
         if ($sheet->getTitle()==='Raw material counts') {
             abort_unless($sheet->rangeToArray('A1:F1',null,false,false)[0]===['material_code','material_name','batch','current_quantity','new_quantity','unit_cost'],422,'Use the raw material template.');
             $rows=[];
@@ -111,7 +179,12 @@ class InventoryCountController
             'rows.*.code'=>'required|string|max:80','rows.*.size'=>'required|string|max:80',
             'rows.*.expected'=>'required|numeric|min:0|max:999999999',
             'rows.*.quantity'=>'required|numeric|min:0|max:999999999',
-            'rows.*.kind'=>'sometimes|in:finished,raw','rows.*.unit_cost'=>'nullable|numeric|min:0|max:999999999']);
+            'rows.*.kind'=>'sometimes|in:finished,raw','rows.*.unit_cost'=>'nullable|numeric|min:0|max:999999999'], [
+                'rows.required' => 'No new quantities found. Fill the yellow cells in Article counts (or new_quantity for raw materials), save the file and upload again. Blank cells leave stock unchanged.',
+                'rows.*.quantity.numeric' => 'Enter numbers only in quantity cells. Formulas and text are not accepted.',
+                'rows.*.quantity.min' => 'Stock quantities cannot be negative.',
+                'rows.*.quantity.max' => 'A stock quantity is too large.',
+            ]);
     }
 
     private function resolve(array $rows): array

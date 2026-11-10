@@ -59,8 +59,23 @@ $response=$controller->template(new Request());ob_start();$response->sendContent
 check(substr($bytes,0,2)==='PK','Real XLSX template');
 $file=tempnam(sys_get_temp_dir(),'count');file_put_contents($file,$bytes);
 $book=PhpOffice\PhpSpreadsheet\IOFactory::load($file);check($book->getSheet(0)->getCell('A2')->getValue()==='001-A','Article codes preserved');
-$book->getSheet(0)->setCellValue('E2',7);(new PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($file);
+check($book->getSheet(0)->getHighestDataRow()===2,'One row per article');
+check($book->getSheet(0)->getCell('C1')->getValue()==='Size 40' && $book->getSheet(0)->getCell('D1')->getValue()==='Size 41','Sizes across columns');
+check($book->getSheetByName('Current stock')->getCell('C2')->getValue()==0,'Current counts available separately');
+$blankRequest=new Request();$blankRequest->files->set('file',new Illuminate\Http\UploadedFile($file,'counts.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',null,true));
+try { $controller->preview($blankRequest); check(false,'Empty workbook must explain missing counts'); }
+catch (Illuminate\Validation\ValidationException $e) { check(str_contains($e->errors()['rows'][0],'yellow cells'),'Readable empty workbook error'); }
+$book->getSheet(0)->setCellValue('C2',7);(new PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($file);
 $request=new Request();$request->files->set('file',new Illuminate\Http\UploadedFile($file,'counts.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',null,true));
 $result=$controller->preview($request)->getData(true);check(count($result['rows'])===1 && $result['rows'][0]['quantity']==7,'Preview ignores blank new quantities');
 check(DB::table('finished_goods_stock')->value('quantity')==0,'Preview never mutates stock');
+$book->getSheet(0)->setCellValue('C2',0);
+$book->getSheet(0)->setCellValue('D2',3);
+(new PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($file);
+$result=$controller->preview($request)->getData(true);
+check(count($result['rows'])===2 && $result['rows'][0]['quantity']==0 && $result['rows'][1]['quantity']==3,'Matrix supports zero and several size counts');
+$book->getSheet(0)->setCellValue('C2','=1+2');
+(new PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($file);
+try { $controller->preview($request); check(false,'Formula must be rejected'); }
+catch (Illuminate\Validation\ValidationException $e) { check(str_contains(json_encode($e->errors()),'numbers only'),'Readable formula error'); }
 unlink($file);echo "Passed $checks inventory count checks. No real database changed.\n";
