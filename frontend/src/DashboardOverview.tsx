@@ -345,8 +345,7 @@ export default function DashboardOverview({
             )}
           </div>
           <p className="db-note">
-            Recorded finished stock: <strong>{number(data.stock.pieces)} pieces</strong>. Sizes
-            without a recorded count are listed separately.
+            Recorded finished stock: <strong>{number(data.stock.pieces)} pieces</strong>. Articles without a recorded count are listed separately.
           </p>
         </section>
       </div>

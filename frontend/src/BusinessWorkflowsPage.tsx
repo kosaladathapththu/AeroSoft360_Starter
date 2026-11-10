@@ -312,6 +312,7 @@ export default function BusinessWorkflowsPage({
                           className="workflow-delete"
                           disabled={busy}
                           title="Delete quotation"
+                          aria-label={`Delete quotation ${q.number}`}
                           onClick={async () => {
                             if (
                               !window.confirm(
@@ -327,7 +328,7 @@ export default function BusinessWorkflowsPage({
                             }
                           }}
                         >
-                          <Trash2 /> Delete
+                          <Trash2 aria-hidden="true" />
                         </button>
                       </>
                     )}

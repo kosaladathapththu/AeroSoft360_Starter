@@ -18,11 +18,22 @@
   font-weight: 700;
 }
 .workflow-actions button.workflow-delete {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
   border-color: #efb9bf;
   color: #aa3343;
 }
 .workflow-actions button.workflow-delete:hover {
   background: #fff1f2;
+  border-color: #dc8791;
+}
+.workflow-actions button.workflow-delete:focus-visible {
+  outline: 2px solid #aa3343;
+  outline-offset: 2px;
 }
 .workflow-table {
   overflow: auto;

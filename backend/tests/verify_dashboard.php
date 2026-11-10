@@ -313,13 +313,13 @@ $check(
 $check(
     $data["stock"] === [
         "pieces" => 22.0,
-        "low" => 1,
-        "out" => 1,
-        "unrecorded" => 1,
+        "low" => 0,
+        "out" => 0,
+        "unrecorded" => 0,
         "threshold" => 5,
-        "variants" => 4,
+        "variants" => 1,
     ],
-    "Stock distinguishes low, zero and unrecorded sizes without duplicate templates",
+    "Stock sums legacy sizes once per active article",
 );
 $check(
     count($data["trend"]) === 30 && $data["period"]["from"] === "2026-10-05",
@@ -364,4 +364,6 @@ $check(
     DB::table("sales_invoices")->get()->toJson() === $before,
     "Dashboard never mutates source data",
 );
+DB::table('finished_goods_stock')->insert(['article_id' => $article, 'size_label' => '__ARTICLE_TOTAL__', 'quantity' => 70]);
+$check((new DashboardService())->report(30)['stock']['pieces'] === 70.0, 'Article total pool takes precedence over legacy sizes without double counting');
 echo "$checks dashboard checks passed.\n";

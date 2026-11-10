@@ -99,7 +99,7 @@ assert.ok(
   "Viewer does not get a transaction-create shortcut",
 );
 assert.ok(render({ createOrder() {} }).includes("Create sales order"));
-assert.ok(empty.includes("Search priority customers") && empty.includes("Download matching rows"));
+assert.ok(empty.includes("Largest customer balances chart") && empty.includes("Receivables distribution by age"));
 assert.ok(
   empty.includes("Last 7 days") && empty.includes("Last 30 days") && empty.includes("Last 90 days"),
 );
