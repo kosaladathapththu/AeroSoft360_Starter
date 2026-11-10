@@ -457,8 +457,7 @@ export default function App() {
     <div className="shell">
       {menu && <button className="scrim" onClick={() => setMenu(false)} />}
       <aside className={menu ? "open" : ""}>
-        <div className="brand">
-          <div className="logo">A</div>
+        <div className="brand workspace-brand">
           <div>
             <b>AeroSoft360</b>
             <span>Finance & Manufacturing ERP</span>
@@ -466,13 +465,6 @@ export default function App() {
           <button className="mobile-close" onClick={() => setMenu(false)}>
             <X />
           </button>
-        </div>
-        <div className="company">
-          <Factory />
-          <div>
-            <b>Supun AeroSoft</b>
-            <span>Colombo 13 · LKR</span>
-          </div>
         </div>
         <nav>
           <label>MAIN MENU</label>
@@ -531,6 +523,7 @@ export default function App() {
       </aside>
       <main>
         <header>
+          <img className="topbar-brand-logo" src="/brands/ymac-smart.png" alt="Y-mac Smart" />
           <button className="menu" onClick={() => setMenu(true)}>
             <Menu />
           </button>

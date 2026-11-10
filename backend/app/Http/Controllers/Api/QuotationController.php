@@ -28,6 +28,7 @@ final class QuotationController
                 ->where("status", "active")
                 ->orderBy("name")
                 ->get(),
+            "articles" => DB::table("articles")->where("status", "active")->orderBy("code")->get(),
             "items" => DB::table("article_set_items as i")
                 ->join("article_set_templates as s", "s.id", "=", "i.set_template_id")
                 ->join("articles as a", "a.id", "=", "s.article_id")
@@ -62,7 +63,8 @@ final class QuotationController
             "notes" => "nullable|string|max:2000",
             "reason" => ($id ? "required" : "nullable") . "|string|max:500",
             "lines" => "required|array|min:1|max:200",
-            "lines.*.set_item_id" => "required|integer|exists:article_set_items,id",
+            "lines.*.set_item_id" => "nullable|integer|exists:article_set_items,id",
+            "lines.*.article_id" => "nullable|integer|exists:articles,id",
             "lines.*.quantity" => "required|numeric|gt:0",
             "lines.*.rate" => "required|numeric|gte:0",
             "lines.*.colour" => "nullable|string|max:80",
@@ -75,6 +77,12 @@ final class QuotationController
             $lines = [];
             $total = 0;
             foreach ($d["lines"] as $line) {
+                if (!empty($line["article_id"])) {
+                    $article = DB::table("articles")->where("status", "active")->find($line["article_id"]);
+                    abort_unless($article, 422, "Select an active article.");
+                    $item = (object) ["id" => null, "set_template_id" => null, "article_id" => $article->id, "code" => $article->code, "name" => $article->name, "size_label" => "", "unit_price" => $article->selling_price ?? 0];
+                } else {
+                abort_if(empty($line["set_item_id"]), 422, "Choose an article.");
                 $item = DB::table("article_set_items as i")
                     ->join("article_set_templates as s", "s.id", "=", "i.set_template_id")
                     ->join("articles as a", "a.id", "=", "s.article_id")
@@ -83,6 +91,7 @@ final class QuotationController
                     ->select("i.*", "s.article_id", "a.code", "a.name")
                     ->first();
                 abort_unless($item, 422, "Select an active product size.");
+                }
                 $rate = round((float) $line["rate"], 2);
                 $amount = round($rate * (float) $line["quantity"], 2);
                 $total += $amount;
@@ -173,7 +182,8 @@ final class QuotationController
                 "updated_at" => now(),
             ]);
             foreach (json_decode($q->lines, true) as $line) {
-                $item = DB::table("article_set_items")->find($line["set_item_id"]);
+                $articleOnly = empty($line["set_item_id"]);
+                $item = $articleOnly ? (object) ["id" => null, "size_label" => "", "set_template_id" => null, "unit_price" => $line["fixed_rate"] ?? 0] : DB::table("article_set_items")->find($line["set_item_id"]);
                 abort_unless(
                     $item &&
                         $item->size_label === $line["size_label"] &&

@@ -4,6 +4,15 @@ Target: https://erp.supuncompanies.com
 Account: /home/camymarket
 
 This ZIP updates the application files. Creating it does not deploy anything.
+
+Latest update (10 November): compact invoice entry; dashboard simplification;
+transparent Y-mac logo in the top navigation; refined sidebar brand text;
+article-level quotations using the original active article catalog, available
+colours, customer contact details, fixed/quoted prices and line totals.
+Quotation conversion retains article quantities, colours and quoted prices.
+These latest changes require NO new database migration or SQL import.
+After extraction, run config:clear and view:clear as the account owner, then
+hard-refresh the browser. Preserve the live .env, APP_KEY and database.
 This follow-up adds deletion for open quotations and fixes deletion of quotation-
 originated sales orders. These changes require no database migration.
 It contains the new Supun Group portal, four company logos, the separate Y-mac
@@ -56,7 +65,7 @@ SQL files, bootstrap cache contents and the entire runtime storage folder.
 It preserves the live users, passwords, customer records, balances, uploads,
 sessions and application key. Uploading code does not update database data.
 Do not import SQL, reset the database, seed data or regenerate APP_KEY.
-This release REQUIRES the specific new migration in step 3. It adds collection
+Earlier collection updates require the migration in step 3 only if it has not already run. It adds collection
 history tables and account 1120 (Cheques in Hand), without rewriting invoices
 or earlier receipts. Stop and resolve any account-code conflict reported by it.
 

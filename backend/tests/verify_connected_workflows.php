@@ -1039,3 +1039,14 @@ check(
     collect($live["liability_balances"])->firstWhere("code", "2250")["balance"] === 100,
     "all payables includes the restored salary liability after reversal",
 );
+
+// Article-level quotations use the original catalog, without a size selection.
+$articleQuote = $quote;
+$articleQuote['lines'] = [['article_id' => 1, 'quantity' => 4, 'rate' => 85, 'colour' => 'BROWN']];
+$articleQuoteId = $quotes->store(req($articleQuote))->getData(true)['id'];
+$articleOffer = DB::table('quotations')->find($articleQuoteId);
+$articleOfferLines = json_decode($articleOffer->lines, true);
+check($articleOfferLines[0]['set_item_id'] === null && $articleOfferLines[0]['size_label'] === '' && (float) $articleOffer->total === 340.0, 'article quotation saves one article line without inventing a size');
+$articleOrderId = $quotes->convert(req(['order_date' => '2026-10-20']), $articleQuoteId)->getData(true)['sales_order_id'];
+$articleOrderLine = DB::table('sales_order_size_lines')->where('sales_order_id', $articleOrderId)->first();
+check($articleOrderLine->size_label === '' && (float) $articleOrderLine->quantity === 4.0 && (float) $articleOrderLine->rate === 85.0, 'article quotation conversion preserves article quantity and quoted price');

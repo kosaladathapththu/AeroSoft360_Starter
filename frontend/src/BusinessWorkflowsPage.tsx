@@ -755,15 +755,19 @@ export default function BusinessWorkflowsPage({
               <p>
                 Valid {modal.row.quotation_date} to {modal.row.valid_until} · {modal.row.sale_type}
               </p>
+              <div className="quote-customer-details">
+                <span>{[data.customers?.find((c: any) => Number(c.id) === Number(modal.row.customer_id))?.address, data.customers?.find((c: any) => Number(c.id) === Number(modal.row.customer_id))?.phone, data.customers?.find((c: any) => Number(c.id) === Number(modal.row.customer_id))?.email].filter(Boolean).join(" | ")}</span>
+                <span>Salesperson: {data.reps?.find((r: any) => Number(r.id) === Number(modal.row.sales_rep_id))?.name || "Not assigned"}</span>
+              </div>
               <WorkflowTable
                 values={modal.row.lines}
                 columns={[
                   ["code", "Article"],
                   ["name", "Product"],
-                  ["size_label", "Size"],
                   ["colour", "Colour"],
                   ["quantity", "Pieces"],
-                  ["rate", "Unit price", "money"],
+                  ["fixed_rate", "Fixed price / piece", "money"],
+                  ["rate", "Quoted price / piece", "money"],
                   ["total", "Amount", "money"],
                 ]}
               />
@@ -771,7 +775,7 @@ export default function BusinessWorkflowsPage({
                 <span>Quotation total</span>
                 <strong>{money(modal.row.total)}</strong>
               </div>
-              <p>{modal.row.notes}</p>
+              <p style={{ whiteSpace: "pre-wrap" }}>{modal.row.notes}</p>
               {modal.row.sales_order && (
                 <button onClick={() => go("Sales Orders")}>
                   Sales order {modal.row.sales_order} →
@@ -1120,14 +1124,21 @@ export function SimpleForm({
 function QuoteForm({ data, initial, user, busy, save }: any) {
   const [customerId, setCustomerId] = useState(Number(initial?.customer_id || 0));
   const [lines, setLines] = useState<any[]>(
-    initial?.lines || [{ set_item_id: "", quantity: 1, rate: 0, colour: "" }],
+    initial?.lines || [{ article_id: "", quantity: 1, rate: 0, colour: "" }],
   );
   const change = (index: number, patch: any) =>
     setLines(lines.map((line, i) => (i === index ? { ...line, ...patch } : line)));
+  const customer = (data.customers || []).find((c: any) => Number(c.id) === customerId);
+  const [quoteDate, setQuoteDate] = useState(initial?.quotation_date || today());
+  const defaultValidity = new Date();
+  defaultValidity.setDate(defaultValidity.getDate() + 14);
+  const [validUntil, setValidUntil] = useState(initial?.valid_until || defaultValidity.toISOString().slice(0, 10));
+  const totalPieces = lines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
   return (
     <SimpleForm
       busy={busy}
       label="Save quotation"
+      submitDisabled={!customerId || !lines.length || lines.some((line) => !line.article_id && !line.set_item_id)}
       submit={(f) =>
         save({
           customer_id: customerId,
@@ -1141,6 +1152,7 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
         })
       }
     >
+      <h3 className="quote-section-title">Customer and quotation details</h3>
       <div className="form-row">
         <OrderCustomerPicker customers={data.customers || []} selectedId={customerId}
           select={setCustomerId} help="Search by customer name, code or phone, then choose a customer." />
@@ -1166,6 +1178,11 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
           </select>
         </label>
       </div>
+      {customer && <div className="quote-customer-details">
+        <strong>{customer.name}</strong>
+        <span>{[customer.address, customer.phone, customer.email].filter(Boolean).join(" | ") || "No contact details recorded"}</span>
+        <span>Credit terms: {customer.credit_days == null ? "Not set" : customer.credit_days + " days"}</span>
+      </div>}
       <div className="form-row">
         <label>
           Quotation date
@@ -1173,7 +1190,8 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
             name="quotation_date"
             type="date"
             required
-            defaultValue={initial?.quotation_date || today()}
+            value={quoteDate}
+            onChange={(e) => { setQuoteDate(e.target.value); if (validUntil < e.target.value) setValidUntil(e.target.value); }}
           />
         </label>
         <label>
@@ -1182,7 +1200,9 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
             name="valid_until"
             type="date"
             required
-            defaultValue={initial?.valid_until || today()}
+            min={quoteDate}
+            value={validUntil}
+            onChange={(e) => setValidUntil(e.target.value)}
           />
         </label>
       </div>
@@ -1193,53 +1213,65 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
           <option value="cash">Cash</option>
         </select>
       </label>
-      <h3>Quoted products and sizes</h3>
-      {lines.map((line, index) => (
+      <h3 className="quote-section-title">Articles, quantities and prices</h3>
+      <p className="quote-help">Choose each article, enter pieces, then adjust the quoted price if needed. Fixed prices remain visible; your price list is unchanged.</p>
+      {lines.map((line, index) => {
+        const articleId = Number(line.article_id || data.items.find((i: any) => Number(i.id) === Number(line.set_item_id))?.article_id || 0);
+        const article = data.articles.find((i: any) => Number(i.id) === articleId);
+        const colours = Array.from(new Set<string>((data.items || [])
+          .filter((i: any) => Number(i.article_id) === articleId)
+          .flatMap((i: any) => String(i.colours || "").split(/[,;\n]+/).map((c: string) => c.trim()).filter(Boolean))));
+        return (
         <div className="workflow-quote-line" key={index}>
           <label>
-            Article / size
+            Article
             <ItemSearchSelect
               required
-              value={line.set_item_id}
+              value={line.article_id || data.items.find((i: any) => Number(i.id) === Number(line.set_item_id))?.article_id || ""}
               onChange={(e) => {
-                const item = data.items.find((i: any) => i.id === Number(e.target.value));
+                const item = data.articles.find((i: any) => i.id === Number(e.target.value));
                 change(index, {
-                  set_item_id: Number(e.target.value),
-                  rate: Number(item?.unit_price || 0),
+                  article_id: Number(e.target.value),
+                  set_item_id: null,
+                  colour: "",
+                  rate: Number(item?.selling_price || 0),
+                  fixed_rate: Number(item?.selling_price || 0),
                 });
               }}
             >
               <option value="" disabled>
-                Choose size
+                Choose article
               </option>
-              {data.items.map((i: any) => (
+              {data.articles.map((i: any) => (
                 <option key={i.id} value={i.id}>
-                  {displayCode(i)} · {i.name} · Size {i.size_label} · {money(i.unit_price)}
+                  {i.code}
                 </option>
               ))}
             </ItemSearchSelect>
+            {article && <span className="quote-article-meta">{article.category || article.name}{Number(article.pieces_per_set) > 0 ? " / " + article.pieces_per_set + " pieces per set" : ""}</span>}
           </label>
           <label>
-            Colour
-            <input
-              maxLength={80}
-              value={line.colour || ""}
-              onChange={(e) => change(index, { colour: e.target.value })}
-            />
+            Colour / variant
+            {colours.length > 0 ? <select value={line.colour || ""} onChange={(e) => change(index, { colour: e.target.value })}>
+              <option value="">Choose colour (optional)</option>
+              {line.colour && !colours.includes(line.colour) && <option value={line.colour}>{line.colour}</option>}
+              {colours.map((colour) => <option key={colour} value={colour}>{colour}</option>)}
+            </select> : <input placeholder={article ? "Enter colour (optional)" : "Choose article first"} disabled={!article} maxLength={80} value={line.colour || ""} onChange={(e) => change(index, { colour: e.target.value })} />}
           </label>
           <label>
             Pieces
             <input
               type="number"
               required
-              min="0.01"
-              step="0.01"
+              min="1"
+              step="1"
               value={line.quantity}
               onChange={(e) => change(index, { quantity: Number(e.target.value) })}
             />
           </label>
+          <div className="quote-fixed-price"><span>Fixed price / piece</span><strong>{(line.article_id || line.set_item_id) ? money(line.fixed_rate ?? data.articles.find((i: any) => Number(i.id) === Number(line.article_id))?.selling_price ?? 0) : "Choose an article"}</strong></div>
           <label>
-            Price / piece
+            Given price / piece
             <input
               type="number"
               min="0"
@@ -1249,6 +1281,7 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
               onChange={(e) => change(index, { rate: Number(e.target.value) })}
             />
           </label>
+          <div className="quote-line-total"><span>Line total</span><strong>{money(Number(line.quantity || 0) * Number(line.rate || 0))}</strong></div>
           <button
             type="button"
             disabled={lines.length === 1}
@@ -1257,15 +1290,15 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
             Remove line
           </button>
         </div>
-      ))}
+      ); })}
       <button
         type="button"
-        onClick={() => setLines([...lines, { set_item_id: "", quantity: 1, rate: 0, colour: "" }])}
+        onClick={() => setLines([...lines, { article_id: "", quantity: 1, rate: 0, colour: "" }])}
       >
-        <Plus /> Add size
+        <Plus /> Add article
       </button>
       <div className="workflow-summary">
-        <span>Offer total</span>
+        <span>{lines.length} lines / {totalPieces} pieces - Quotation total (LKR)</span>
         <strong>
           {money(
             lines.reduce((sum, line) => sum + Math.round(line.quantity * line.rate * 100) / 100, 0),
@@ -1273,8 +1306,8 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
         </strong>
       </div>
       <label>
-        Notes
-        <textarea name="notes" maxLength={2000} defaultValue={initial?.notes} />
+        Terms and notes
+        <textarea name="notes" rows={4} maxLength={2000} placeholder="Payment terms, delivery lead time, delivery location, exclusions and special conditions for this offer." defaultValue={initial?.notes} />
       </label>
       {initial && (
         <label>
