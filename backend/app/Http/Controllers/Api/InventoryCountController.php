@@ -16,74 +16,40 @@ class InventoryCountController
         if ($request->query('kind') === 'raw') return $this->rawTemplate();
         $book = new Spreadsheet();
         $sheet = $book->getActiveSheet();
-        $sheet->setTitle('Article counts');
-        $current = $book->createSheet();
-        $current->setTitle('Current stock');
+        $sheet->setTitle('Article stock');
+        $sheet->fromArray([['Article code', 'Category', 'Stock']]);
         $baseline = $book->createSheet();
         $baseline->setTitle('Import baseline');
-        $baseline->fromArray([['article_code', 'size', 'current_quantity']]);
-
-        $items = DB::table('article_set_items as i')
-            ->join('article_set_templates as t', 't.id', '=', 'i.set_template_id')
-            ->join('articles as a', 'a.id', '=', 't.article_id')
-            ->leftJoin('finished_goods_stock as s', function ($join) {
-                $join->on('s.article_id', '=', 'a.id')->on('s.size_label', '=', 'i.size_label');
-            })
-            ->select('a.code', 'i.size_label', DB::raw('COALESCE(s.quantity,0) as quantity'))
-            ->distinct()->get();
-        $sizes = $items->pluck('size_label')->map(fn ($size) => (string) $size)->unique()->values()->all();
-        usort($sizes, 'strnatcasecmp');
-        $headers = array_merge(['article_code', 'article_name'], array_map(fn ($size) => 'Size '.$size, $sizes));
-        $sheet->fromArray([$headers]);
-        $current->fromArray([$headers]);
-        $counts = [];
-        $baselineLine = 2;
-        foreach ($items as $item) {
-            $counts[(string) $item->code][(string) $item->size_label] = (float) $item->quantity;
-            $baseline->setCellValueExplicit('A'.$baselineLine, (string) $item->code, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $baseline->setCellValueExplicit('B'.$baselineLine, (string) $item->size_label, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $baseline->setCellValue('C'.$baselineLine++, (float) $item->quantity);
-        }
+        $baseline->fromArray([['article_code', 'current_quantity']]);
+        $totals = DB::table('finished_goods_stock')->select('article_id', DB::raw('SUM(quantity) as quantity'))->groupBy('article_id')->pluck('quantity', 'article_id');
         $line = 2;
-        foreach (DB::table('articles')->orderBy('code')->get(['code', 'name']) as $article) {
-            foreach ([$sheet, $current] as $target) {
-                $target->setCellValueExplicit('A'.$line, (string) $article->code, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $target->setCellValueExplicit('B'.$line, (string) $article->name, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            }
-            foreach ($sizes as $index => $size) {
-                $cell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($index + 3).$line;
-                $available = array_key_exists($size, $counts[(string) $article->code] ?? []);
-                $sheet->getStyle($cell)->getFill()->setFillType('solid')->getStartColor()->setRGB($available ? 'FFF2CC' : 'E7E9EC');
-                if ($available) $current->setCellValue($cell, $counts[(string) $article->code][$size]);
-            }
+        foreach (DB::table('articles')->orderBy('code')->get() as $article) {
+            $quantity = (float) ($totals[$article->id] ?? 0);
+            $sheet->setCellValueExplicit('A'.$line, (string) $article->code, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $sheet->setCellValueExplicit('B'.$line, (string) ($article->category ?? 'Uncategorized'), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $sheet->setCellValue('C'.$line, $quantity);
+            $baseline->setCellValueExplicit('A'.$line, (string) $article->code, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $baseline->setCellValue('B'.$line, $quantity);
             $line++;
         }
-        $lastColumn = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
-        foreach ([$sheet, $current] as $target) {
-            $target->freezePane('C2');
-            $target->setAutoFilter('A1:'.$lastColumn.max(1, $line - 1));
-            $target->getColumnDimension('A')->setWidth(20);
-            $target->getColumnDimension('B')->setWidth(32);
-            for ($column = 3; $column <= count($headers); $column++) {
-                $target->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($column))->setWidth(13);
-            }
-            $target->getStyle('A1:'.$lastColumn.'1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
-            $target->getStyle('A1:'.$lastColumn.'1')->getFill()->setFillType('solid')->getStartColor()->setRGB('245443');
-            $target->getRowDimension(1)->setRowHeight(28);
-        }
+        $sheet->freezePane('A2');
+        $sheet->setAutoFilter('A1:C'.max(1, $line - 1));
+        foreach (['A' => 24, 'B' => 36, 'C' => 22] as $column => $width) $sheet->getColumnDimension($column)->setWidth($width);
+        $sheet->getStyle('A1:C1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle('A1:C1')->getFill()->setFillType('solid')->getStartColor()->setRGB('245443');
+        $sheet->getStyle('C2:C'.max(2, $line - 1))->getFill()->setFillType('solid')->getStartColor()->setRGB('FFF2CC');
+        $sheet->getRowDimension(1)->setRowHeight(28);
         $baseline->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_VERYHIDDEN);
         $help = $book->createSheet();
         $help->setTitle('Instructions');
         $help->fromArray([
-            ['1. Article counts: each article appears once. Enter counted pieces in yellow size cells.'],
-            ['2. Leave a cell blank to keep its stock unchanged. Enter 0 to clear that size.'],
-            ['3. Grey cells are sizes not configured for that article. Do not enter quantities there.'],
-            ['4. Current stock is a reference sheet. Editing it does not update inventory.'],
-            ['5. Save this Excel file, upload it, review changes and save the stock update.'],
-            ['Counts replace stock; they do not add to it. Quantities cover all colours.'],
-            ['Download a fresh template for each count. Configure missing sizes in Pricing List.'],
+            ['Each article appears once. Stock is the TOTAL number of pieces for that article.'],
+            ['Edit Stock only. Existing totals are filled in. Blank keeps stock unchanged; 0 clears it.'],
+            ['Save this file, upload, review and save the update. No sizes or size allocation are required.'],
+            ['The new article total replaces its existing stock total; it is not added again.'],
+            ['Download a fresh template for each update. Keep Article code and Category unchanged.'],
         ]);
-        $help->getColumnDimension('A')->setWidth(115);
+        $help->getColumnDimension('A')->setWidth(110);
         $book->setActiveSheetIndex(0);
         return response()->streamDownload(fn () => (new Xlsx($book))->save('php://output'),
             'Article_Stock_Counts.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
@@ -123,6 +89,31 @@ class InventoryCountController
         abort_if(($info[0]['totalRows']??0)>5001 || ($info[0]['totalColumns']??0)>256,422,'Use the supplied template (maximum 5,000 rows).');
         $book=$reader->load($file);
         $sheet=$book->getSheet(0);
+        if ($sheet->getTitle() === 'Article stock') {
+            abort_unless($sheet->rangeToArray('A1:C1', null, false, false)[0] === ['Article code', 'Category', 'Stock'], 422, 'Use the Article code, Category, Stock template.');
+            $baseline = $book->getSheetByName('Import baseline');
+            abort_unless($baseline, 422, 'Download a fresh stock template from this page.');
+            $expected = [];
+            foreach ($baseline->toArray(null, false, false) as $index => $cells) {
+                if ($index > 0) $expected[(string) $cells[0]] = $cells[1];
+            }
+            $rows = [];
+            $seen = [];
+            for ($line = 2; $line <= $sheet->getHighestDataRow(); $line++) {
+                $code = (string) $sheet->getCell('A'.$line)->getValue();
+                $quantity = $sheet->getCell('C'.$line)->getValue();
+                if ($quantity === null || $quantity === '') continue;
+                abort_unless(array_key_exists($code, $expected), 422, 'Unknown article on row '.$line.'. Download a fresh template.');
+                abort_if(isset($seen[$code]), 422, 'Article '.$code.' appears more than once. Keep one row per article.');
+                $seen[$code] = true;
+                if (is_numeric($quantity) && (float) $quantity === (float) $expected[$code]) continue;
+                $rows[] = ['kind' => 'article', 'code' => $code, 'size' => '__ARTICLE_TOTAL__', 'expected' => $expected[$code], 'quantity' => $quantity];
+            }
+            if (!$rows) return response()->json(['rows' => [], 'message' => 'No stock changes found. Edit the Stock column, save your file and upload it again.']);
+            $request->merge(['rows' => $rows]);
+            $data = $this->validated($request);
+            return response()->json(['rows' => $this->resolve($data['rows'])]);
+        }
         if ($sheet->getTitle() === 'Article counts') {
             $baseline = $book->getSheetByName('Import baseline');
             abort_unless($baseline && $sheet->getCell('A1')->getValue() === 'article_code' && $sheet->getCell('B1')->getValue() === 'article_name', 422, 'Download a fresh article template and keep its headings unchanged.');
@@ -179,7 +170,7 @@ class InventoryCountController
             'rows.*.code'=>'required|string|max:80','rows.*.size'=>'required|string|max:80',
             'rows.*.expected'=>'required|numeric|min:0|max:999999999',
             'rows.*.quantity'=>'required|numeric|min:0|max:999999999',
-            'rows.*.kind'=>'sometimes|in:finished,raw','rows.*.unit_cost'=>'nullable|numeric|min:0|max:999999999'], [
+            'rows.*.kind'=>'sometimes|in:finished,raw,article','rows.*.unit_cost'=>'nullable|numeric|min:0|max:999999999'], [
                 'rows.required' => 'No new quantities found. Fill the yellow cells in Article counts (or new_quantity for raw materials), save the file and upload again. Blank cells leave stock unchanged.',
                 'rows.*.quantity.numeric' => 'Enter numbers only in quantity cells. Formulas and text are not accepted.',
                 'rows.*.quantity.min' => 'Stock quantities cannot be negative.',
@@ -190,6 +181,13 @@ class InventoryCountController
     private function resolve(array $rows): array
     {
         $seen=[];
+        $articleModes = [];
+        foreach ($rows as $entry) {
+            if (($entry['kind'] ?? '') === 'raw') continue;
+            $mode = ($entry['kind'] ?? '') === 'article' ? 'article' : 'size';
+            if (isset($articleModes[$entry['code']]) && $articleModes[$entry['code']] !== $mode) throw ValidationException::withMessages(['rows' => 'Do not mix article totals and size counts for the same article.']);
+            $articleModes[$entry['code']] = $mode;
+        }
         foreach ($rows as &$row) {
             if (($row['kind']??'finished') === 'raw') {
                 $material=DB::table('materials')->where('code',$row['code'])->lockForUpdate()->first();
@@ -208,12 +206,24 @@ class InventoryCountController
             if ((float)$row['quantity'] != floor((float)$row['quantity'])) throw ValidationException::withMessages(['rows'=>'Article quantities must be whole pieces.']);
             $article=DB::table('articles')->where('code',$row['code'])->lockForUpdate()->first();
             if (!$article) throw ValidationException::withMessages(['rows'=>'Unknown article: '.$row['code']]);
+            if (($row['kind'] ?? '') === 'article') {
+                if (isset($seen['article:'.$article->id])) throw ValidationException::withMessages(['rows' => 'Keep one count per article.']);
+                $seen['article:'.$article->id] = true;
+                $stocks = DB::table('finished_goods_stock')->where('article_id', $article->id)->lockForUpdate()->get();
+                $current = (float) $stocks->sum('quantity');
+                if (abs($current - (float) $row['expected']) > 0.0001) throw ValidationException::withMessages(['rows' => 'Stock changed for '.$row['code'].'. Download a fresh template.']);
+                $row['article_id'] = $article->id;
+                $row['name'] = $article->name;
+                $row['difference'] = (float) $row['quantity'] - $current;
+                continue;
+            }
             $key=$article->id.':'.$row['size'];
             if (isset($seen[$key])) throw ValidationException::withMessages(['rows'=>'Duplicate article / size: '.$key]);
             $seen[$key]=true;
             $valid=DB::table('article_set_items as i')->join('article_set_templates as t','t.id','=','i.set_template_id')
                 ->where('t.article_id',$article->id)->where('i.size_label',$row['size'])->exists();
             if (!$valid) throw ValidationException::withMessages(['rows'=>'Invalid size for article '.$row['code']]);
+            if (DB::table('finished_goods_stock')->where('article_id', $article->id)->where('size_label', '__ARTICLE_TOTAL__')->exists()) throw ValidationException::withMessages(['rows' => 'This article uses total stock. Download the new Article code, Category, Stock template.']);
             $stock=DB::table('finished_goods_stock')->where('article_id',$article->id)->where('size_label',$row['size'])->lockForUpdate()->first();
             $current=(float)($stock->quantity??0);
             if (abs($current-(float)$row['expected'])>0.0001) throw ValidationException::withMessages(['rows'=>'Stock changed for '.$row['code'].' size '.$row['size'].'. Download a fresh template.']);
@@ -245,12 +255,16 @@ class InventoryCountController
                         'unit_cost'=>$row['unit_cost'],'reason'=>$meta['reason']]),app(\App\Services\Accounting\PostingService::class));
                     continue;
                 }
+                if (($row['kind'] ?? '') === 'article') {
+                    (new FinishedGoodsInventoryService())->setArticleCount($row['article_id'], (float) $row['quantity'], date('Y-m-d'));
+                    continue;
+                }
                 if ($row['difference']!=0) (new FinishedGoodsInventoryService())->adjust($row['article_id'],$row['size'],abs($row['difference']),$row['difference']>0?'increase':'decrease',date('Y-m-d'));
             }
             DB::table('stock_import_batches')->insert(['import_key'=>$meta['import_key'],'payload_hash'=>$hash,'rows'=>count($rows),'created_at'=>now()]);
             DB::table('audit_logs')->insert(['event'=>'inventory.count_updated','entity_type'=>'stock_import','entity_id'=>0,
                 'payload'=>json_encode(['reason'=>$meta['reason'],'rows'=>$rows]),'created_at'=>now()]);
-            return response()->json(['message'=>count($rows).' article / size counts updated successfully.']);
+            return response()->json(['message'=>count($rows).' stock counts updated successfully.']);
         });
     }
 }

@@ -1,34 +1,51 @@
 /* Scoped inventory colours keep operational actions easy to distinguish. */
 .inventory-overview-page > .heading {
-  padding:20px 24px; margin:0 0 16px; border:1px solid #cdded7;
+  padding:10px 16px; margin:0 0 10px; border:1px solid #cdded7;
   border-left:5px solid #267657; border-radius:13px;
   background:linear-gradient(110deg,#fff 45%,#e9f3ed); position:relative;
 }
-.inventory-overview-page > .heading span { color:#397253; letter-spacing:1.7px; font-size:10px; font-weight:800; }
-.inventory-overview-page > .heading h1 { font-size:29px; margin:7px 0; color:#203d31; }
+.inventory-overview-page > .heading span { display:none; }
+.inventory-overview-page > .heading h1 { font-size:24px; margin:0 0 3px; color:#203d31; }
 .inventory-overview-page > .heading p { font-size:13px; color:#53685d; margin:0; }
 .inventory-overview-page .inventory-summary-grid > button {
   --stock-colour:#6b46a0; --stock-tint:#f2ecfa; --stock-border:#d9c9ef;
   background:var(--stock-tint); border:1px solid var(--stock-border); border-top:3px solid var(--stock-colour);
-  padding:16px 18px; gap:16px; min-height:96px; box-shadow:none; transition:box-shadow .15s,border-color .15s;
+  padding:10px 14px; gap:10px; min-height:66px; box-shadow:none; transition:box-shadow .15s,border-color .15s;
 }
 .inventory-overview-page .inventory-summary-grid > button:nth-child(2) { --stock-colour:#23734d; --stock-tint:#edf7ef; --stock-border:#bddbc6; }
 .inventory-overview-page .inventory-summary-grid > button:nth-child(3) { --stock-colour:#a46510; --stock-tint:#fff5e5; --stock-border:#ebd2a8; }
-.inventory-overview-page .inventory-summary-grid > button > svg { width:46px; height:46px; padding:10px; border-radius:12px; box-sizing:border-box; color:var(--stock-colour); background:white; flex-shrink:0; }
+.inventory-overview-page .inventory-summary-grid > button > svg { width:34px; height:34px; padding:7px; border-radius:12px; box-sizing:border-box; color:var(--stock-colour); background:white; flex-shrink:0; }
 .inventory-overview-page .inventory-summary-grid > button small { color:#526158; font-size:12px; font-weight:600; }
-.inventory-overview-page .inventory-summary-grid > button b { color:#243d31; font-size:24px; }
+.inventory-overview-page .inventory-summary-grid > button b { color:#243d31; font-size:20px; }
 .inventory-overview-page .inventory-summary-grid > button.active,
 .inventory-overview-page .inventory-summary-grid > button:hover { background:var(--stock-tint); border-color:var(--stock-colour); box-shadow:0 3px 12px #233b3212; }
 .inventory-overview-page .inventory-summary-grid > button.active { outline:2px solid var(--stock-colour); outline-offset:-3px; }
-.inventory-overview-page .inventory-manage-links { padding:13px 16px; background:white; gap:10px; border-color:#d4dfd9; }
+.inventory-overview-page .inventory-manage-links { padding:8px 12px; background:white; gap:8px; border-color:#d4dfd9; }
 .inventory-overview-page .inventory-tools-label { margin-right:auto; }
 .inventory-overview-page .inventory-tools-label b { font-size:13px; color:#2b4437; }
-.inventory-overview-page .inventory-tools-label small { display:block; text-transform:none; margin:4px 0 0; font-size:11px; font-weight:400; color:#68766d; }
-.inventory-overview-page .inventory-manage-links button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:9px 13px; font-size:12px; border:1px solid #1f704e; background:#23734d; color:white; box-shadow:0 2px 4px #173b2510; }
+.inventory-overview-page .inventory-tools-label small { display:none; text-transform:none; margin:4px 0 0; font-size:11px; font-weight:400; color:#68766d; }
+.inventory-overview-page .inventory-manage-links button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:36px; padding:7px 11px; font-size:12px; border:1px solid #1f704e; background:#23734d; color:white; box-shadow:0 2px 4px #173b2510; }
 .inventory-overview-page .inventory-manage-links button:nth-of-type(2) { background:#a46510; border-color:#955b0c; }
 .inventory-overview-page .inventory-manage-links button:nth-of-type(3) { background:#7044a1; border-color:#60388d; }
 .inventory-overview-page .inventory-manage-links button:hover { filter:brightness(.92); }
 .inventory-overview-page button:focus-visible { outline:3px solid #d49623; outline-offset:3px; }
-.inventory-overview-page .inventory-filters { margin:14px 0; background:#fff; border-color:#d4dfd9; }
+.inventory-overview-page .inventory-filters { margin:0; background:#fff; border-color:#d4dfd9; }
 @media(max-width:1000px) { .inventory-overview-page .inventory-tools-label { width:100%; } .inventory-overview-page .inventory-manage-links button { flex:1; } }
 @media(max-width:700px) { .inventory-overview-page > .heading { padding:16px; } .inventory-overview-page .inventory-manage-links button { flex-basis:100%; } }
+
+/* Compact top area leaves the inventory list visible immediately. */
+.inventory-overview-page .inventory-overview { gap:10px; }
+.inventory-overview-page .inventory-summary-grid { gap:8px; }
+.inventory-overview-page .inventory-filters { padding:8px 12px; gap:12px; }
+.inventory-overview-page .inventory-filters label { gap:4px; }
+.inventory-overview-page .inventory-filters select { margin-top:0; height:34px; min-height:34px; padding-top:5px; padding-bottom:5px; }
+.inventory-overview-page .record-filters { padding:10px 12px; margin:0; }
+.inventory-overview-page .record-filters input,
+.inventory-overview-page .record-filters button { min-height:36px; padding-top:7px; padding-bottom:7px; }
+.inventory-overview-page .record-filters > p { margin:6px 0 0; }
+@media(min-width:1500px) {
+  .inventory-overview-page .inventory-summary-grid { grid-template-columns:repeat(3,minmax(150px,1fr)) minmax(490px,1.8fr); }
+  .inventory-overview-page .inventory-manage-links { grid-column:auto; }
+  .inventory-overview-page .inventory-tools-label { display:none; }
+  .inventory-overview-page .inventory-manage-links button { flex:1; }
+}

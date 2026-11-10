@@ -1368,7 +1368,8 @@ function SalesPage({
   };
   const groupedFinishedStock = (data.articles || []).map((article: any) => {
     const stocked = (data.finished_stock || []).filter((item: any) => Number(item.article_id) === Number(article.id));
-    const sizes = [...new Set([...(article.sets || []).flatMap((set: any) => (set.items || []).map((item: any) => String(item.size_label))), ...stocked.map((item: any) => String(item.size_label))])];
+    const articleCount = stocked.find((item: any) => item.size_label === "__ARTICLE_TOTAL__");
+    const sizes = articleCount ? ["__ARTICLE_TOTAL__"] : [...new Set([...(article.sets || []).flatMap((set: any) => (set.items || []).map((item: any) => String(item.size_label))), ...stocked.map((item: any) => String(item.size_label))])];
     const details = sizes.map((size: any) => {
       const stock = stocked.find((item: any) => String(item.size_label) === size);
       return {...stock, id: stock?.id || "new-"+article.id+"-"+size, size_label:size, quantity:Number(stock?.quantity || 0),
@@ -1378,7 +1379,7 @@ function SalesPage({
       inventory_kind:"finished",type:"Finished goods",item:article.code+" / "+article.name,
       category:article.category || "Uncategorized",quantity:details.reduce((sum:number,item:any)=>sum+item.quantity,0),
       item_codes:(article.sets || []).flatMap((set:any)=>(set.items || []).map((item:any)=>item.item_code || "")).join(" "),
-      unit:"pcs",details,variant:details.length ? details.length+" sizes" : "Sizes not configured",size_labels:sizes.join(", ")};
+      unit:"pcs",details,variant:articleCount ? "Article total" : details.length ? details.length+" sizes" : "Sizes not configured",size_labels:articleCount ? "" : sizes.join(", ")};
   });
   const inventoryRows =
     page === "Inventory Overview"
@@ -2393,7 +2394,7 @@ function InventoryRecordModal({
             if (row.inventory_kind === "finished") {
               if (!row.details.length) throw new Error("Configure article sizes in Pricing List before assigning stock.");
               await save("inventory-count/apply", {import_key:updateKey,reason:form.get("reason"),
-                rows:row.details.map((detail:any)=>({code:row.article_code,size:String(detail.size_label),expected:Number(detail.quantity),quantity:Number(form.get("quantity_"+detail.id))}))});
+                rows:row.details.map((detail:any)=>({kind:detail.size_label === "__ARTICLE_TOTAL__" ? "article" : "finished",code:row.article_code,size:String(detail.size_label),expected:Number(detail.quantity),quantity:Number(form.get("quantity_"+detail.id))}))});
             }
             else {
               await save(
@@ -2455,7 +2456,7 @@ function InventoryRecordModal({
               </div>
               {(row.details || []).map((detail: any) => (
                 <div className="inventory-size-line" key={detail.id}>
-                  <b>Size {detail.size_label}</b>
+                  <b>{detail.size_label === "__ARTICLE_TOTAL__" ? "Article stock" : "Size " + detail.size_label}</b>
                   <div className="inventory-colour-list">
                     {detail.colours?.length ? (
                       detail.colours.map((colour: string) => (
@@ -5783,10 +5784,10 @@ function SalesCreateModal({
                                   />
                                   <span>
                                     {Number(
-                                      (data.finished_stock || []).find(
+                                      (data.finished_stock || []).slice().sort((a: any, b: any) => Number(b.size_label === "__ARTICLE_TOTAL__") - Number(a.size_label === "__ARTICLE_TOTAL__")).find(
                                         (stock: any) =>
                                           Number(stock.article_id) === Number(line.article_id) &&
-                                          stock.size_label === item.size_label,
+                                          (stock.size_label === "__ARTICLE_TOTAL__" || stock.size_label === item.size_label),
                                       )?.quantity || 0,
                                     ).toLocaleString()}
                                   </span>
@@ -5860,10 +5861,10 @@ function SalesCreateModal({
                                   <span><small>Fixed: {money(fixedItemRate(line, item))}</small><br /><b>Given: {money(givenItemRate(line, item))}</b></span>
                                   <span>
                                     {Number(
-                                      (data.finished_stock || []).find(
+                                      (data.finished_stock || []).slice().sort((a: any, b: any) => Number(b.size_label === "__ARTICLE_TOTAL__") - Number(a.size_label === "__ARTICLE_TOTAL__")).find(
                                         (stock: any) =>
                                           Number(stock.article_id) === Number(line.article_id) &&
-                                          stock.size_label === item.size_label,
+                                          (stock.size_label === "__ARTICLE_TOTAL__" || stock.size_label === item.size_label),
                                       )?.quantity || 0,
                                     ).toLocaleString()}
                                   </span>
@@ -6088,10 +6089,10 @@ function SalesCreateModal({
                   );
                   const stockForSize = (size: any) =>
                     Number(
-                      (data.finished_stock || []).find(
+                      (data.finished_stock || []).slice().sort((a: any, b: any) => Number(b.size_label === "__ARTICLE_TOTAL__") - Number(a.size_label === "__ARTICLE_TOTAL__")).find(
                         (stock: any) =>
                           Number(stock.article_id) === Number(line.article_id) &&
-                          String(stock.size_label) === String(size),
+                          (stock.size_label === "__ARTICLE_TOTAL__" || String(stock.size_label) === String(size)),
                       )?.quantity || 0,
                     );
                   return (

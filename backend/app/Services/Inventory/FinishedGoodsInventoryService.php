@@ -108,6 +108,22 @@ final class FinishedGoodsInventoryService
         );
     }
 
+    /** Article counts use one shared balance, without inventing size quantities. */
+    public function setArticleCount(int $articleId, float $quantity, string $date): void
+    {
+        DB::table('articles')->where('id', $articleId)->lockForUpdate()->first();
+        $balances = DB::table('finished_goods_stock')->where('article_id', $articleId)->lockForUpdate()->get();
+        foreach ($balances as $balance) {
+            if ($balance->size_label !== '__ARTICLE_TOTAL__' && (float) $balance->quantity !== 0.0) {
+                $this->move($articleId, $balance->size_label, -(float) $balance->quantity, 'article_count', 'manual_adjustment', 0, 'article-count:'.uniqid('', true), $date, false);
+            }
+        }
+        $current = (float) ($balances->firstWhere('size_label', '__ARTICLE_TOTAL__')->quantity ?? 0);
+        if ($quantity !== $current || !$balances->contains('size_label', '__ARTICLE_TOTAL__')) {
+            $this->move($articleId, '__ARTICLE_TOTAL__', $quantity - $current, 'article_count', 'manual_adjustment', 0, 'article-count:'.uniqid('', true), $date, false);
+        }
+    }
+
     private function move(
         int $articleId,
         string $size,
@@ -121,6 +137,12 @@ final class FinishedGoodsInventoryService
     ): void {
         if (DB::table("finished_goods_movements")->where("event_key", $eventKey)->exists()) {
             return;
+        }
+        // Sales and returns keep their original item sizes on documents, but use the
+        // shared article balance once stock has been counted by article.
+        DB::table('articles')->where('id', $articleId)->lockForUpdate()->first();
+        if ($movementType !== 'article_count' && DB::table('finished_goods_stock')->where('article_id', $articleId)->where('size_label', '__ARTICLE_TOTAL__')->exists()) {
+            $size = '__ARTICLE_TOTAL__';
         }
         $balance = DB::table("finished_goods_stock")
             ->where(["article_id" => $articleId, "size_label" => $size])

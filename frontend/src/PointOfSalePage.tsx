@@ -129,10 +129,10 @@ export default function PointOfSalePage({
               records={data.items
                 .map((item: any) => {
                   const quantity = Number(
-                    data.stock.find(
+                    data.stock.slice().sort((a: any, b: any) => Number(b.size_label === "__ARTICLE_TOTAL__") - Number(a.size_label === "__ARTICLE_TOTAL__")).find(
                       (stock: any) =>
                         stock.article_id === item.article_id &&
-                        stock.size_label === item.size_label,
+                        (stock.size_label === "__ARTICLE_TOTAL__" || stock.size_label === item.size_label),
                     )?.quantity || 0,
                   );
                   return {
@@ -153,10 +153,10 @@ export default function PointOfSalePage({
                     </p>
                   )}
                   {filteredRows.map((item: any) => {
-                    const stock = data.stock.find(
+                    const stock = data.stock.slice().sort((a: any, b: any) => Number(b.size_label === "__ARTICLE_TOTAL__") - Number(a.size_label === "__ARTICLE_TOTAL__")).find(
                       (s: any) =>
                         s.article_id === item.article_id &&
-                        s.size_label === item.size_label,
+                        (s.size_label === "__ARTICLE_TOTAL__" || s.size_label === item.size_label),
                     );
                     return (
                       <button
