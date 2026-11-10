@@ -77,21 +77,21 @@ export default function DashboardOverview({
       group: "Inventory",
       title: "Stock quantities not recorded",
       count: data.stock.unrecorded,
-      detail: "Article sizes need a verified opening count",
+      detail: "Articles awaiting a verified opening count",
       page: "Bulk Inventory Import",
     },
     {
       group: "Inventory",
       title: "Out of stock",
       count: data.stock.out,
-      detail: "Recorded article sizes with no available pieces",
+      detail: "Recorded articles with no available pieces",
       page: "Finished Goods Stock",
     },
     {
       group: "Inventory",
       title: "Low stock",
       count: data.stock.low,
-      detail: `${data.stock.threshold} pieces or fewer per article size`,
+      detail: `${data.stock.threshold} pieces or fewer per article`,
       page: "Finished Goods Stock",
     },
     {
@@ -193,7 +193,7 @@ export default function DashboardOverview({
         <div>
           <span className="db-eyebrow">YOUR BUSINESS AT A GLANCE</span>
           <h1>Business overview</h1>
-          <p>What needs attention, what came in, and what happens next.</p>
+          <p>Sales, payments and stock. One clear view.</p>
         </div>
         <div className="db-header-actions">
           <button
@@ -258,11 +258,9 @@ export default function DashboardOverview({
       <section className="db-quick-actions" aria-label="Frequently used pages">
         {[
           ["Collections", "Record collection", ArrowDownLeft],
-          ["Point of Sale", "Counter sale", ShoppingCart],
           ["Purchase Orders", "Purchase orders", ClipboardList],
           ["Payment Vouchers", "Payment vouchers", Wallet],
           ["Inventory Overview", "Inventory", Boxes],
-          ["Reports", "Business reports", FileText],
         ].map(([page, label, Icon]: any) => (
           <button type="button" key={page} onClick={() => go(page)}>
             <Icon />
@@ -299,10 +297,7 @@ export default function DashboardOverview({
               Open reports <ArrowRight />
             </button>
           </div>
-          <p className="db-note">
-            Opening balances are excluded from sales. Collections may settle earlier invoices; these
-            are separate activity measures.
-          </p>
+          <p className="db-note">Sales exclude opening balances. Collections can settle earlier invoices.</p>
         </section>
         <section className="db-panel db-attention">
           <div className="db-panel-title">
@@ -322,7 +317,7 @@ export default function DashboardOverview({
           </div>
           <div className="db-task-list">
             {tasks.length ? (
-              tasks.map((task) => (
+              tasks.slice(0, 5).map((task) => (
                 <button
                   type="button"
                   className="db-task"
@@ -366,29 +361,13 @@ export default function DashboardOverview({
               View aging <ArrowRight />
             </button>
           </div>
-          <div className="db-receivable-split">
-            <span>
-              Opening receivables<strong>{money(data.opening_receivables_total)}</strong>
-            </span>
-            <span>
-              Sales invoice balances<strong>{money(data.sales_receivables_total)}</strong>
-            </span>
-          </div>
-          {data.outstanding_total > 0 && (
-            <div className="db-aging-bar" role="img" aria-label="Receivables distribution by age">
-              {aging.map(
-                ([key, label, tone]) =>
-                  data.aging[key] > 0 && (
-                    <span
-                      key={key}
-                      className={`db-age-${tone}`}
-                      style={{ width: `${(data.aging[key] / data.outstanding_total) * 100}%` }}
-                      title={`${label}: ${money(data.aging[key])}`}
-                    />
-                  ),
-              )}
+          <div className="db-aging-visual">
+            <ReceivablesChart aging={data.aging} total={data.outstanding_total} />
+            <div className="db-receivable-split">
+              <span>Opening balances<strong>{money(data.opening_receivables_total)}</strong></span>
+              <span>Sales balances<strong>{money(data.sales_receivables_total)}</strong></span>
             </div>
-          )}
+          </div>
           <div className="db-aging-list">
             {aging.map(([key, label, tone]) => (
               <button type="button" onClick={() => go("Debtors Aging")} key={key}>
@@ -417,47 +396,16 @@ export default function DashboardOverview({
               Ledgers <ArrowRight />
             </button>
           </div>
-          <FilteredRecords
-            records={data.top_customers.filter((row: any) => matchesSearch(row, search))}
-            title="priority customers"
-            fields={[
-              { key: "code", label: "Customer code" },
-              { key: "customer", label: "Customer" },
-              { key: "outstanding", label: "Outstanding", kind: "number" },
-              { key: "overdue", label: "Overdue", kind: "number" },
-            ]}
-          >
-            {(rows) => (
-              <div className="db-customer-list">
-                {rows.map((customer: any, index: number) => (
-                  <button
-                    type="button"
-                    key={customer.id}
-                    onClick={() => go("Customers", { query: customer.code })}
-                  >
-                    <span className="db-rank">{index + 1}</span>
-                    <span className="db-customer-name">
-                      <strong>{customer.customer}</strong>
-                      <small>
-                        {displayCode(customer)} · {customer.invoices} open balances
-                      </small>
-                    </span>
-                    <span className="db-customer-amount">
-                      <strong>{money(customer.outstanding)}</strong>
-                      <small>
-                        {customer.overdue > 0
-                          ? `${money(customer.overdue)} overdue`
-                          : "No dated overdue balance"}
-                      </small>
-                    </span>
-                  </button>
-                ))}
-                {!rows.length && (
-                  <p className="db-note">No outstanding customers in this selection.</p>
-                )}
-              </div>
-            )}
-          </FilteredRecords>
+          <div className="db-balance-bars" aria-label="Largest customer balances chart">
+            {data.top_customers.filter((row: any) => matchesSearch(row, search)).map((customer: any, index: number) => (
+              <button type="button" key={customer.id} onClick={() => go("Customers", { query: customer.code })}>
+                <span className="db-balance-heading"><strong>{customer.customer}</strong><b>{money(customer.outstanding)}</b></span>
+                <span className="db-balance-track"><i style={{width: Math.max(0, Math.min(100, customer.outstanding / Math.max(1, ...data.top_customers.map((c: any) => Number(c.outstanding))) * 100)) + "%", background: ["#7350a2", "#21866c", "#d18a32", "#b8536e", "#52818b"][index % 5]}} /></span>
+                <small>{customer.invoices} open invoices{customer.overdue > 0 ? " / " + money(customer.overdue) + " overdue" : ""}</small>
+              </button>
+            ))}
+            {!data.top_customers.filter((row: any) => matchesSearch(row, search)).length && <p className="db-note">No matching customer balances.</p>}
+          </div>
           <p className="db-note">
             Top five by outstanding amount. {number(data.customers_count)} active customer accounts
             in the system.
@@ -642,4 +590,21 @@ function ActivityChart({ rows }: { rows: { date: string; sales: number; collecti
       </details>
     </div>
   );
+}
+
+function ReceivablesChart({ aging, total }: { aging: Record<string, number>; total: number }) {
+  const segments = ["current", "1_30", "31_60", "61_90", "90_plus", "terms_not_set"];
+  const colours = ["#25826b", "#a9be59", "#d09a3b", "#ce6d42", "#aa4565", "#8973ad"];
+  let offset = 0;
+  return <div className="db-donut" role="img" aria-label={"Receivables distribution by age. Total " + money(total)}>
+    <svg viewBox="0 0 180 180"><circle cx="90" cy="90" r="68" fill="none" stroke="#edf0ed" strokeWidth="20" />
+      {segments.map((key, index) => {
+        const share = total > 0 ? Math.max(0, Number(aging[key] || 0)) / total * 100 : 0;
+        const start = offset; offset += share;
+        return <circle key={key} cx="90" cy="90" r="68" pathLength="100" fill="none" stroke={colours[index]} strokeWidth="20" strokeDasharray={share + " " + (100 - share)} strokeDashoffset={-start} transform="rotate(-90 90 90)"><title>{key.replace(/_/g, " ") + ": " + money(aging[key])}</title></circle>;
+      })}
+      <text x="90" y="86" textAnchor="middle" className="db-donut-label">RECEIVABLES</text>
+      <text x="90" y="108" textAnchor="middle" className="db-donut-total">{new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(total || 0)}</text>
+    </svg>
+  </div>;
 }

@@ -54,6 +54,10 @@ Route::prefix("v1")->group(function (): void {
             \App\Http\Controllers\Api\QuotationController::class,
             "update",
         ])->middleware("permission:accounting.manage");
+        Route::delete("/quotations/{id}", [
+            \App\Http\Controllers\Api\QuotationController::class,
+            "delete",
+        ])->middleware("permission:accounting.manage");
         Route::post("/quotations/{id}/convert", [
             \App\Http\Controllers\Api\QuotationController::class,
             "convert",

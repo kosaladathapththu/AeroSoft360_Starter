@@ -240,6 +240,30 @@ final class QuotationController
         });
     }
 
+    public function delete(Request $r, int $id)
+    {
+        return DB::transaction(function () use ($r, $id) {
+            $q = DB::table("quotations")->lockForUpdate()->find($id);
+            abort_unless($q, 404, "Quotation not found.");
+            abort_unless(
+                $q->status === "open" && $q->sales_order_id === null,
+                422,
+                "Only open quotations that have not been converted to sales orders can be deleted.",
+            );
+            $this->audit($id, $r, "deleted", "Quotation deleted.", [
+                "number" => $q->number,
+                "customer_id" => $q->customer_id,
+                "sales_rep_id" => $q->sales_rep_id,
+                "quotation_date" => $q->quotation_date,
+                "valid_until" => $q->valid_until,
+                "total" => $q->total,
+                "lines" => json_decode($q->lines, true),
+            ]);
+            DB::table("quotations")->where("id", $id)->delete();
+            return response()->json(["message" => "Quotation deleted."]);
+        });
+    }
+
     private function audit(
         int $id,
         Request $r,

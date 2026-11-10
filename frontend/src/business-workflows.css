@@ -17,6 +17,13 @@
   font-size: 12px;
   font-weight: 700;
 }
+.workflow-actions button.workflow-delete {
+  border-color: #efb9bf;
+  color: #aa3343;
+}
+.workflow-actions button.workflow-delete:hover {
+  background: #fff1f2;
+}
 .workflow-table {
   overflow: auto;
   margin: 16px 0;

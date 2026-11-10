@@ -519,6 +519,13 @@ final class AccountingSalesController extends Controller
             foreach ($invoiceIds as $invoiceId) {
                 $this->deleteInvoice((int) $invoiceId);
             }
+            DB::table("quotations")
+                ->whereIn("sales_order_id", $orderIds)
+                ->update([
+                    "sales_order_id" => null,
+                    "status" => "open",
+                    "updated_at" => now(),
+                ]);
             DB::table("sales_order_size_lines")->whereIn("sales_order_id", $orderIds)->delete();
             DB::table("sales_orders")->whereIn("id", $orderIds)->delete();
             DB::table("customer_po_lines")->where("customer_po_id", $id)->delete();
@@ -555,6 +562,13 @@ final class AccountingSalesController extends Controller
                 422,
                 "Sales order has invoices and cannot be deleted.",
             );
+            DB::table("quotations")
+                ->where("sales_order_id", $id)
+                ->update([
+                    "sales_order_id" => null,
+                    "status" => "open",
+                    "updated_at" => now(),
+                ]);
             DB::table("sales_order_size_lines")->where("sales_order_id", $id)->delete();
             DB::table("sales_orders")->where("id", $id)->delete();
             DB::table("customer_pos")

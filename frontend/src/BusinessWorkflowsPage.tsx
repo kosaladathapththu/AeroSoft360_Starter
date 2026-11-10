@@ -7,7 +7,7 @@ import FilteredRecords from "./FilteredRecords";
 import { recordFields } from "./record-filters";
 import { matchesSearch } from "./search";
 import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Check, Eye, FileDown, Plus, Printer, RefreshCw, X } from "lucide-react";
+import { Check, Eye, FileDown, Plus, Printer, RefreshCw, Trash2, X } from "lucide-react";
 import {
   financeCsv,
   financeMoney as money,
@@ -307,6 +307,27 @@ export default function BusinessWorkflowsPage({
                         </button>
                         <button onClick={() => setModal({ kind: "quote-cancel", row: q })}>
                           Cancel
+                        </button>
+                        <button
+                          className="workflow-delete"
+                          disabled={busy}
+                          title="Delete quotation"
+                          onClick={async () => {
+                            if (
+                              !window.confirm(
+                                `Delete quotation ${q.number}? This cannot be undone.`,
+                              )
+                            )
+                              return;
+                            try {
+                              await mutate(`quotations/${q.id}`, undefined, "DELETE");
+                              setNotice(`${q.number} deleted.`);
+                            } catch (e) {
+                              setError((e as Error).message);
+                            }
+                          }}
+                        >
+                          <Trash2 /> Delete
                         </button>
                       </>
                     )}

@@ -4,6 +4,8 @@ Target: https://erp.supuncompanies.com
 Account: /home/camymarket
 
 This ZIP updates the application files. Creating it does not deploy anything.
+This follow-up adds deletion for open quotations and fixes deletion of quotation-
+originated sales orders. These changes require no database migration.
 It contains the new Supun Group portal, four company logos, the separate Y-mac
 login, upcoming pages for the other companies, and the current ERP code.
 This release also includes the latest invoice layout, compact workflow links,
@@ -58,7 +60,12 @@ This release REQUIRES the specific new migration in step 3. It adds collection
 history tables and account 1120 (Cheques in Hand), without rewriting invoices
 or earlier receipts. Stop and resolve any account-code conflict reported by it.
 
-## 3. Apply targeted updates and clear cached configuration
+## 3. Apply earlier pending migrations only, then clear cached configuration
+
+The quotation and sales-order deletion changes in this follow-up need no
+migration. The commands below are only for an installation that has not yet
+received the preceding collection and catalogue updates. Do not rerun them if
+those migrations are already recorded as complete.
 
 In cPanel Terminal, use the PHP binary matching the ERP domain:
 

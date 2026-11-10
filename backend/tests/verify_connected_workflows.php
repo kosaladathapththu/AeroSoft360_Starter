@@ -22,6 +22,7 @@ use App\Services\Procurement\PurchaseReturnService;
 use App\Http\Controllers\Api\BusinessWorkflowController;
 use App\Http\Controllers\Api\QuotationController;
 use App\Http\Controllers\Api\SubledgerController;
+use App\Http\Controllers\Api\AccountingSalesController;
 function check($ok, $name)
 {
     if (!$ok) {
@@ -348,6 +349,35 @@ rejects(
 check(
     $quotes->index()->getData(true)["quotations"][0]["sales_order"] !== null,
     "quotation list includes its sales order reference",
+);
+$sales = new AccountingSalesController();
+rejects(
+    fn() => $quotes->delete(req([], "DELETE"), $qid),
+    "converted quotations cannot be deleted while linked to a sales order",
+);
+$sales->deleteSalesOrder($so);
+check(
+    !DB::table("sales_orders")->where("id", $so)->exists() &&
+        !DB::table("sales_order_size_lines")->where("sales_order_id", $so)->exists(),
+    "deleting a sales order removes its lines",
+);
+check(
+    DB::table("quotations")->where("id", $qid)->value("sales_order_id") === null &&
+        DB::table("quotations")->where("id", $qid)->value("status") === "open",
+    "deleting a sales order reopens and unlinks its quotation",
+);
+$quotes->delete(req([], "DELETE"), $qid);
+check(
+    !DB::table("quotations")->where("id", $qid)->exists(),
+    "deleting an open quotation removes the quotation",
+);
+check(
+    DB::table("audit_logs")
+        ->where("entity_type", "quotation")
+        ->where("entity_id", $qid)
+        ->where("event", "quotation.deleted")
+        ->exists(),
+    "quotation deletion is retained in the audit log",
 );
 
 DB::table("suppliers")->insert([
