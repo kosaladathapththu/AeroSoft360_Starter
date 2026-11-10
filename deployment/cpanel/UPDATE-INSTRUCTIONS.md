@@ -58,7 +58,7 @@ This release REQUIRES the specific new migration in step 3. It adds collection
 history tables and account 1120 (Cheques in Hand), without rewriting invoices
 or earlier receipts. Stop and resolve any account-code conflict reported by it.
 
-## 3. Install collection tables and clear cached configuration
+## 3. Apply targeted updates and clear cached configuration
 
 In cPanel Terminal, use the PHP binary matching the ERP domain:
 
@@ -69,6 +69,7 @@ In cPanel Terminal, use the PHP binary matching the ERP domain:
     /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_09_000002_add_card_collection_charges.php --force
     /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_09_000003_make_collection_collector_optional.php --force
     /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_09_000004_add_collection_corrections.php --force
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_10_000001_reconcile_verified_article_catalog.php --force
     /opt/cpanel/ea-php82/root/usr/bin/php artisan route:clear
     /opt/cpanel/ea-php82/root/usr/bin/php artisan view:clear
 
@@ -76,6 +77,21 @@ The commands above assume the ERP still uses PHP 8.2 as previously configured.
 If MultiPHP Manager shows a different version, use its corresponding binary.
 If PHP OPcache continues serving old backend code, reload the ERP's PHP-FPM
 pool through the server administrator. Do not restart unrelated applications.
+
+## Current article and inventory changes
+
+The catalogue migration uses the verified Production Pricing sheet from pricing
+ aerosoft (1).xlsx: 195 distinct article codes, with size rows grouped by code.
+It corrects names/categories in place and removes unused Uncategorized records
+and the placeholder category. Referenced legacy records are archived instead
+of deleting their transaction or stock history. It does not change prices,
+quantities, invoice balances, receipts or login accounts. It is tracked by Laravel
+and will not run again after successful installation.
+
+Inventory Item now displays the article code only. Excel stock templates contain
+Article code, Category and Stock, one row per active article. Upload automatically
+previews changes; an explicit confirmation and reason are required to update stock.
+A downloaded template or preview does not update inventory.
 
 ## 4. Verify the update
 
@@ -92,7 +108,8 @@ pool through the server administrator. Do not restart unrelated applications.
    Pending cheques must not increase available cash. Test in staging first.
    Check invoice entry starts without a preselected article.
 6. Check existing reports, downloads and the database backup function.
-7. Open Inventory Overview: all articles should appear, including unassigned stock.
+7. Open Inventory Overview: active articles should appear, including unassigned stock.
+   Item should show the code only. Uncategorized entries should be absent.
    The temporary stock-fill button must be gone. Edit stock opens an inline page.
    In Bulk Inventory Import, download an Excel template and inspect its Instructions
    sheet. Download and preview do not change balances. Apply only verified real counts.

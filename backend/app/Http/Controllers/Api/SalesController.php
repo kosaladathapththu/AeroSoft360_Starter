@@ -341,6 +341,7 @@ class SalesController
             "sets.*.items.*.quantity" => "required|numeric|gt:0",
             "sets.*.items.*.unit_price" => "required|numeric|min:0",
         ]);
+        abort_if(strtoupper(trim($d["category"])) === "UNCATEGORIZED", 422, "Choose a real article category.");
         $id = DB::transaction(function () use ($d) {
             $first = $d["sets"][0];
             $id = DB::table("articles")->insertGetId([
@@ -403,6 +404,7 @@ class SalesController
             "sets.*.items.*.quantity" => "required|numeric|gt:0",
             "sets.*.items.*.unit_price" => "required|numeric|min:0",
         ]);
+        abort_if(strtoupper(trim($d["category"])) === "UNCATEGORIZED", 422, "Choose a real article category.");
         DB::transaction(function () use ($d, $id) {
             abort_unless(
                 DB::table("articles")->where("id", $id)->exists(),

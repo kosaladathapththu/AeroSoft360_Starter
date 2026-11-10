@@ -152,7 +152,8 @@ final class PriceListController extends Controller
                 }
                 continue;
             }
-            $category = trim((string) ($row[$columns["category"]] ?? "")) ?: "UNCATEGORIZED";
+            $category = trim((string) ($row[$columns["category"]] ?? ""));
+            abort_if($category === "" || strtoupper($category) === "UNCATEGORIZED", 422, "Every article must have a valid category in the price list.");
             $colours = trim((string) ($row[$columns["colours"]] ?? "")) ?: null;
             $cost = $this->number($row[$columns["production_cost"]] ?? null);
             $variantKey = $this->variantKey($category, $colours, $cost, $price);
@@ -199,9 +200,8 @@ final class PriceListController extends Controller
                     DB::table("articles")
                         ->where("id", $articleId)
                         ->update([
-                            "name" => $category === "UNCATEGORIZED" ? $article->name : $articleName,
-                            "category" =>
-                                $category === "UNCATEGORIZED" ? $article->category : $category,
+                            "name" => $articleName,
+                            "category" => $category,
                             "pieces_per_set" => count(collect($variantGroups)->first()) * 2,
                             "selling_price" => $price,
                             "status" => "active",

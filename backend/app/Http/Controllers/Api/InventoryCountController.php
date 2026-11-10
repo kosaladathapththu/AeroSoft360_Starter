@@ -23,10 +23,10 @@ class InventoryCountController
         $baseline->fromArray([['article_code', 'current_quantity']]);
         $totals = DB::table('finished_goods_stock')->select('article_id', DB::raw('SUM(quantity) as quantity'))->groupBy('article_id')->pluck('quantity', 'article_id');
         $line = 2;
-        foreach (DB::table('articles')->orderBy('code')->get() as $article) {
+        foreach (DB::table('articles')->where('status', 'active')->orderBy('code')->get() as $article) {
             $quantity = (float) ($totals[$article->id] ?? 0);
             $sheet->setCellValueExplicit('A'.$line, (string) $article->code, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $sheet->setCellValueExplicit('B'.$line, (string) ($article->category ?? 'Uncategorized'), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $sheet->setCellValueExplicit('B'.$line, (string) ($article->category ?? ''), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             $sheet->setCellValue('C'.$line, $quantity);
             $baseline->setCellValueExplicit('A'.$line, (string) $article->code, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             $baseline->setCellValue('B'.$line, $quantity);
@@ -205,7 +205,7 @@ class InventoryCountController
             }
             if ((float)$row['quantity'] != floor((float)$row['quantity'])) throw ValidationException::withMessages(['rows'=>'Article quantities must be whole pieces.']);
             $article=DB::table('articles')->where('code',$row['code'])->lockForUpdate()->first();
-            if (!$article) throw ValidationException::withMessages(['rows'=>'Unknown article: '.$row['code']]);
+            if (!$article || $article->status !== 'active') throw ValidationException::withMessages(['rows'=>'Unknown or inactive article: '.$row['code']]);
             if (($row['kind'] ?? '') === 'article') {
                 if (isset($seen['article:'.$article->id])) throw ValidationException::withMessages(['rows' => 'Keep one count per article.']);
                 $seen['article:'.$article->id] = true;

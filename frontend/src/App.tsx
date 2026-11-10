@@ -1366,7 +1366,7 @@ function SalesPage({
       "Unit",
     ],
   };
-  const groupedFinishedStock = (data.articles || []).map((article: any) => {
+  const groupedFinishedStock = (data.articles || []).filter((article: any) => article.status !== "inactive").map((article: any) => {
     const stocked = (data.finished_stock || []).filter((item: any) => Number(item.article_id) === Number(article.id));
     const articleCount = stocked.find((item: any) => item.size_label === "__ARTICLE_TOTAL__");
     const sizes = articleCount ? ["__ARTICLE_TOTAL__"] : [...new Set([...(article.sets || []).flatMap((set: any) => (set.items || []).map((item: any) => String(item.size_label))), ...stocked.map((item: any) => String(item.size_label))])];
@@ -1376,8 +1376,8 @@ function SalesPage({
         colours:[...new Set((article.sets || []).flatMap((set: any) => (set.items || []).filter((item: any) => String(item.size_label) === size).flatMap((item: any) => splitColours(item.colours || ""))))]};
     });
     return {id:"finished-article-"+article.id,record_id:article.id,article_code:article.code,article_name:article.name,
-      inventory_kind:"finished",type:"Finished goods",item:article.code+" / "+article.name,
-      category:article.category || "Uncategorized",quantity:details.reduce((sum:number,item:any)=>sum+item.quantity,0),
+      inventory_kind:"finished",type:"Finished goods",item:article.code,
+      category:article.category || "",quantity:details.reduce((sum:number,item:any)=>sum+item.quantity,0),
       item_codes:(article.sets || []).flatMap((set:any)=>(set.items || []).map((item:any)=>item.item_code || "")).join(" "),
       unit:"pcs",details,variant:articleCount ? "Article total" : details.length ? details.length+" sizes" : "Sizes not configured",size_labels:articleCount ? "" : sizes.join(", ")};
   });
@@ -1392,7 +1392,7 @@ function SalesPage({
             inventory_kind: "raw",
             type: "Raw materials",
             item: `${displayCode(item)} — ${item.name}`,
-            category: item.category || "Uncategorized",
+            category: item.category || "",
             variant: `Batch ${item.batch_number}`,
             quantity: Number(item.quantity || 0),
             unit: "stock units",
