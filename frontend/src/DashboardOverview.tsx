@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   ArrowDownLeft,
   ArrowRight,
@@ -15,7 +14,6 @@ import {
 import { financeMoney as money } from "./finance-utils";
 import { WorkflowGo } from "./workflow";
 import { matchesSearch } from "./search";
-import FilteredRecords from "./FilteredRecords";
 import "./dashboard.css";
 
 type Props = {
@@ -45,7 +43,6 @@ export default function DashboardOverview({
   createOrder,
   search,
 }: Props) {
-  const [activity, setActivity] = useState("invoices");
   const period = `${date(data.period.from)} – ${date(data.period.to)}`;
   const metrics = [
     {
@@ -105,7 +102,6 @@ export default function DashboardOverview({
     ["90_plus", "Over 90 days", "old"],
     ["terms_not_set", "Terms not set", "unknown"],
   ];
-  const activityRows = activity === "invoices" ? data.recent_invoices : data.recent_receipts;
   return (
     <div className="dashboard-overview" aria-busy={busy}>
       <header className="db-header">
@@ -250,81 +246,7 @@ export default function DashboardOverview({
           </p>
         </section>
       </div>
-      <section className="db-panel db-activity">
-        <div className="db-panel-title">
-          <div>
-            <span className="db-eyebrow">LATEST DOCUMENTS</span>
-            <h2>Recent activity</h2>
-          </div>
-          <div className="db-period-options">
-            <button
-              type="button"
-              aria-pressed={activity === "invoices"}
-              onClick={() => setActivity("invoices")}
-            >
-              Invoices
-            </button>
-            <button
-              type="button"
-              aria-pressed={activity === "collections"}
-              onClick={() => setActivity("collections")}
-            >
-              Collections
-            </button>
-          </div>
-        </div>
-        <FilteredRecords
-          key={activity}
-          records={activityRows.filter((row: any) => matchesSearch(row, search))}
-          title="recent documents"
-          fields={
-            activity === "invoices"
-              ? [
-                  { key: "number", label: "Invoice" },
-                  { key: "customer_name", label: "Customer" },
-                  { key: "invoice_date", label: "Date", kind: "date" },
-                  { key: "total", label: "Total", kind: "number" },
-                  { key: "outstanding", label: "Outstanding", kind: "number" },
-                ]
-              : [
-                  { key: "number", label: "Receipt" },
-                  { key: "customer_name", label: "Customer" },
-                  { key: "receipt_date", label: "Date", kind: "date" },
-                  { key: "amount", label: "Received", kind: "number" },
-                ]
-          }
-        >
-          {(rows) => (
-            <div className="db-activity-grid">
-              {rows.map((row: any) => (
-                <button
-                  type="button"
-                  className="db-document"
-                  key={row.id}
-                  onClick={() =>
-                    go(activity === "invoices" ? "Invoices" : "Collections", { query: row.number })
-                  }
-                >
-                  <i>{activity === "invoices" ? <FileText /> : <ArrowDownLeft />}</i>
-                  <span>
-                    <strong>{row.number}</strong>
-                    <small>{row.customer_name}</small>
-                    <small>{date(row.invoice_date || row.receipt_date)}</small>
-                  </span>
-                  <b>{money(activity === "invoices" ? row.total : row.amount)}</b>
-                  <ArrowUpRight />
-                </button>
-              ))}
-              {!rows.length && (
-                <p className="db-note">No {activity} recorded for this period and search.</p>
-              )}
-            </div>
-          )}
-        </FilteredRecords>
-        <p className="db-note">
-          Latest eight documents in the selected period. Opening balance documents are excluded.
-        </p>
-      </section>
+
     </div>
   );
 }
