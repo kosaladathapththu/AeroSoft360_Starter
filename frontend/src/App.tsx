@@ -827,6 +827,7 @@ export default function App() {
               setModal("");
             } catch (e) {
               setError((e as Error).message);
+              throw e;
             }
           }}
         />
@@ -844,6 +845,7 @@ export default function App() {
               setEditing(null);
             } catch (e) {
               setError((e as Error).message);
+              throw e;
             }
           }}
         />
@@ -8009,25 +8011,24 @@ function ModalShell({
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   children: React.ReactNode;
 }) {
+  const [submitError, setSubmitError] = useState("");
   return (
-    <div className="backdrop" onMouseDown={close}>
+    <WorkspaceEntry>
       <form
         className="modal"
-        onSubmit={onSubmit}
+        onSubmit={async (event) => {
+          setSubmitError("");
+          try { await onSubmit(event); } catch (error) { setSubmitError((error as Error).message); }
+        }}
         onMouseDown={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Business record dialog"
       >
         <div className="popup-header">
-          <button type="button" className="close" onClick={close} aria-label="Close dialog">
-            <X />
-          </button>
+          <button type="button" className="workspace-entry-back" onClick={close}><ArrowLeft size={17} /> Back to records</button>
           <span>CONTROLLED TRANSACTION</span>
           <h2>{title}</h2>
         </div>
         <div className="popup-body">
-          <p>Review the information before saving this business record.</p>
+          {submitError && <p role="alert" className="error">{submitError}</p>}
           {children}
         </div>
         <div className="popup-footer">
@@ -8042,7 +8043,7 @@ function ModalShell({
           </div>
         </div>
       </form>
-    </div>
+    </WorkspaceEntry>
   );
 }
 function GrnFields({ orders }: { orders: Order[] }) {
