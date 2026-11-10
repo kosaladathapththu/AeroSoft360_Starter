@@ -1,4 +1,3 @@
-import { displayCode } from "./representative-reference";
 import { useState } from "react";
 import {
   ArrowDownLeft,
@@ -7,12 +6,10 @@ import {
   Banknote,
   Boxes,
   CalendarDays,
-  Check,
   ClipboardList,
   FileText,
   Plus,
   RefreshCw,
-  ShoppingCart,
   Wallet,
 } from "lucide-react";
 import { financeMoney as money } from "./finance-utils";
@@ -49,85 +46,7 @@ export default function DashboardOverview({
   search,
 }: Props) {
   const [activity, setActivity] = useState("invoices");
-  const [taskGroup, setTaskGroup] = useState("All");
   const period = `${date(data.period.from)} – ${date(data.period.to)}`;
-  const tasks = [
-    {
-      group: "Sales",
-      title: "Orders to dispatch",
-      count: data.dispatch_count,
-      detail: `${number(data.dispatch_pieces)} pieces still to supply`,
-      page: "Sales Orders",
-    },
-    {
-      group: "Finance",
-      title: "Overdue invoices",
-      count: data.overdue_count,
-      detail: `${money(data.overdue_total)} across overdue invoices`,
-      page: "Collections",
-    },
-    {
-      group: "Finance",
-      title: "Credit terms missing",
-      count: data.terms_missing_count,
-      detail: "Set due dates to complete customer aging",
-      page: "Debtors Aging",
-    },
-    {
-      group: "Inventory",
-      title: "Stock quantities not recorded",
-      count: data.stock.unrecorded,
-      detail: "Articles awaiting a verified opening count",
-      page: "Bulk Inventory Import",
-    },
-    {
-      group: "Inventory",
-      title: "Out of stock",
-      count: data.stock.out,
-      detail: "Recorded articles with no available pieces",
-      page: "Finished Goods Stock",
-    },
-    {
-      group: "Inventory",
-      title: "Low stock",
-      count: data.stock.low,
-      detail: `${data.stock.threshold} pieces or fewer per article`,
-      page: "Finished Goods Stock",
-    },
-    {
-      group: "Purchasing",
-      title: "Purchase orders to approve",
-      count: data.draft_purchase_orders,
-      detail: "Draft supplier orders awaiting review",
-      page: "Purchase Orders",
-    },
-    {
-      group: "Purchasing",
-      title: "Deliveries to receive",
-      count: data.awaiting_goods,
-      detail: "Approved or partly received purchase orders",
-      page: "Receive Goods",
-    },
-    {
-      group: "Purchasing",
-      title: "Supplier bills to register",
-      count: data.unbilled_receipts,
-      detail: "Posted GRNs without a purchase invoice",
-      page: "Supplier Invoices",
-    },
-    {
-      group: "Finance",
-      title: "Supplier payments overdue",
-      count: data.supplier_overdue_count,
-      detail: `${money(data.supplier_payables)} total supplier payables`,
-      page: "All Payables",
-    },
-  ].filter(
-    (task) =>
-      task.count > 0 &&
-      (taskGroup === "All" || task.group === taskGroup) &&
-      matchesSearch(task, search),
-  );
   const metrics = [
     {
       title: "Accounts receivable",
@@ -270,86 +189,6 @@ export default function DashboardOverview({
         ))}
       </section>
       <div className="db-main-grid">
-        <section className="db-panel db-trend">
-          <div className="db-panel-title">
-            <div>
-              <span className="db-eyebrow">PERIOD ACTIVITY</span>
-              <h2>Sales and collections</h2>
-            </div>
-            <span>{period}</span>
-          </div>
-          <div className="db-chart-legend">
-            <span>
-              <i className="db-dot db-dot-sales" />
-              Sales invoices
-            </span>
-            <span>
-              <i className="db-dot db-dot-cash" />
-              Customer collections
-            </span>
-          </div>
-          <ActivityChart rows={data.trend} />
-          <div className="db-trend-foot">
-            <span>
-              Return credits in this period <strong>{money(data.period_return_credits)}</strong>
-            </span>
-            <button type="button" onClick={() => go("Reports")}>
-              Open reports <ArrowRight />
-            </button>
-          </div>
-          <p className="db-note">Sales exclude opening balances. Collections can settle earlier invoices.</p>
-        </section>
-        <section className="db-panel db-attention">
-          <div className="db-panel-title">
-            <div>
-              <span className="db-eyebrow">NEXT ACTIONS</span>
-              <h2>Needs attention</h2>
-            </div>
-            <select
-              aria-label="Filter tasks by area"
-              value={taskGroup}
-              onChange={(event) => setTaskGroup(event.target.value)}
-            >
-              {["All", "Sales", "Finance", "Inventory", "Purchasing"].map((group) => (
-                <option key={group}>{group}</option>
-              ))}
-            </select>
-          </div>
-          <div className="db-task-list">
-            {tasks.length ? (
-              tasks.slice(0, 5).map((task) => (
-                <button
-                  type="button"
-                  className="db-task"
-                  key={task.title}
-                  onClick={() => go(task.page)}
-                >
-                  <span
-                    className={`db-task-number ${task.group === "Finance" ? "db-task-wine" : ""}`}
-                  >
-                    {number(task.count)}
-                  </span>
-                  <span>
-                    <strong>{task.title}</strong>
-                    <small>{task.detail}</small>
-                  </span>
-                  <ArrowRight />
-                </button>
-              ))
-            ) : (
-              <div className="db-empty">
-                <Check />
-                <strong>No tasks in this selection</strong>
-                <p>Try another area or clear the top search.</p>
-              </div>
-            )}
-          </div>
-          <p className="db-note">
-            Recorded finished stock: <strong>{number(data.stock.pieces)} pieces</strong>. Articles without a recorded count are listed separately.
-          </p>
-        </section>
-      </div>
-      <div className="db-main-grid">
         <section className="db-panel">
           <div className="db-panel-title">
             <div>
@@ -486,107 +325,6 @@ export default function DashboardOverview({
           Latest eight documents in the selected period. Opening balance documents are excluded.
         </p>
       </section>
-    </div>
-  );
-}
-
-function ActivityChart({ rows }: { rows: { date: string; sales: number; collections: number }[] }) {
-  const max = Math.max(0, ...rows.flatMap((row) => [row.sales, row.collections]));
-  if (!max)
-    return (
-      <div className="db-chart-empty">
-        <FileText />
-        <strong>No sales or collections in this period</strong>
-        <span>
-          New posted activity will appear here. Imported opening debt is shown in receivables.
-        </span>
-      </div>
-    );
-  const points = (key: "sales" | "collections") =>
-    rows
-      .map(
-        (row, index) =>
-          `${55 + (index / Math.max(1, rows.length - 1)) * 590},${190 - (row[key] / max) * 155}`,
-      )
-      .join(" ");
-  return (
-    <div className="db-chart">
-      <svg
-        viewBox="0 0 670 230"
-        role="img"
-        aria-label="Daily sales invoices and customer collections in LKR"
-      >
-        <title>Daily sales and collections</title>
-        {[0, 0.5, 1].map((fraction) => (
-          <g key={fraction}>
-            <line
-              x1="55"
-              y1={190 - fraction * 155}
-              x2="645"
-              y2={190 - fraction * 155}
-              stroke="#e5ebe8"
-            />
-            <text x="47" y={194 - fraction * 155} textAnchor="end">
-              {new Intl.NumberFormat("en", {
-                notation: "compact",
-                maximumFractionDigits: 1,
-              }).format(max * fraction)}
-            </text>
-          </g>
-        ))}
-        <polyline
-          points={points("sales")}
-          fill="none"
-          stroke="#187b62"
-          strokeWidth="3"
-          strokeLinejoin="round"
-        />
-        <polyline
-          points={points("collections")}
-          fill="none"
-          stroke="#b67b21"
-          strokeWidth="3"
-          strokeLinejoin="round"
-          strokeDasharray="7 4"
-        />
-        {[0, Math.floor((rows.length - 1) / 2), rows.length - 1].map((index) => (
-          <text
-            key={index}
-            x={55 + (index / Math.max(1, rows.length - 1)) * 590}
-            y="218"
-            textAnchor={index === 0 ? "start" : index === rows.length - 1 ? "end" : "middle"}
-          >
-            {date(rows[index].date)}
-          </text>
-        ))}
-      </svg>
-      <details>
-        <summary>View daily figures</summary>
-        <FilteredRecords records={rows} title="activity days">
-          {(filteredRows) => (
-            <div className="table-card">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Sales invoiced</th>
-                    <th>Collections</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.map((row) => (
-                    <tr key={row.date}>
-                      <td>{row.date}</td>
-                      <td>{money(row.sales)}</td>
-                      <td>{money(row.collections)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </FilteredRecords>
-      </details>
     </div>
   );
 }

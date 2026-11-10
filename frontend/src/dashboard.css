@@ -791,3 +791,26 @@
 .dashboard-overview .db-age-late { background: #ce6d42; }
 .dashboard-overview .db-age-old { background: #aa4565; }
 .dashboard-overview .db-age-unknown { background: #8973ad; }
+
+/* Neutral surfaces with restrained motion. */
+.dashboard-overview .db-header { background: #fff; color: #263d36; border: 1px solid #dfe7e4; }
+.dashboard-overview .db-header h1 { color: #263d36; }
+.dashboard-overview .db-header p,.dashboard-overview .db-header .db-eyebrow { color: #667c72; }
+.dashboard-overview .db-header .db-primary { background: #18705b; border-color: #18705b; color: #fff; }
+.dashboard-overview .db-header .db-secondary { background: #fff; border-color: #ccd9d2; color: #345c4e; }
+.dashboard-overview .db-metric { background: #fff; border: 1px solid #dfe7e4; }
+.dashboard-overview .db-metric-top i { background: #f3f5f4; color: #55736a; }
+.dashboard-overview .db-metric strong { color: #263d36; }
+.dashboard-overview .db-header,.dashboard-overview .db-metric,.dashboard-overview .db-panel,.dashboard-overview .db-quick-actions { animation: db-enter 450ms ease-out both; }
+.dashboard-overview .db-metric:nth-child(2) { animation-delay: 40ms; }
+.dashboard-overview .db-metric:nth-child(3) { animation-delay: 80ms; }
+.dashboard-overview .db-metric:nth-child(4) { animation-delay: 120ms; }
+.dashboard-overview .db-metric:nth-child(5) { animation-delay: 160ms; }
+.dashboard-overview .db-metric:nth-child(6) { animation-delay: 200ms; }
+.dashboard-overview .db-metric,.dashboard-overview .db-quick-actions button { transition: transform 180ms ease,box-shadow 180ms ease; }
+.dashboard-overview .db-metric:hover,.dashboard-overview .db-quick-actions button:hover { transform: translateY(-3px); box-shadow: 0 8px 20px #243d3510; }
+.db-balance-track i { transform-origin: left; animation: db-bar-enter 650ms ease-out both; }
+.db-donut { animation: db-enter 600ms ease-out both; }
+@keyframes db-enter { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes db-bar-enter { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .dashboard-overview *, .dashboard-overview *::before, .dashboard-overview *::after { animation: none !important; transition: none !important; } }

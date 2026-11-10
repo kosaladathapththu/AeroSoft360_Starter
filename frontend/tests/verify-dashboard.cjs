@@ -83,16 +83,16 @@ const render = (overrides = {}) =>
 const empty = render();
 assert.ok(empty.includes("Business overview") && empty.includes("LKR 23,120,293.00"));
 assert.ok(
-  empty.includes("No sales or collections in this period"),
-  "Zero activity shows an honest empty state",
+  !empty.includes("Sales and collections"),
+  "Removed activity panel stays absent",
 );
 assert.ok(
   empty.includes("343") && empty.includes("not overdue"),
   "Missing terms remain identifiable separately from overdue debt",
 );
 assert.ok(
-  empty.includes("Stock quantities not recorded") && !empty.includes('class="db-task-number">0'),
-  "Tasks distinguish unrecorded inventory and omit zero-count actions",
+  !empty.includes("Needs attention"),
+  "Removed attention panel stays absent",
 );
 assert.ok(
   !empty.includes("Create sales order"),
@@ -112,14 +112,14 @@ const live = render({
     trend: data.trend.map((row, i) => ({ ...row, sales: i * 30, collections: i * 10 })),
   },
 });
-assert.ok(live.includes('aria-label="Daily sales invoices and customer collections in LKR"'));
+assert.ok(live.includes("Largest customer balances chart"));
 assert.ok(
-  live.includes("View daily figures") && live.includes("Sales invoiced"),
-  "Chart has an accessible source-data view",
+  live.includes("Receivables distribution by age") && live.includes("Sales invoiced"),
+  "Retained charts and sales metrics remain available",
 );
 assert.ok(
-  render({ search: "no-matching-task" }).includes("No tasks in this selection"),
-  "Top search also filters attention tasks",
+  render({ search: "no-matching-task" }).includes("No matching customer balances"),
+  "Top search filters retained customer chart",
 );
 console.log("12 dashboard presentation checks passed.");
 const outIndex = process.argv.indexOf("--render-dir");
