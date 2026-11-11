@@ -1,3 +1,5 @@
+import { stockAvailability } from "./stock-availability";
+import CommissionCategoriesPage from "./CommissionCategoriesPage";
 import ItemSearchSelect from "./ItemSearchSelect";
 import DashboardOverview from "./DashboardOverview";
 import CustomerOrderContext from "./CustomerOrderContext";
@@ -1361,18 +1363,16 @@ function SalesPage({
   };
   const groupedFinishedStock = (data.articles || []).filter((article: any) => article.status !== "inactive").map((article: any) => {
     const stocked = (data.finished_stock || []).filter((item: any) => Number(item.article_id) === Number(article.id));
-    const articleCount = stocked.find((item: any) => item.size_label === "__ARTICLE_TOTAL__");
-    const sizes = articleCount ? ["__ARTICLE_TOTAL__"] : [...new Set([...(article.sets || []).flatMap((set: any) => (set.items || []).map((item: any) => String(item.size_label))), ...stocked.map((item: any) => String(item.size_label))])];
-    const details = sizes.map((size: any) => {
-      const stock = stocked.find((item: any) => String(item.size_label) === size);
-      return {...stock, id: stock?.id || "new-"+article.id+"-"+size, size_label:size, quantity:Number(stock?.quantity || 0),
-        colours:[...new Set((article.sets || []).flatMap((set: any) => (set.items || []).filter((item: any) => String(item.size_label) === size).flatMap((item: any) => splitColours(item.colours || ""))))]};
-    });
+    const colours = [...new Set<string>((article.sets || []).flatMap((set: any) => (set.items || []).flatMap((item: any) => splitColours(item.colours || ""))))];
+    for (const stock of stocked) if (String(stock.size_label).startsWith('__COLOUR__:')) colours.push(String(stock.size_label).slice(11));
+    const details = [...new Set(colours)].map((colour: string) => ({id: colour, colour, quantity: Number(stocked.find((stock: any) => stock.size_label === '__COLOUR__:' + colour)?.quantity || 0)}));
+    const unassigned = stocked.filter((stock: any) => !String(stock.size_label).startsWith('__COLOUR__:')).reduce((sum: number, stock: any) => sum + Number(stock.quantity), 0);
+    details.push({id: '', colour: '', quantity: unassigned});
     return {id:"finished-article-"+article.id,record_id:article.id,article_code:article.code,article_name:article.name,
       inventory_kind:"finished",type:"Finished goods",item:article.code,
       category:article.category || "",quantity:details.reduce((sum:number,item:any)=>sum+item.quantity,0),
       item_codes:(article.sets || []).flatMap((set:any)=>(set.items || []).map((item:any)=>item.item_code || "")).join(" "),
-      unit:"pcs",details,variant:articleCount ? "Article total" : details.length ? details.length+" sizes" : "Sizes not configured",size_labels:articleCount ? "" : sizes.join(", ")};
+      unit:"pcs",details,variant:colours.length ? [...new Set(colours)].join(", ") : "Unassigned colour",size_labels:""};
   });
   const inventoryRows =
     page === "Inventory Overview"
@@ -1407,6 +1407,7 @@ function SalesPage({
   const rawQuantity = inventoryRows
     .filter((item: any) => item.type === "Raw materials")
     .reduce((sum: number, item: any) => sum + item.quantity, 0);
+  if (page === "Commissions") return <CommissionCategoriesPage token={token} permissions={permissions} />;
   if (inventoryRecord) return <InventoryRecordModal record={inventoryRecord} close={() => setInventoryRecord(null)} save={post} fail={setError} />;
   return (
     <>
@@ -2374,7 +2375,7 @@ function InventoryRecordModal({
 }) {
   const row = record.row;
   const [localError,setLocalError]=useState("");
-  const [updateKey]=useState(()=>crypto.randomUUID());
+
   return (
     <section className="inventory-record-page">
       <form
@@ -2385,9 +2386,10 @@ function InventoryRecordModal({
           const form = new FormData(event.currentTarget);
           try {
             if (row.inventory_kind === "finished") {
-              if (!row.details.length) throw new Error("Configure article sizes in Pricing List before assigning stock.");
-              await save("inventory-count/apply", {import_key:updateKey,reason:form.get("reason"),
-                rows:row.details.map((detail:any)=>({kind:detail.size_label === "__ARTICLE_TOTAL__" ? "article" : "finished",code:row.article_code,size:String(detail.size_label),expected:Number(detail.quantity),quantity:Number(form.get("quantity_"+detail.id))}))});
+              await save('articles/' + row.record_id + '/colour-stock', {
+                expected_total: Number(row.quantity), reason: form.get('reason'),
+                colours: row.details.map((detail: any) => ({colour: detail.colour, quantity: Number(form.get('quantity_' + detail.id))}))
+              }, 'PUT');
             }
             else {
               await save(
@@ -2438,45 +2440,16 @@ function InventoryRecordModal({
             </div>
           </div>
           {record.mode === "edit" && row.inventory_kind === "finished" && <label>Reason for stock update<input name="reason" required minLength={3} maxLength={255} placeholder="Physical stock count / opening inventory" /></label>}
-          {row.inventory_kind === "finished" && !row.details.length && <p role="status">No sizes configured. Add article sizes in Pricing List before assigning quantities.</p>}
           {row.inventory_kind === "finished" ? (
-            <div className="inventory-size-details">
-              <div className="inventory-size-head">
-                <b>Size</b>
-                <b>Colours</b>
-                <b>Assignment</b>
-                <b>Available quantity</b>
-              </div>
-              {(row.details || []).map((detail: any) => (
-                <div className="inventory-size-line" key={detail.id}>
-                  <b>{detail.size_label === "__ARTICLE_TOTAL__" ? "Article stock" : "Size " + detail.size_label}</b>
-                  <div className="inventory-colour-list">
-                    {detail.colours?.length ? (
-                      detail.colours.map((colour: string) => (
-                        <span key={colour}>
-                          <i className="colour-swatch" style={{ background: colourHex(colour) }} />
-                          {colour}
-                        </span>
-                      ))
-                    ) : (
-                      <small>No colour specified</small>
-                    )}
-                  </div>
-                  <span>{String(detail.id).startsWith("new-") ? "Not assigned" : "Assigned"}</span>
-                  {record.mode === "edit" ? (
-                    <input
-                      name={`quantity_${detail.id}`}
-                      type="number"
-                      min="0"
-                      step="1"
-                      defaultValue={detail.quantity}
-                      required
-                    />
-                  ) : (
-                    <strong>{Number(detail.quantity).toLocaleString()} pcs</strong>
-                  )}
-                </div>
-              ))}
+            <div className="colour-stock-editor">
+              <p>Enter the total pieces for each colour, across all sizes. Unassigned keeps stock whose colour has not been recorded.</p>
+              <table><thead><tr><th>Colour</th><th>Current stock</th><th>New stock (pieces)</th></tr></thead><tbody>
+                {row.details.map((detail: any) => <tr key={detail.id || 'unassigned'}>
+                  <td><span className="colour-stock-label"><i className="colour-swatch" style={{background: colourHex(detail.colour)}} />{detail.colour || 'Unassigned'}</span></td>
+                  <td>{Number(detail.quantity).toLocaleString()} pcs</td>
+                  <td>{record.mode === 'edit' ? <input aria-label={'Stock for ' + (detail.colour || 'Unassigned')} name={'quantity_' + detail.id} type="number" min="0" max="999999999" step="1" defaultValue={detail.quantity} required /> : <b>{Number(detail.quantity).toLocaleString()} pcs</b>}</td>
+                </tr>)}
+              </tbody></table>
             </div>
           ) : record.mode === "edit" ? (
             <div className="inventory-edit-fields">
@@ -2535,7 +2508,7 @@ function InventoryRecordModal({
             </button>
             {record.mode === "edit" && (
               <button className="primary" type="submit">
-                <Check /> Save all sizes
+                <Check /> Save stock
               </button>
             )}
           </div>
@@ -5777,11 +5750,7 @@ function SalesCreateModal({
                                   />
                                   <span>
                                     {Number(
-                                      (data.finished_stock || []).slice().sort((a: any, b: any) => Number(b.size_label === "__ARTICLE_TOTAL__") - Number(a.size_label === "__ARTICLE_TOTAL__")).find(
-                                        (stock: any) =>
-                                          Number(stock.article_id) === Number(line.article_id) &&
-                                          (stock.size_label === "__ARTICLE_TOTAL__" || stock.size_label === item.size_label),
-                                      )?.quantity || 0,
+                                      stockAvailability(data.finished_stock || [], line.article_id, item.size_label, line.colour || ""),
                                     ).toLocaleString()}
                                   </span>
                                   {itemColours.length ? (
@@ -5854,11 +5823,7 @@ function SalesCreateModal({
                                   <span><small>Fixed: {money(fixedItemRate(line, item))}</small><br /><b>Given: {money(givenItemRate(line, item))}</b></span>
                                   <span>
                                     {Number(
-                                      (data.finished_stock || []).slice().sort((a: any, b: any) => Number(b.size_label === "__ARTICLE_TOTAL__") - Number(a.size_label === "__ARTICLE_TOTAL__")).find(
-                                        (stock: any) =>
-                                          Number(stock.article_id) === Number(line.article_id) &&
-                                          (stock.size_label === "__ARTICLE_TOTAL__" || stock.size_label === item.size_label),
-                                      )?.quantity || 0,
+                                      stockAvailability(data.finished_stock || [], line.article_id, item.size_label, line.colour || ""),
                                     ).toLocaleString()}
                                   </span>
                                 </div>
@@ -6082,11 +6047,7 @@ function SalesCreateModal({
                   );
                   const stockForSize = (size: any) =>
                     Number(
-                      (data.finished_stock || []).slice().sort((a: any, b: any) => Number(b.size_label === "__ARTICLE_TOTAL__") - Number(a.size_label === "__ARTICLE_TOTAL__")).find(
-                        (stock: any) =>
-                          Number(stock.article_id) === Number(line.article_id) &&
-                          (stock.size_label === "__ARTICLE_TOTAL__" || String(stock.size_label) === String(size)),
-                      )?.quantity || 0,
+                      stockAvailability(data.finished_stock || [], line.article_id, size, line.colour || ""),
                     );
                   return (
                     <div className={`invoice-item-card simple-invoice-item ${article ? "has-article" : "empty-article"}`} key={index}>

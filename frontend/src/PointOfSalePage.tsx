@@ -1,3 +1,4 @@
+import { stockAvailability } from "./stock-availability";
 import { displayCode } from "./representative-reference";
 import FilteredRecords from "./FilteredRecords";
 import { matchesSearch } from "./search";
@@ -129,11 +130,7 @@ export default function PointOfSalePage({
               records={data.items
                 .map((item: any) => {
                   const quantity = Number(
-                    data.stock.slice().sort((a: any, b: any) => Number(b.size_label === "__ARTICLE_TOTAL__") - Number(a.size_label === "__ARTICLE_TOTAL__")).find(
-                      (stock: any) =>
-                        stock.article_id === item.article_id &&
-                        (stock.size_label === "__ARTICLE_TOTAL__" || stock.size_label === item.size_label),
-                    )?.quantity || 0,
+                    stockAvailability(data.stock, item.article_id, item.size_label, item.colour || ""),
                   );
                   return {
                     ...item,
@@ -153,11 +150,7 @@ export default function PointOfSalePage({
                     </p>
                   )}
                   {filteredRows.map((item: any) => {
-                    const stock = data.stock.slice().sort((a: any, b: any) => Number(b.size_label === "__ARTICLE_TOTAL__") - Number(a.size_label === "__ARTICLE_TOTAL__")).find(
-                      (s: any) =>
-                        s.article_id === item.article_id &&
-                        (s.size_label === "__ARTICLE_TOTAL__" || s.size_label === item.size_label),
-                    );
+                    const stock = { quantity: stockAvailability(data.stock, item.article_id, item.size_label, item.colour || "") };
                     return (
                       <button
                         className="pos-product"

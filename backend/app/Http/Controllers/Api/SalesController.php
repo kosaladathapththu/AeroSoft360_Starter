@@ -5,6 +5,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use App\Services\Accounting\CommissionPolicy;
 class SalesController
 {
     public function workspace(): JsonResponse
@@ -201,7 +202,7 @@ class SalesController
             "orders" => $orders,
             "invoices" => $invoices,
             "receipts" => $receipts,
-            "commissions" => $commissions,
+            "commissions" => $commissions->filter(fn ($row) => ($row->commission_category ?? "direct") !== "head_office")->values(),
         ]);
     }
     public function storeCustomer(Request $r): JsonResponse
@@ -1169,8 +1170,8 @@ class SalesController
             ->sum("quantity");
         $collectedRatio = min(1, (float) $d["amount"] / max(0.01, (float) $invoice->total));
         $commissionPieces = round($invoicePieces * $collectedRatio, 4);
-        $rate = (float) ($payee->default_commission_rate ?? 0);
-        $limit = DB::table("commission_settings")->value("max_collection_days") ?? 100;
+        $rate = CommissionPolicy::rate($payee);
+        $limit = CommissionPolicy::days((int) $payee->id);
         $eligible = $days <= (int) $limit;
         $cancelled = $d["commission_decision"] === "cancel";
         $commission = !$cancelled && $eligible ? round($commissionPieces * $rate, 2) : 0;
@@ -1186,6 +1187,7 @@ class SalesController
             "amount" => $d["amount"],
             "days_taken" => $days,
             "commission_pieces" => $commissionPieces,
+            "commission_category" => CommissionPolicy::category($payeeId),
             "commission_rate" => $rate,
             "commission_amount" => $commission,
             "commission_status" => $commissionStatus,

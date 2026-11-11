@@ -225,7 +225,7 @@ final class DashboardService
                 continue;
             }
             $pool = $records->firstWhere('size_label', '__ARTICLE_TOTAL__');
-            $quantity = $pool ? (float) $pool->quantity : (float) $records->sum('quantity');
+            $quantity = (float) $records->sum('quantity');
             $pieces += $quantity;
             if ($quantity <= 0) $out++;
             elseif ($quantity <= 5) $low++;

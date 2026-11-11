@@ -87,4 +87,14 @@ check(DB::table('finished_goods_stock')->sum('quantity')==5 && DB::table('finish
 $book->getSheet(0)->setCellValue('C2','=1+2');(new PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($file);
 try { $controller->preview($request); check(false,'Formula rejected'); }
 catch (Illuminate\Validation\ValidationException $e) { check(str_contains(json_encode($e->errors()),'numbers only'),'Readable formula error'); }
+$service->setColourCounts(1, [['colour'=>'RED','quantity'=>10],['colour'=>'BLUE','quantity'=>5],['colour'=>'','quantity'=>2]], date('Y-m-d'));
+$move->invoke($service,1,'40',-3,'sale','sales_invoice',3,'colour-sale',date('Y-m-d'),true,'RED');
+check(DB::table('finished_goods_stock')->where('size_label','__COLOUR__:RED')->value('quantity')==7,'Sale consumes only selected colour');
+check(DB::table('finished_goods_stock')->where('size_label','__COLOUR__:BLUE')->value('quantity')==5,'Other colour remains unchanged');
+$service->receiveReturn(1,'40',2,2,2,date('Y-m-d'),'RED');
+check(DB::table('finished_goods_stock')->where('size_label','__COLOUR__:RED')->value('quantity')==9,'Return restores original colour');
+try { $move->invoke($service,1,'40',-10,'sale','sales_invoice',4,'colour-shortage',date('Y-m-d'),true,'RED');check(false,'Colour overselling rejected'); }
+catch (Illuminate\Validation\ValidationException $e) {check(true,'Colour overselling rejected');}
+$service->setArticleCount(1,20,date('Y-m-d'));
+check(DB::table('finished_goods_stock')->sum('quantity')==20,'Excel article count replaces colour totals without duplication');
 unlink($file);echo "Passed $checks inventory count checks. No real database changed.\n";

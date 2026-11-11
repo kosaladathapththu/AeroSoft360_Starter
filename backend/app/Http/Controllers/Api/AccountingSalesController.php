@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Accounting\PostingService;
+use App\Services\Accounting\CommissionPolicy;
 use App\Services\Inventory\FinishedGoodsInventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -86,6 +87,7 @@ final class AccountingSalesController extends Controller
             ->select(
                 DB::raw("(-m.id) as id"),
                 "m.id as manual_id",
+                "m.commission_category",
                 "m.sales_rep_id",
                 "m.customer_id",
                 "m.invoice_id",
@@ -107,7 +109,7 @@ final class AccountingSalesController extends Controller
             ->get()
             ->map(fn($row) => (array) $row)
             ->all();
-        $data["commissions"] = array_values(array_merge($manual, $data["commissions"] ?? []));
+        $data["commissions"] = array_values(array_filter(array_merge($manual, $data["commissions"] ?? []), fn ($row) => ($row['commission_category'] ?? 'direct') !== 'head_office'));
         $data["finished_stock"] = Schema::hasTable("finished_goods_stock")
             ? DB::table("finished_goods_stock as stock")
                 ->join("articles as article", "article.id", "=", "stock.article_id")
@@ -158,6 +160,11 @@ final class AccountingSalesController extends Controller
             "commission_amount" => ["nullable", "numeric", "gte:0"],
             "notes" => ["nullable", "string", "max:255"],
         ]);
+        $data['commission_category'] = CommissionPolicy::category((int) $data['sales_rep_id']);
+        CommissionPolicy::guard($request, $data['commission_category']);
+        if ($data['commission_category'] === 'head_office') {
+            $data['commission_rate'] = (float) DB::table('head_office_commission_settings')->value('rate_per_piece');
+        }
         return DB::transaction(function () use ($data, $posting) {
             $data["commission_amount"] = round(
                 (float) $data["basis_amount"] * (float) $data["commission_rate"],
@@ -204,6 +211,7 @@ final class AccountingSalesController extends Controller
 
     public function updateManualCommission(Request $request, int $id): JsonResponse
     {
+        CommissionPolicy::guard($request, DB::table('manual_commissions')->where('id', $id)->value('commission_category') ?? 'direct');
         $data = $request->validate([
             "sales_rep_id" => ["required", "integer", "exists:sales_representatives,id"],
             "customer_id" => ["nullable", "integer", "exists:customers,id"],
@@ -215,6 +223,11 @@ final class AccountingSalesController extends Controller
             "commission_amount" => ["nullable", "numeric", "gte:0"],
             "notes" => ["nullable", "string", "max:255"],
         ]);
+        $data['commission_category'] = CommissionPolicy::category((int) $data['sales_rep_id']);
+        CommissionPolicy::guard($request, $data['commission_category']);
+        if ($data['commission_category'] === 'head_office') {
+            $data['commission_rate'] = (float) DB::table('head_office_commission_settings')->value('rate_per_piece');
+        }
         return DB::transaction(function () use ($data, $id) {
             abort_unless(
                 DB::table("manual_commissions")->where("id", $id)->exists(),
@@ -255,8 +268,9 @@ final class AccountingSalesController extends Controller
         });
     }
 
-    public function deleteManualCommission(int $id): JsonResponse
+    public function deleteManualCommission(Request $request, int $id): JsonResponse
     {
+        CommissionPolicy::guard($request, DB::table('manual_commissions')->where('id', $id)->value('commission_category') ?? 'direct');
         return DB::transaction(function () use ($id) {
             $journalId = DB::table("journal_entries")
                 ->where(["source_type" => "manual_commission", "source_id" => $id])
@@ -275,6 +289,7 @@ final class AccountingSalesController extends Controller
 
     public function updateAutomaticCommission(Request $request, int $id): JsonResponse
     {
+        CommissionPolicy::guard($request, DB::table('receipt_allocations')->where('id', $id)->value('commission_category') ?? 'direct');
         $data = $request->validate([
             "commission_rate" => ["required", "numeric", "gte:0"],
             "commission_amount" => ["required", "numeric", "gte:0"],
@@ -296,8 +311,9 @@ final class AccountingSalesController extends Controller
         });
     }
 
-    public function deleteAutomaticCommission(int $id): JsonResponse
+    public function deleteAutomaticCommission(Request $request, int $id): JsonResponse
     {
+        CommissionPolicy::guard($request, DB::table('receipt_allocations')->where('id', $id)->value('commission_category') ?? 'direct');
         return DB::transaction(function () use ($id) {
             $allocation = DB::table("receipt_allocations")->find($id);
             abort_unless($allocation, 404, "Commission not found.");
@@ -490,9 +506,9 @@ final class AccountingSalesController extends Controller
         });
     }
 
-    public function deleteCustomerPo(int $id): JsonResponse
+    public function deleteCustomerPo(Request $request, int $id): JsonResponse
     {
-        return DB::transaction(function () use ($id) {
+        return DB::transaction(function () use ($request, $id) {
             $po = DB::table("customer_pos")->find($id);
             abort_unless($po, 404, "Customer PO not found.");
             $orderIds = DB::table("sales_orders")->where("customer_po_id", $id)->pluck("id");
@@ -511,7 +527,7 @@ final class AccountingSalesController extends Controller
                 })
                 ->pluck("id");
             foreach ($manualCommissionIds as $commissionId) {
-                $this->deleteManualCommission((int) $commissionId);
+                $this->deleteManualCommission($request, (int) $commissionId);
             }
             foreach ($receiptIds as $receiptId) {
                 $this->deleteReceipt((int) $receiptId);
@@ -991,10 +1007,10 @@ final class AccountingSalesController extends Controller
                     (strtotime($data["receipt_date"]) - strtotime($invoice->invoice_date)) / 86400,
                 ),
             );
-            $limit = (int) (DB::table("commission_settings")->value("max_collection_days") ?? 100);
+            $limit = CommissionPolicy::days((int) $payee->id);
             $eligible = $days <= $limit;
             $cancelled = $data["commission_decision"] === "cancel";
-            $rate = (float) ($payee->default_commission_rate ?? 0);
+            $rate = CommissionPolicy::rate($payee);
             $commission =
                 !$cancelled && $eligible
                     ? round((float) $allocation->commission_pieces * $rate, 2)
@@ -1013,6 +1029,7 @@ final class AccountingSalesController extends Controller
                 ->where("id", $allocation->id)
                 ->update([
                     "commission_payee_sales_rep_id" => $cancelled ? null : $payeeId,
+                    "commission_category" => CommissionPolicy::category($payeeId),
                     "days_taken" => $days,
                     "commission_rate" => $rate,
                     "commission_amount" => $commission,

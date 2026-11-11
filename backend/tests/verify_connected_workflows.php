@@ -134,6 +134,7 @@ $tables["customer_receipts"] = [
     "updated_at",
 ];
 $tables["receipt_allocations"] = [
+    "commission_category",
     "receipt_id",
     "invoice_id",
     "commission_payee_sales_rep_id",

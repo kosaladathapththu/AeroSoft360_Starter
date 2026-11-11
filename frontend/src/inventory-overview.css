@@ -49,3 +49,5 @@
   .inventory-overview-page .inventory-tools-label { display:none; }
   .inventory-overview-page .inventory-manage-links button { flex:1; }
 }
+
+.colour-stock-editor table{width:100%;table-layout:fixed;border-collapse:collapse}.colour-stock-editor th,.colour-stock-editor td{padding:12px 16px;text-align:left;border-bottom:1px solid #dce5e2}.colour-stock-editor th{background:#e9f2ed;color:#214b3d}.colour-stock-label{display:flex;align-items:center;gap:10px;font-weight:700}.colour-stock-editor input{width:100%;max-width:220px;min-height:40px}.colour-stock-editor p{font-size:13px;color:#536c62;margin:12px 0}

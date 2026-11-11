@@ -299,6 +299,11 @@ Route::prefix("v1")->group(function (): void {
             AccountingSalesController::class,
             "deleteReceipt",
         ])->middleware("permission:accounting.manage");
+        Route::get('/commission-categories', [\App\Http\Controllers\Api\CommissionCategoryController::class, 'index'])->middleware('permission:workspace.view');
+        Route::get('/commission-categories/status', [\App\Http\Controllers\Api\CommissionCategoryController::class, 'status'])->middleware('permission:workspace.view');
+        Route::post('/commission-categories/unlock', [\App\Http\Controllers\Api\CommissionCategoryController::class, 'unlock'])->middleware(['permission:workspace.view', 'throttle:5,1']);
+        Route::post('/commission-categories/lock', [\App\Http\Controllers\Api\CommissionCategoryController::class, 'lock'])->middleware('permission:workspace.view');
+        Route::put('/commission-categories/settings', [\App\Http\Controllers\Api\CommissionCategoryController::class, 'settings'])->middleware(['permission:admin.manage', 'throttle:5,1']);
         Route::post("/commissions/manual", [
             AccountingSalesController::class,
             "manualCommission",
@@ -323,6 +328,7 @@ Route::prefix("v1")->group(function (): void {
             AccountingSalesController::class,
             "updateCommissionSettings",
         ])->middleware("permission:accounting.manage");
+        Route::put('/articles/{id}/colour-stock', [\App\Http\Controllers\Api\ColourStockController::class, 'update'])->middleware('permission:stock.manage');
         Route::post("/finished-stock-adjustments", [
             AccountingSalesController::class,
             "adjustFinishedStock",
