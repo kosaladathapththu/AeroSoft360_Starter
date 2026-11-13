@@ -5,6 +5,28 @@ Account: /home/camymarket
 
 This ZIP updates the application files. Creating it does not deploy anything.
 
+Latest 13 November update: customer/supplier/product ledger selection uses a
+visible searchable list with empty-state feedback. Ledger movements show all
+matching rows without Next/Previous pagination. The app and public login pages
+include the copyright footer and linked Supun IT Solutions credit. PHP 8.5
+database configuration avoids deprecated constants that corrupted login JSON.
+Includes multi-line journals and journal reversal described below.
+No new database migration or SQL import is required for these changes.
+
+13 November: New Journal Entry supports multiple account rows with individual
+debits, credits and optional memos. Add/remove lines and review live totals;
+each line must have one positive debit or credit, and totals must balance.
+This form update needs no migration or SQL import.
+
+12 November journal reversal update: General Ledger now offers Reverse for
+posted manual journals and account opening journals. Enter a posting date and
+reason, then confirm. The original entry stays posted; a linked opposite entry
+offsets it. Repeat requests return the existing reversal. Posted journals cannot
+be deleted. Other system journals must be reversed through their source workflow.
+No migration or SQL import is required for this journal reversal update.
+After upload, run config:clear, route:clear and view:clear, then hard-refresh.
+Uploading this package does not reverse JV-2611-0354 or change any balance.
+
 Latest update (10 November): compact invoice entry; dashboard simplification;
 transparent Y-mac logo in the top navigation; refined sidebar brand text;
 article-level quotations using the original active article catalog, available

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import SiteFooter from "./SiteFooter";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Boxes, Building2, Check, ChevronRight, Clock3, Eye, EyeOff, Layers3, Loader2, LockKeyhole, Rocket, ShieldCheck, ShoppingBag, Wallet } from "lucide-react";
 import "./portal-tailwind.css";
 import "./company-portal.css";
@@ -82,9 +83,7 @@ export function HomePage() {
 }
 
 function PortalFooter() {
-  return <footer className="portal-footer tw:mx-auto tw:flex tw:max-w-7xl tw:flex-wrap tw:items-center tw:justify-between tw:gap-3 tw:px-6 tw:py-6 tw:md:px-10">
-    <span>© {new Date().getFullYear()} Supun Group of Companies</span><span>Independent businesses. A connected future.</span>
-  </footer>;
+  return <SiteFooter owner="Supun Group of Companies" />;
 }
 
 function CompanyLayout({ company, children }: { company: PortalCompany; children: React.ReactNode }) {

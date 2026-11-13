@@ -948,16 +948,19 @@ export function WorkflowTable({
   columns,
   actions,
   minimumRows = 1,
+  paginate = true,
 }: {
   values: any[];
   columns: Column[];
   actions?: (row: any) => ReactNode;
   minimumRows?: number;
+  paginate?: boolean;
 }) {
   const availableFields = recordFields(values);
   return (
     <FilteredRecords
       records={values}
+      paginate={paginate}
       minimumRows={minimumRows}
       title="records"
       key={columns.map(([key]) => key).join(",")}
@@ -1887,6 +1890,13 @@ function Subledger({
     [data, setData] = useState<any>(null),
     [error, setError] = useState("");
   const output = useRef<HTMLDivElement>(null);
+  const [partySearch, setPartySearch] = useState("");
+  useEffect(() => {
+    setKind(page === "Customer Ledgers" ? "customer" : page === "Supplier Ledgers" ? "supplier" : "raw");
+    setId("");
+    setVariant("");
+    setPartySearch("");
+  }, [page]);
   useEffect(() => {
     let active = true;
     financeRequest(api, token, `business-workflows?as_of=${today()}`)
@@ -1931,6 +1941,7 @@ function Subledger({
             : "articles"
     ] || [];
   const stock = kind === "raw" || kind === "finished";
+  const matchingParties = options.filter((option: any) => matchesSearch([displayCode(option), ...Object.values(option)], partySearch));
   const columns: Column[] = stock
     ? [
         ["date", "Date"],
@@ -1978,23 +1989,23 @@ function Subledger({
             </select>
           </label>
         )}
-        <label className="ledger-party-field">
+        <div className="ledger-party-field">
+          <label htmlFor="ledger-party-search">
           {stock ? "Product" : "Party"}
-          <ItemSearchSelect
-            value={id}
-            onChange={(e) => {
-              setId(e.target.value);
-              setVariant("");
-            }}
-          >
-            <option value="">Choose {stock ? "product" : "party"}</option>
-            {options.map((o: any) => (
-              <option key={o.id} value={o.id}>
-                {displayCode(o)} · {o.name}
-              </option>
-            ))}
-          </ItemSearchSelect>
-        </label>
+          <input id="ledger-party-search" type="search" value={partySearch}
+            placeholder={`Search ${stock ? "product" : kind} name or code`}
+            onChange={event => setPartySearch(event.target.value)} />
+          </label>
+          <div className="ledger-party-results" aria-label={`Choose ${stock ? "product" : kind}`}>
+            {!metadata ? <p role="status">{error ? "Could not load the list." : "Loading records…"}</p> :
+              matchingParties.length ? matchingParties.map((option: any) => <button
+                key={option.id} type="button" aria-pressed={id === String(option.id)}
+                onClick={() => { setId(String(option.id)); setVariant(""); }}>
+                <strong>{displayCode(option)}</strong><span>{option.name}</span>
+                {id === String(option.id) && <Check size={16} aria-label="Selected" />}
+              </button>) : <p role="status">No matching {stock ? "products" : `${kind}s`} in this database. Try another name or code.</p>}
+          </div>
+        </div>
         {stock && (
           <label>
             Batch / size (optional)
@@ -2050,6 +2061,7 @@ function Subledger({
       {!id && (
         <p>Choose a {stock ? "product" : "customer/supplier"} to view its linked movements.</p>
       )}
+      {id && !data && !error && from <= to && <p role="status">Loading ledger movements…</p>}
       {data && (
         <div ref={output} className="subledger-output">
           <h2>
@@ -2061,6 +2073,7 @@ function Subledger({
           </div>
           <WorkflowTable
             values={data.rows.filter((r: any) => matchesSearch(r, search))}
+            paginate={false}
             columns={columns}
             actions={(r) => <button onClick={() => go(r.source_page)}>Open source module →</button>}
           />

@@ -1,6 +1,9 @@
 import { stockAvailability } from "./stock-availability";
 import CommissionCategoriesPage from "./CommissionCategoriesPage";
 import ItemSearchSelect from "./ItemSearchSelect";
+import SiteFooter from "./SiteFooter";
+import JournalEntryLines from "./JournalEntryLines";
+import { emptyJournalLine, journalPayload } from "./journal-draft";
 import DashboardOverview from "./DashboardOverview";
 import CustomerOrderContext from "./CustomerOrderContext";
 import OrderCustomerPicker from "./OrderCustomerPicker";
@@ -797,6 +800,18 @@ export default function App() {
                       edit={setEditing}
                       view={setViewing}
                       remove={remove}
+                      reverse={can("accounting.manage") ? async (row) => {
+                        const journal = row as Journal;
+                        const posting_date = prompt("Reversal posting date (YYYY-MM-DD)", new Date().toLocaleDateString("en-CA"));
+                        if (!posting_date) return;
+                        const reason = prompt(`Reason for reversing ${journal.number}`, "Correction of journal entry");
+                        if (!reason?.trim()) return;
+                        if (!(await confirmDialog(`Reverse ${journal.number} on ${posting_date}? This posts an equal and opposite journal and preserves the original.`))) return;
+                        try {
+                          setError("");
+                          await call(`/journals/${row.id}/reverse`, { posting_date, reason });
+                        } catch (e) { setError((e as Error).message); }
+                      } : undefined}
                       receive={
                         profile.permissions.includes("stock.manage")
                           ? (id) => goToPage("Receive Goods", { orderId: id })
@@ -810,6 +825,7 @@ export default function App() {
           )}
         </section>
         <div id="workspace-entry-root" />
+        <SiteFooter />
       </main>
       {modal && (
         <CreateModal
@@ -6967,6 +6983,7 @@ function Records({
   edit,
   remove,
   receive,
+  reverse,
 }: {
   page: string;
   rows: RecordRow[];
@@ -6975,6 +6992,7 @@ function Records({
   edit: (row: RecordRow) => void;
   remove: (row: RecordRow) => void;
   receive?: (id: number) => void;
+  reverse?: (row: RecordRow) => void;
 }) {
   let heads: string[] = [];
   if (page === "Suppliers")
@@ -7096,14 +7114,18 @@ function Records({
                           >
                             <Pencil />
                           </button>
-                          <button
+                          {(page !== "General Ledger" || row.status !== "posted") && <button
                             className="icon-action delete"
                             title="Delete"
                             onClick={() => remove(row)}
                           >
                             <Trash2 />
-                          </button>
+                          </button>}
                         </>
+                      )}
+                      {page === "General Ledger" && reverse && row.status === "posted" &&
+                        ["manual_journal", "account_opening"].includes(row.source_type) && (
+                        <button className="secondary-action" onClick={() => reverse(row)}>Reverse</button>
                       )}
                     </div>
                   </td>
@@ -7134,6 +7156,7 @@ function CreateModal({
   submit: (url: string, body: any) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [journalLines, setJournalLines] = useState([emptyJournalLine(), emptyJournalLine()]);
   const [purchaseLines, setPurchaseLines] = useState<PurchaseDraftLine[]>([
     { material_id: 0, quantity: "", unit_cost: "" },
   ]);
@@ -7184,10 +7207,7 @@ function CreateModal({
         await submit("/journals", {
           posting_date: f.get("posting_date"),
           description: f.get("description"),
-          lines: [
-            { account_code: f.get("debit_account"), debit: Number(f.get("amount")), credit: 0 },
-            { account_code: f.get("credit_account"), debit: 0, credit: Number(f.get("amount")) },
-          ],
+          lines: journalPayload(journalLines),
         });
       if (type === "stock_adjustment")
         await submit("/stock-adjustments", {
@@ -7342,43 +7362,12 @@ function CreateModal({
                 defaultValue={new Date().toISOString().slice(0, 10)}
               />
             </label>
-            <label>
-              Amount (LKR)
-              <input name="amount" required type="number" min="0.01" step="0.01" />
-            </label>
           </div>
           <label>
             Description
             <input name="description" required maxLength={255} />
           </label>
-          <div className="form-row">
-            <label>
-              Debit account
-              <select name="debit_account" required defaultValue="">
-                <option value="" disabled>
-                  Select account
-                </option>
-                {data.accounts.map((account) => (
-                  <option value={account.code} key={account.id}>
-                    {displayCode(account)} — {account.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Credit account
-              <select name="credit_account" required defaultValue="">
-                <option value="" disabled>
-                  Select account
-                </option>
-                {data.accounts.map((account) => (
-                  <option value={account.code} key={account.id}>
-                    {displayCode(account)} — {account.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <JournalEntryLines accounts={data.accounts} lines={journalLines} change={setJournalLines} />
         </>
       )}
     </ModalShell>

@@ -384,6 +384,7 @@ Route::prefix("v1")->group(function (): void {
         Route::post("/stock-adjustments", [StockAdjustmentController::class, "store"])->middleware(
             "permission:stock.manage",
         );
+        Route::post('/journals/{journal}/reverse', [JournalController::class, 'reverse'])->middleware('permission:accounting.manage');
         Route::post("/journals", [JournalController::class, "store"])->middleware(
             "permission:accounting.manage",
         );
