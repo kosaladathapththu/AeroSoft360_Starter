@@ -5,6 +5,11 @@ const assert = require("node:assert/strict");
 const ts = require("typescript");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
+const footerModule = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/SiteFooter.tsx'), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 },
+}).outputText, { exports: footerModule, require: name => name.endsWith('.css') ? {} : require(name) });
+const componentRequire = name => name === './SiteFooter' ? footerModule : require(name);
 const source = fs.readFileSync(
   path.join(__dirname, "../src/CompanyPortal.tsx"),
   "utf8",
@@ -19,7 +24,7 @@ const code = ts.transpileModule(source, {
 const mod = {};
 vm.runInNewContext(code, {
   exports: mod,
-  require: (name) => (name.endsWith(".css") ? {} : require(name)),
+  require: (name) => (name.endsWith(".css") ? {} : componentRequire(name)),
 });
 const home = renderToStaticMarkup(React.createElement(mod.HomePage));
 const login = renderToStaticMarkup(
@@ -94,7 +99,7 @@ async function checkLogin(status, result, expected) {
                 ];
               },
             }
-          : require(name),
+          : componentRequire(name),
   });
   const tree = fixture.SignInPage({
     api: "/api",

@@ -1,7 +1,7 @@
 import { displayCode } from "./representative-reference";
 import { matchesSearch } from "./search";
 import FilteredRecords from "./FilteredRecords";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileDown, Loader2, RefreshCw } from "lucide-react";
 import {
   activityLabel,
@@ -29,7 +29,10 @@ export default function CashFlowPage({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [activity, setActivity] = useState("all");
+  const [accountId, setAccountId] = useState("");
+  const requestVersion = useRef(0);
   const load = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!from || !to || from > to) {
       setError("Choose a valid date range.");
       return;
@@ -37,13 +40,14 @@ export default function CashFlowPage({
     setBusy(true);
     setError("");
     try {
-      setData(await financeRequest(api, token, `cash-flow?from=${from}&to=${to}`));
+      const result = await financeRequest(api, token, `cash-flow?from=${from}&to=${to}${accountId ? `&account_id=${accountId}` : ""}`);
+      if (version === requestVersion.current) setData(result);
     } catch (err) {
-      setError((err as Error).message);
+      if (version === requestVersion.current) setError((err as Error).message);
     } finally {
-      setBusy(false);
+      if (version === requestVersion.current) setBusy(false);
     }
-  }, [api, token, from, to]);
+  }, [api, token, from, to, accountId]);
   useEffect(() => {
     load();
   }, [load]);
@@ -67,6 +71,14 @@ export default function CashFlowPage({
       </div>
       <div className="finance-toolbar">
         <label>
+          Cash / bank account
+          <select value={accountId} onChange={event => { setAccountId(event.target.value); setActivity("all"); }}>
+            <option value="">All cash and bank accounts</option>
+            {(data?.available_accounts || data?.accounts || []).map((account: any) =>
+              <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}
+          </select>
+        </label>
+        <label>
           From
           <input
             type="date"
@@ -89,10 +101,12 @@ export default function CashFlowPage({
         </button>
         <button
           className="secondary-action"
-          disabled={!data || busy || data.period.from !== from || data.period.to !== to}
+          disabled={!data || busy || data.period.from !== from || data.period.to !== to || String(data.account_id ?? "") !== accountId}
           onClick={() =>
-            financeCsv(`Cash_Flow_${from}_to_${to}.csv`, [
+            financeCsv(`Cash_Flow_${accountId || "All"}_${from}_to_${to}.csv`, [
               ["Cash flow report", from, to],
+              ["Account", accountId ? `${data.accounts[0]?.code} - ${data.accounts[0]?.name}` : "All cash and bank accounts"],
+              ["Basis", accountId ? "Includes transfers into/out of selected account; same-period cancelled vouchers excluded" : "Internal cash/bank transfers excluded"],
               ["Opening cash / bank", data.opening_balance],
               ["Operating", data.operating],
               ["Investing", data.investing],
@@ -155,11 +169,15 @@ export default function CashFlowPage({
           <Loader2 /> Calculating posted movements…
         </div>
       )}
-      {data && !busy && (
+      {data && !busy && !error && String(data.account_id ?? "") === accountId && (
         <>
           <p className="finance-period">
             {data.period.from} to {data.period.to}
+            {accountId && <> · {data.accounts[0]?.code} — {data.accounts[0]?.name}</>}
           </p>
+          <p className="report-note">{accountId
+            ? "Selected account: receipts include money transferred from banks and other cash accounts. Cancelled vouchers and their reversals within this period are excluded from receipts and payments."
+            : "Combined company cash flow: transfers between cash and bank accounts are excluded. Select an account to view its receipts and payments including transfers."}</p>
           <div className="cash-flow-kpis">
             <article>
               <span>Opening cash &amp; bank</span>
@@ -186,7 +204,7 @@ export default function CashFlowPage({
           )}
           <div className="cash-flow-panels">
             <section>
-              <h2>Cash-flow statement</h2>
+              <h2>{accountId ? "Account receipts and payments" : "Cash-flow statement"}</h2>
               <dl>
                 {["operating", "investing", "financing", "unclassified"].map((key) => (
                   <div key={key}>
@@ -211,8 +229,8 @@ export default function CashFlowPage({
             <section>
               <h2>Cash &amp; bank accounts</h2>
               <p>
-                Balances include internal transfers; the statement excludes transfers between these
-                accounts.
+                {accountId ? "This account balance includes transfers received and payments made."
+                  : "Balances include internal transfers; the statement excludes transfers between these accounts."}
               </p>
               {data.accounts.length === 0 && (
                 <p>No accounts are marked as cash/bank. Set them up in the Chart of Accounts.</p>

@@ -5,6 +5,17 @@ Account: /home/camymarket
 
 This ZIP updates the application files. Creating it does not deploy anything.
 
+Latest follow-up: invoices show article and colour without size columns; matching
+article/colour/rate rows are combined for display only. Stock size records remain
+unchanged. Full record lists replace Next/Previous pagination across the app.
+Cash Flow includes an optional cash/bank account selector and correct treatment
+of opening reversals. General Ledger offers permanent deletion of manual and
+account-opening journals together with their linked reversal and lines. Deletion
+requires a reason and confirmation, retains an audit snapshot, and is blocked in
+closed periods. Source-generated invoice/payment journals are handled in their
+source modules. Uploading this package does not delete any transaction.
+These follow-up changes require no new migration or database import.
+
 Latest 13 November update: customer/supplier/product ledger selection uses a
 visible searchable list with empty-state feedback. Ledger movements show all
 matching rows without Next/Previous pagination. The app and public login pages

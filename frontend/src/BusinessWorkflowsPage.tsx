@@ -948,7 +948,7 @@ export function WorkflowTable({
   columns,
   actions,
   minimumRows = 1,
-  paginate = true,
+  paginate = false,
 }: {
   values: any[];
   columns: Column[];

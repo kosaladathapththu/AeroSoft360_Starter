@@ -229,7 +229,8 @@ final class AccountController
         $data = $r->validate([
             "from" => "required|date",
             "to" => "required|date|after_or_equal:from",
+            "account_id" => "nullable|integer|exists:accounts,id",
         ]);
-        return response()->json($service->report($data["from"], $data["to"]));
+        return response()->json($service->report($data["from"], $data["to"], isset($data['account_id']) ? (int) $data['account_id'] : null));
     }
 }

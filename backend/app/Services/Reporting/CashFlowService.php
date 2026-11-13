@@ -6,10 +6,44 @@ use Illuminate\Support\Facades\DB;
 
 final class CashFlowService
 {
-    public function report(string $from, string $to): array
+    public function report(string $from, string $to, ?int $accountId = null): array
     {
         $accounts = DB::table("accounts")->orderBy("code")->get()->keyBy("id");
         $cashIds = $accounts->filter(fn($a) => AccountPolicy::cash($a))->keys()->all();
+        $availableAccounts = $accounts->only($cashIds)->values()
+            ->map(fn ($account) => ['id' => (int) $account->id, 'code' => $account->code, 'name' => $account->name])->all();
+        if ($accountId !== null) {
+            abort_unless(in_array($accountId, $cashIds), 422, 'Select a cash/bank account.');
+            $cashIds = [$accountId];
+        }
+        // In an account view, suppress voucher/cancellation pairs wholly inside the
+        // period. Their closing effect is zero; cross-period cancellations stay dated.
+        $cancelledIds = [];
+        if ($accountId !== null) {
+            $pairs = DB::table('journal_entries as reversal')
+                ->join('journal_entries as original', 'original.source_id', '=', 'reversal.source_id')
+                ->where('reversal.source_type', 'payment_voucher_reversal')
+                ->where('original.source_type', 'payment_voucher')
+                ->where('reversal.status', 'posted')->where('original.status', 'posted')
+                ->whereBetween('original.posting_date', [$from, $to])
+                ->whereBetween('reversal.posting_date', [$from, $to])
+                ->select('original.id as original_id', 'reversal.id as reversal_id')->get();
+            foreach ($pairs as $pair) {
+                $cancelledIds[] = (int) $pair->original_id;
+                $cancelledIds[] = (int) $pair->reversal_id;
+            }
+        }
+        $isCancelled = $cancelledIds ? 'j.id IN (' . implode(',', $cancelledIds) . ')' : '1=0';
+        // A reversal of an opening balance is an opening correction, not a cash payment.
+        // Keep both entries dated so reports before the reversal retain their history.
+        $openingIds = DB::table('journal_entries')
+            ->where('source_type', 'account_opening')
+            ->orWhere(function ($query) {
+                $query->where('source_type', 'journal_reversal')->whereIn('source_id',
+                    DB::table('journal_entries')->select('id')->where('source_type', 'account_opening'));
+            })
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $isOpening = $openingIds ? 'j.id IN (' . implode(',', $openingIds) . ')' : '1=0';
         $balances = DB::table("journal_lines as l")
             ->join("journal_entries as j", "j.id", "=", "l.journal_entry_id")
             ->where("j.status", "posted")
@@ -17,15 +51,15 @@ final class CashFlowService
             ->whereDate("j.posting_date", "<=", $to)
             ->select("l.account_id")
             ->selectRaw(
-                "SUM(CASE WHEN j.posting_date < ? OR j.source_type = 'account_opening' THEN l.debit-l.credit ELSE 0 END) as opening",
+                "SUM(CASE WHEN j.posting_date < ? OR ($isOpening) THEN l.debit-l.credit ELSE 0 END) as opening",
                 [$from],
             )
             ->selectRaw(
-                "SUM(CASE WHEN j.posting_date >= ? AND COALESCE(j.source_type,'') <> 'account_opening' THEN l.debit ELSE 0 END) as receipts",
+                "SUM(CASE WHEN j.posting_date >= ? AND NOT ($isOpening) AND NOT ($isCancelled) THEN l.debit ELSE 0 END) as receipts",
                 [$from],
             )
             ->selectRaw(
-                "SUM(CASE WHEN j.posting_date >= ? AND COALESCE(j.source_type,'') <> 'account_opening' THEN l.credit ELSE 0 END) as payments",
+                "SUM(CASE WHEN j.posting_date >= ? AND NOT ($isOpening) AND NOT ($isCancelled) THEN l.credit ELSE 0 END) as payments",
                 [$from],
             )
             ->selectRaw("SUM(l.debit-l.credit) as closing")
@@ -58,11 +92,8 @@ final class CashFlowService
             ->join("journal_entries as j", "j.id", "=", "l.journal_entry_id")
             ->where("j.status", "posted")
             ->whereBetween("j.posting_date", [$from, $to])
-            ->where(
-                fn($q) => $q
-                    ->whereNull("j.source_type")
-                    ->orWhere("j.source_type", "<>", "account_opening"),
-            )
+            ->whereNotIn('j.id', $openingIds)
+            ->whereNotIn('j.id', $cancelledIds)
             ->whereIn("j.id", $cashJournals)
             ->select(
                 "l.*",
@@ -188,6 +219,8 @@ final class CashFlowService
             "outflows" => round($outflows, 2),
             "reconciliation_difference" => round($opening + $net - $closing, 2),
             "accounts" => $accountRows,
+            "account_id" => $accountId,
+            "available_accounts" => $availableAccounts,
             "movements" => $movements,
             "transfers" => $transfers,
             "method" =>

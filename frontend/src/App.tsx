@@ -412,7 +412,15 @@ export default function App() {
           : page === "General Ledger"
             ? "journal"
             : "purchase order";
-    if (!(await confirmDialog(`Delete this ${kind}? This action cannot be undone.`))) return;
+    let deleteBody: { reason: string } | undefined;
+    if (page === "General Ledger") {
+      const reason = prompt("Reason for permanently deleting this journal and its linked original/reversal", "Entered by mistake");
+      if (!reason?.trim()) return;
+      deleteBody = { reason: reason.trim() };
+    }
+    if (!(await confirmDialog(page === "General Ledger"
+      ? "Permanently delete this journal, its original/linked reversal and all their lines? This changes balances and reports, including historical dates. A deletion audit record is retained. This cannot be undone."
+      : `Delete this ${kind}? This action cannot be undone.`))) return;
     const path =
       page === "Suppliers"
         ? `/suppliers/${row.id}`
@@ -423,7 +431,7 @@ export default function App() {
             : `/purchase-orders/${row.id}`;
     try {
       setError("");
-      await call(path, undefined, "DELETE");
+      await call(path, deleteBody, "DELETE");
     } catch (e) {
       setError((e as Error).message);
     }
@@ -1705,9 +1713,9 @@ function SalesPage({
           </FilteredRecords>
         </div>
       ) : (
-        <FilteredRecords records={rows} title="records" minimumRows={page === "Pricing List" ? 5 : 1} paginate={page !== "Invoices"} customerSearch={page === "Invoices"} key={page + collectionView}>
+        <FilteredRecords records={rows} title="records" minimumRows={page === "Pricing List" ? 5 : 1} paginate={false} customerSearch={page === "Invoices"} key={page + collectionView}>
           {(filteredRows, filtersActive) => (
-            <InvoicePagination records={filteredRows} enabled={page === "Invoices"}>
+            <InvoicePagination records={filteredRows} enabled={false}>
               {(pageRows) => (
             <div
               ref={salesTableRef}
@@ -7114,7 +7122,7 @@ function Records({
                           >
                             <Pencil />
                           </button>
-                          {(page !== "General Ledger" || row.status !== "posted") && <button
+                          {page !== "General Ledger" && <button
                             className="icon-action delete"
                             title="Delete"
                             onClick={() => remove(row)}
@@ -7126,6 +7134,10 @@ function Records({
                       {page === "General Ledger" && reverse && row.status === "posted" &&
                         ["manual_journal", "account_opening"].includes(row.source_type) && (
                         <button className="secondary-action" onClick={() => reverse(row)}>Reverse</button>
+                      )}
+                      {page === "General Ledger" && reverse &&
+                        ["manual_journal", "account_opening", "journal_reversal"].includes(row.source_type) && (
+                        <button className="icon-action delete" title="Delete journal and linked original/reversal" aria-label={`Delete ${row.number} and linked original/reversal`} onClick={() => remove(row)}><Trash2 /></button>
                       )}
                     </div>
                   </td>

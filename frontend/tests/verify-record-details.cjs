@@ -7,10 +7,12 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const mod = {};
 const representative = {};
+const invoiceLines = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/invoice-display-lines.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports: invoiceLines });
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/representative-reference.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports: representative });
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/RecordDetails.tsx'), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 },
-}).outputText, { exports: mod, require: (name) => name === './representative-reference' ? representative : name === './finance-utils' ? { financeMoney: (value) => 'LKR ' + Number(value).toFixed(2) } : require(name) });
+}).outputText, { exports: mod, require: (name) => name === './invoice-display-lines' ? invoiceLines : name === './representative-reference' ? representative : name === './finance-utils' ? { financeMoney: (value) => 'LKR ' + Number(value).toFixed(2) } : require(name) });
 const render = (row, page = 'Invoices') => renderToStaticMarkup(React.createElement(mod.default, { page, row, close() {} }));
 const opening = render({ number: 'AR-25225-9e740e8be94a', original_invoice_number: '25225', customer_id: 163, sales_rep_id: 7, customer_name: 'THEJAN SP', is_opening_balance: true, total: '63400.00', received_amount: '0.00', outstanding: '63400.00', subtotal: '0.00', due_date: null, lines: [] });
 assert(opening.includes('Invoice 25225') && !opening.includes('9e740e8be94a'));
@@ -21,6 +23,7 @@ assert.equal(mod.readableReference({ number: 'AR-123-abcdef123456', is_opening_b
 const invoice = render({ number: 'INV-001', total: '200', lines: [{ article_name: 'Sandal', size_label: '40', quantity: '2', fixed_rate: '95', rate: '100', line_total: '200' }] });
 assert(invoice.includes('Fixed rate / piece') && invoice.includes('Given rate / piece') && invoice.includes('Sandal'));
 assert(!invoice.includes('NaN') && !invoice.includes('[object Object]'));
+assert(!invoice.includes('<th>Size</th>'));
 assert.equal(mod.detailValue('is_opening_balance', 0), 'No');
 assert(render({ number: 'PO-1', lines: [] }, 'Customer POs').includes('No item lines recorded'));
 assert.equal(representative.representativeReference({id: 7, code: 'AR-R-581832950537'}), 'REP-007');
