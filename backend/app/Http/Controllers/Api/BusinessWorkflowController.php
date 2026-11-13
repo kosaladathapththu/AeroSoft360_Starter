@@ -526,6 +526,7 @@ final class BusinessWorkflowController
             "name" => "required|string|max:80",
         ]);
         $d["name"] = trim($d["name"]);
+        abort_if($d["kind"] === "category" && strtoupper($d["name"]) === "UNCATEGORIZED", 422, "Enter a real category name.");
         abort_if($d["name"] === "", 422, "Enter a name.");
         abort_if(
             $d["kind"] === "unit" && strlen($d["name"]) > 20,

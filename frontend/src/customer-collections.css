@@ -1,0 +1,399 @@
+﻿.customer-collection-form { min-width: 0; }
+.collection-input-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; }
+.collection-input-grid label { margin: 0 !important; display: grid; gap: 6px; align-content: start; }
+.collection-payment-panel { border-top: 3px solid #217d65; }
+.collection-customer-balance, .collection-allocation-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; background: #eaf6ef; border: 1px solid #b3d6c2; border-radius: 8px; margin-top: 14px; color: #20513f; }
+.collection-customer-balance strong { font-size: 20px; }
+.collection-invoice-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.collection-invoice-toolbar h3 { margin: 0 auto 0 0; }
+.collection-invoice-toolbar > input { flex: 1; min-width: 180px; }
+.collection-invoice-toolbar > select { max-width: 290px; }
+.collection-invoice-toolbar label { display: flex; align-items: center; gap: 10px; margin: 0; }
+.collection-cheque-panel { padding: 16px; margin: 16px 0 0; border: 1px solid #e2c392; border-left: 4px solid #b67619; border-radius: 8px; background: #fff9ed; }
+.collection-cheque-panel > b { display: block; margin-bottom: 12px; }
+.collection-cheque-panel p { margin: 10px 0 0; font-size: 12px; color: #79541f; }
+.collection-table-scroll { overflow-x: auto; border: 1px solid #c7d8df; border-radius: 8px; }
+.collection-table-scroll table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.collection-table-scroll th { background: #edf2f4; font-size: 11px; text-transform: uppercase; text-align: left; }
+.collection-table-scroll td, .collection-table-scroll th { padding: 10px 12px; border-bottom: 1px solid #dce5e9; vertical-align: middle; }
+.collection-table-scroll small { display: block; color: #58717e; margin-top: 4px; line-height: 1.4; }
+.collection-allocation-table td:nth-child(4), .collection-allocation-table td:nth-child(5), .collection-allocation-table td:nth-child(6), .collection-allocation-table td:nth-child(7) { white-space: nowrap; }
+.collection-allocation-table input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: #157559; }
+.collection-selected-row { background: #eef8f1 !important; }
+.collection-commission-check { display: flex !important; align-items: center; gap: 7px; margin: 0 !important; white-space: nowrap; }
+.collection-allocation-summary { flex-wrap: wrap; }
+.collection-allocation-summary span { font-size: 13px; }
+.collection-register { margin: 14px 0; }
+.collection-register-rows { max-height: 420px; overflow-y: auto; }
+.collection-register-actions { display: flex; gap: 6px; }
+.collection-register-actions button { padding: 7px 10px; font-size: 12px; }
+.collection-action-panel { margin: 12px 0; }
+.collection-action-message { padding: 12px; border: 1px solid #a2cbbb; background: #edf8f2; border-radius: 6px; }
+@media(max-width: 1000px) { .collection-input-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media(max-width: 600px) { .collection-input-grid { grid-template-columns: 1fr; } .collection-customer-balance { align-items: flex-start; flex-direction: column; gap: 6px; } }
+.collection-customer-balance small { display: block; font-size: 12px; margin-top: 4px; color: #56756a; }
+.shell .collection-invoice-toolbar button.secondary { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 8px 12px; border: 1px solid #abc9bc; border-radius: 7px; background: #eef7f0; color: #256044; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.shell .collection-invoice-toolbar button.secondary:hover { background: #dcefe3; border-color: #4c9271; }
+.shell .collection-invoice-toolbar button:disabled { opacity: .5; cursor: default; }
+.shell .collection-register .primary { border: 1px solid #116947; background: #167652; color: white; border-radius: 7px; padding: 8px 12px; }
+.shell .collection-register .danger { border: 1px solid #d9a69e; background: #fceeea; color: #a13326; border-radius: 7px; padding: 8px 12px; }
+.collection-manual-payment { display: grid; gap: 5px; min-width: 150px; }
+.collection-manual-payment input { width: 150px; min-height: 38px; padding: 8px 10px; font-size: 14px; border: 1px solid #759c8b; border-radius: 6px; background: white; }
+.shell .collection-manual-payment button.secondary { padding: 4px 8px; min-height: 28px; border: 1px solid #b4cdbc; border-radius: 5px; color: #28633f; background: #edf7ef; font-size: 11px; cursor: pointer; }
+.collection-manual-payment input:disabled, .collection-manual-payment button:disabled { opacity: .5; cursor: default; }
+
+/* Collections: one high-contrast forest, slate and amber palette. */
+@media screen {
+  .shell .record-workspace-page:has(.collection-modal) {
+    background: #eef2f0;
+    border-radius: 12px;
+  }
+  .shell .modal.collection-modal {
+    border: 1px solid #b6c6be;
+    border-top: 4px solid #176344;
+    background: #fff;
+    color: #182f29;
+  }
+  .shell .modal.collection-modal > .popup-header {
+    background: #fff;
+    border-bottom: 1px solid #bdcec5;
+  }
+  .shell .modal.collection-modal .popup-header h2 { color: #193e30; }
+  .shell .modal.collection-modal > .popup-body { background: #eef2f0; }
+  .shell .modal.collection-modal > .popup-footer {
+    background: #fff;
+    border-top: 1px solid #bdcec5;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-section,
+  .shell .collection-register.collection-section {
+    background: #fff;
+    border: 1px solid #b8cac0;
+    box-shadow: 0 2px 5px #203c2c0a;
+  }
+  .shell :is(.customer-collection-form, .collection-register) h3 {
+    color: #183d2e;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+  .shell .modal.collection-modal .collection-section label,
+  .shell .collection-register label {
+    color: #283e35;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .shell .customer-collection-form .collection-payment-panel {
+    border-top: 3px solid #176344;
+  }
+  .shell :is(.customer-collection-form, .collection-register) :is(input:not([type=checkbox]):not([type=hidden]), select) {
+    background: #fff;
+    border: 1px solid #859f91;
+    color: #172e24;
+    font-size: 14px;
+    box-shadow: none;
+  }
+  .shell :is(.customer-collection-form, .collection-register) input::placeholder {
+    color: #596b61;
+    opacity: 1;
+  }
+  .shell .customer-collection-form .customer-dropdown-control {
+    background: #fff;
+    border-color: #859f91;
+  }
+  .shell .customer-collection-form .customer-dropdown-control > input {
+    border: 0;
+    background: transparent;
+  }
+  .shell :is(.customer-collection-form, .collection-register) :is(.collection-search-status, .customer-dropdown-help, .collection-table-scroll small) {
+    color: #4c6155;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .shell .customer-collection-form .collection-customer-balance {
+    background: #e1eee5;
+    border: 1px solid #91b49c;
+    border-left: 4px solid #176344;
+    color: #183d2e;
+  }
+  .shell .customer-collection-form .collection-customer-balance small { color: #3e5e49; }
+  .shell :is(.customer-collection-form, .collection-register) .collection-table-scroll {
+    border: 1px solid #9db3a6;
+    background: #fff;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-table-scroll th {
+    background: #294c3e;
+    color: #fff;
+    padding: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    border-bottom: 2px solid #183629;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-table-scroll td {
+    background: #fff;
+    color: #20382b;
+    border-bottom: 1px solid #c3d2c8;
+    font-size: 14px;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-table-scroll tr:nth-child(even) td {
+    background: #f3f6f3;
+  }
+  .shell .customer-collection-form .collection-allocation-table tr.collection-selected-row td {
+    background: #e1f0e5;
+  }
+  .shell .customer-collection-form .collection-allocation-table tr.collection-selected-row td:first-child {
+    box-shadow: inset 4px 0 #16704b;
+  }
+  .shell .customer-collection-form .collection-allocation-table tr.collection-selected-row td:nth-child(7) {
+    background: #fff3d4;
+  }
+  .shell .customer-collection-form .collection-manual-payment {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 155px;
+    max-width: 195px;
+  }
+  .shell .customer-collection-form .collection-manual-payment input:not(:disabled) {
+    width: 100%;
+    background: #fffefa;
+    border: 2px solid #a47b1b;
+    font-weight: 700;
+    color: #332b16;
+  }
+  .shell .customer-collection-form .collection-manual-payment button.secondary {
+    width: 100%;
+    background: #176344;
+    border: 1px solid #104c33;
+    color: #fff;
+    padding: 6px 9px;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .shell .customer-collection-form .collection-manual-payment button.secondary:hover:not(:disabled) {
+    background: #104b32;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-invoice-toolbar button.secondary {
+    background: #fff;
+    color: #214a35;
+    border: 1px solid #648f73;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .shell :is(.customer-collection-form, .collection-register) .collection-invoice-toolbar button.secondary:hover:not(:disabled) {
+    background: #e0eee4;
+    border-color: #285d3b;
+  }
+  .shell :is(.customer-collection-form, .collection-register) button:disabled {
+    opacity: 1;
+    background: #e9eeea;
+    color: #647367;
+    border-color: #c0ccc3;
+    cursor: not-allowed;
+  }
+  .shell .customer-collection-form .collection-manual-payment input:disabled {
+    opacity: 1;
+    background: #edf1ed;
+    border-color: #c0ccc3;
+    color: #647367;
+  }
+  .shell .customer-collection-form .collection-allocation-summary {
+    padding: 14px 16px;
+    border-radius: 8px;
+    gap: 8px 20px;
+  }
+  .shell .customer-collection-form .collection-allocation-summary.needs-allocation {
+    background: #fff1ce;
+    border: 1px solid #c09a40;
+    color: #644509;
+  }
+  .shell .customer-collection-form .collection-allocation-summary.ready {
+    background: #225c40;
+    border: 1px solid #194830;
+    color: #fff;
+  }
+  .shell .customer-collection-form .collection-allocation-summary b { font-size: 16px; }
+  .shell .customer-collection-form .collection-allocation-summary span { color: inherit; }
+  .shell :is(.customer-collection-form, .collection-register) .collection-cheque-panel {
+    background: #fff4df;
+    border-color: #bd944b;
+    color: #614218;
+  }
+  .shell :is(.customer-collection-form, .collection-register) :is(button, input, select):focus-visible {
+    outline: 3px solid #8aa252;
+    outline-offset: 2px;
+  }
+}
+@media screen {
+  .shell .customer-collection-form .collection-manual-payment button.secondary:disabled {
+    background: #e9eeea;
+    color: #647367;
+    border-color: #c0ccc3;
+    opacity: 1;
+  }
+}
+@media screen {
+  /* Override the older shared form selectors without changing other pages. */
+  .shell .record-workspace-page .modal.collection-modal .customer-collection-form.collection-fields .collection-section :is(input:not([type=checkbox]):not([type=hidden]), select) {
+    border-color: #859f91;
+    background-color: #fff;
+    color: #172e24;
+  }
+  .shell .record-workspace-page .modal.collection-modal .customer-collection-form.collection-fields .collection-section input::placeholder {
+    color: #596b61;
+  }
+  .shell .record-workspace-page .modal.collection-modal .customer-collection-form.collection-fields .collection-allocation-table .collection-manual-payment input:not(:disabled) {
+    border-color: #a47b1b;
+    background-color: #fffefa;
+    color: #332b16;
+  }
+  .shell .record-workspace-page .modal.collection-modal .customer-collection-form.collection-fields .collection-manual-payment input:disabled {
+    background-color: #edf1ed;
+    border-color: #c0ccc3;
+    color: #647367;
+  }
+}
+
+/* Compact desktop collection entry: no inner table scroll or clipped columns. */
+@media screen and (min-width: 1100px) {
+  .shell .record-workspace-page:has(.collection-modal) { padding: 10px; }
+  .shell .record-workspace-page .modal.collection-modal > .popup-body { padding: 12px; }
+  .shell .modal.collection-modal .customer-collection-form { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(0, 2fr); gap: 12px; }
+  .shell .modal.collection-modal .customer-collection-form > .collection-section { margin: 0; padding: 12px 14px; min-width: 0; }
+  .shell .customer-collection-form > .collection-section:nth-of-type(n+3),
+  .shell .customer-collection-form > .collection-history { grid-column: 1 / -1; }
+  .shell .customer-collection-form h3 { margin: 0 0 8px; font-size: 15px; }
+  .shell .customer-collection-form .collection-input-grid { gap: 8px 12px; }
+  .shell .record-workspace-page .modal.collection-modal .customer-collection-form .collection-section :is(input:not([type=checkbox]):not([type=hidden]),select) { min-height: 38px; height: 38px; padding-top: 6px; padding-bottom: 6px; font-size: 13px; }
+  .shell .customer-collection-form .collection-customer-balance { padding: 8px 10px; margin-top: 10px; flex-wrap: wrap; gap: 6px; }
+  .shell .customer-collection-form .collection-customer-balance strong { font-size: 18px; }
+  .shell .customer-collection-form .customer-dropdown-help { display: none; }
+  .shell .customer-collection-form .collection-cheque-panel { margin-top: 8px; padding: 8px 12px; }
+  .shell .customer-collection-form .collection-cheque-panel p { margin-top: 5px; }
+  .shell .customer-collection-form .collection-invoice-toolbar { margin: 6px 0; gap: 8px; }
+  .shell .customer-collection-form .collection-search-status { margin: 5px 0; font-size: 11px; }
+  .shell .customer-collection-form .collection-allocation-summary { padding: 8px 12px; margin-top: 8px; gap: 8px; font-size: 13px; }
+  .shell .customer-collection-form .collection-allocation-summary span { font-size: 11px; }
+  .shell .customer-collection-form .collection-table-scroll:has(.collection-allocation-table) { overflow: visible; }
+  .shell .customer-collection-form .collection-allocation-table { table-layout: fixed; width: 100%; min-width: 0; }
+  .shell .customer-collection-form .collection-allocation-table :is(th,td) { padding: 7px 6px; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
+  .shell .customer-collection-form .collection-allocation-table th { font-size: 10px; }
+  .shell .customer-collection-form .collection-allocation-table :is(th,td):first-child { width: 34px; }
+  .shell .customer-collection-form .collection-allocation-table :is(th,td):nth-child(2) { width: 13%; }
+  .shell .customer-collection-form .collection-allocation-table :is(th,td):nth-child(3) { width: 9%; }
+  .shell .customer-collection-form .collection-allocation-table :is(th,td):nth-child(7) { width: 14%; }
+  .shell .customer-collection-form .collection-manual-payment { min-width: 0; max-width: none; }
+  .shell .customer-collection-form .collection-manual-payment input { width: 100%; min-width: 0; box-sizing: border-box; }
+  .shell .customer-collection-form .collection-table-scroll small { font-size: 10px; margin-top: 3px; }
+}
+.collection-history > summary { cursor: pointer; font-weight: 700; color: #214a35; }
+.collection-history[open] > summary { margin-bottom: 12px; }
+
+/* Before customer selection, use the full width and show the next action clearly. */
+.shell .modal.collection-modal .customer-collection-form:not(:has(.collection-payment-panel)) { grid-template-columns: minmax(0, 1fr); }
+.shell .modal.collection-modal .customer-collection-form:not(:has(.collection-payment-panel)) > .collection-section { grid-column: 1 / -1; }
+.shell .modal.collection-modal .customer-collection-form:not(:has(.collection-payment-panel)) .customer-dropdown-help { display: block; font-size: 13px; margin-top: 10px; }
+.shell .modal.collection-modal:not(:has(.collection-payment-panel)) .popup-footer .primary { display: none; }
+
+/* Keep the allocation task visually quiet: six essential columns and three totals. */
+.shell .customer-collection-form .collection-allocation-summary { background: #f0f6f2; border: 1px solid #bfd2c5; color: #254c37; border-radius: 7px; margin: 12px 0; }
+.shell .customer-collection-form .collection-allocation-summary.ready { background: #f0f6f2; color: #254c37; }
+.shell .customer-collection-form .collection-allocation-summary.needs-allocation { background: #fff7e4; color: #725113; }
+.shell .customer-collection-form .collection-allocation-summary > span { flex: 1; font-size: 11px; }
+.shell .customer-collection-form .collection-allocation-summary b { display: block; margin-top: 4px; font-size: 16px; }
+.shell .customer-collection-form .simple-allocation-table :is(th,td) { width: auto; white-space: normal; }
+.shell .customer-collection-form .simple-allocation-table :is(th,td):nth-child(2) { width: 26%; }
+.shell .customer-collection-form .simple-allocation-table :is(th,td):nth-child(3) { width: 15%; }
+.shell .customer-collection-form .simple-allocation-table :is(th,td):nth-child(5) { width: 18%; }
+.shell .customer-collection-form .simple-allocation-table :is(th,td):nth-child(7) { width: 12%; }
+.shell .customer-collection-form .simple-allocation-table tr.collection-selected-row td { background: #f0f6f2; }
+.shell .customer-collection-form .simple-allocation-table tr.collection-selected-row td.collection-pay-cell { background: #fff8e9; }
+.shell .customer-collection-form .collection-invoice-toolbar h3 { margin-right: auto; }
+.collection-commission-options { margin-top: 12px; font-size: 12px; color: #40604e; }
+.collection-commission-options > summary { cursor: pointer; }
+@media screen and (min-width:1100px) {
+  .shell .customer-collection-form .simple-allocation-table :is(th,td) { padding: 12px 9px; font-size: 13px; }
+  .shell .customer-collection-form .simple-allocation-table th { font-size: 11px; }
+  .shell .customer-collection-form .collection-invoice-search { max-width: 520px; }
+  .shell .customer-collection-form .collection-allocation-summary { padding: 10px 14px; }
+}
+.shell .customer-collection-form .simple-allocation-table :is(th,td):first-child { width: 42px; white-space: nowrap; }
+.shell .customer-collection-form .simple-allocation-table tr.collection-selected-row td:nth-child(7) { background: #f0f6f2; }
+/* Collection actions and settlement documents share the full workspace. */
+.collection-register-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.collection-register-actions button { border-radius: 7px; padding: 8px 12px; font-weight: 700; border: 1px solid transparent; cursor: pointer; }
+.collection-register-actions .collection-view-button { background: #eee5ff; color: #5c298b; border-color: #cdb0e7; }
+.collection-register-actions .collection-edit-button { background: #fff0c9; color: #795000; border-color: #d7ac4c; }
+.collection-register-actions .danger { background: #ffe4e7; color: #a42339; border-color: #df9eaa; }
+.collection-receipt { background: white; border: 1px solid #c2d5cc; border-radius: 12px; padding: 22px; }
+.collection-receipt-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+.collection-receipt-toolbar h2 { font-size: 22px; margin: 0; }
+.collection-receipt-content { color: #203e34; line-height: 1.6; }
+.collection-receipt-content table { width: 100%; table-layout: auto; border-collapse: collapse; font-size: 13px; }
+.collection-receipt-content th, .collection-receipt-content td { padding: 10px; text-align: left; border: 1px solid #c6d6cd; overflow-wrap: anywhere; }
+.collection-receipt-content th { background: #244d3d; color: white; }
+.collection-receipt-content h3 { margin-top: 26px; }
+.collection-receipt-totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
+.collection-receipt-totals span { background: #edf5ee; border: 1px solid #b9cfc0; padding: 14px; border-radius: 8px; }
+.collection-receipt-totals b { display: block; font-size: 20px; }
+.collection-receipt-invoice { margin: 20px 0; padding-top: 8px; border-top: 2px solid #b9cfc0; }
+.collection-correction-reason { display: grid; gap: 8px; margin: 18px 0; font-weight: 700; }
+.collection-correction-reason textarea { min-height: 75px; padding: 12px; border: 1px solid #8aa899; border-radius: 8px; }
+@media (max-width: 700px) { .collection-receipt { padding: 12px; } .collection-receipt-totals { grid-template-columns: 1fr; } }
+
+.collection-register-actions .collection-print-button { background: #dff0ff; color: #18567c; border-color: #9fc2db; }
+.collection-receipt-toolbar button { padding: 10px 16px; border-radius: 8px; border: 1px solid #9db8ab; font: inherit; font-weight: 700; cursor: pointer; }
+.collection-receipt-toolbar .secondary { background: #edf4ef; color: #244d3d; }
+.collection-receipt-content p { margin: 10px 0; min-height: 0; }
+.collection-receipt-content h2 { margin: 0 0 12px; }
+.receipt-payment-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 24px; margin: 16px 0; }
+.receipt-payment-details p { margin: 0; }
+.receipt-payment-details span { display: block; font-size: 12px; color: #66786c; }
+.receipt-payment-details b { display: block; margin-top: 3px; }
+.receipt-payment-summary { display: flex; gap: 24px; padding: 18px; margin: 20px 0; border: 1px solid #b8cbbd; background: #f0f5ee; border-radius: 8px; }
+.receipt-payment-summary > span { flex: 1; }
+.receipt-payment-summary strong { display: block; font-size: 24px; color: #24503a; }
+.receipt-payment-summary small, .receipt-settlement-table td small { display: block; color: #64796b; font-size: 12px; }
+.receipt-note { font-size: 12px; color: #5d7163; }
+.receipt-closing { margin-top: 20px; }
+.receipt-allocated-total { display: flex; justify-content: space-between; border-top: 2px solid #72927c; padding: 14px 0; }
+.receipt-allocated-total strong { font-size: 22px; }
+.receipt-signatures { display: flex; justify-content: space-between; gap: 24px; margin: 24px 0; }
+.receipt-signatures b { display: block; margin-top: 14px; }
+@media (max-width: 700px) { .receipt-payment-details { grid-template-columns: 1fr 1fr; } .receipt-payment-summary { flex-wrap: wrap; } }
+
+/* Compact collection lists: every action stays inside its column. */
+@media screen and (min-width: 900px) {
+  .shell .collection-register.collection-section { padding: 16px; margin: 10px 0; }
+  .shell .collection-register .collection-invoice-toolbar { margin: 0 0 10px; gap: 12px; }
+  .shell .collection-register .collection-invoice-toolbar h3 { font-size: 16px; }
+  .shell .collection-register .collection-invoice-toolbar :is(input, select) { min-height: 40px; padding: 8px 12px; font-size: 13px; }
+  .shell .collection-register .collection-search-status { margin: 6px 0 12px; font-size: 12px; }
+  .shell .collection-register-rows,
+  .shell .collection-history-table { max-height: none; overflow: visible; }
+  .shell .collection-register-rows table,
+  .shell .collection-history-table table { width: 100%; min-width: 0 !important; table-layout: fixed; }
+  .shell .collection-register-rows :is(th, td),
+  .shell .collection-history-table :is(th, td) { min-width: 0 !important; white-space: normal !important; overflow-wrap: anywhere; padding: 10px 9px !important; font-size: 12px !important; height: auto !important; }
+  .shell .collection-register-rows th:nth-child(1) { width: 20%; }
+  .shell .collection-register-rows th:nth-child(2) { width: 12%; }
+  .shell .collection-register-rows th:nth-child(3) { width: 11%; }
+  .shell .collection-register-rows th:nth-child(4) { width: 12%; }
+  .shell .collection-register-rows th:nth-child(5) { width: 10%; }
+  .shell .collection-register-rows th:nth-child(6) { width: 20%; }
+  .shell .collection-register-rows th:nth-child(7) { width: 15%; }
+  .shell .collection-register-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin: 3px 0; }
+  .shell .collection-register-actions button { min-width: 0; min-height: 30px; padding: 5px 6px; font-size: 11px; line-height: 1.3; }
+  .shell .collection-history-table th:nth-child(1) { width: 16%; }
+  .shell .collection-history-table th:nth-child(2) { width: 26%; }
+  .shell .collection-history-table th:nth-child(3) { width: 18%; }
+  .shell .collection-history-table th:nth-child(4) { width: 14%; }
+  .shell .collection-history-table th:nth-child(5) { width: 14%; }
+  .shell .collection-history-table th:nth-child(6) { width: 12%; }
+  .shell .collection-history-table small { display: block; margin-top: 5px; color: #536e62; font-size: 11px; }
+  .shell .collection-history-table .row-actions { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-start; }
+  .shell .collection-history-table .icon-action { width: 30px; height: 30px; min-width: 30px; padding: 6px; }
+  .shell .collection-history-table .icon-action svg { width: 16px; height: 16px; }
+  .content:has(.collection-register) .heading { margin: 10px 0; }
+  .content:has(.collection-register) .heading h1 { font-size: 25px; }
+  .content:has(.collection-register) .heading p,
+  .content:has(.collection-register) .heading > div > span { display: none; }
+}

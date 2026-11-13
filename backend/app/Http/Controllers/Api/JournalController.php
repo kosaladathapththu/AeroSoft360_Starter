@@ -10,6 +10,36 @@ use Illuminate\Support\Facades\DB;
 
 final class JournalController extends Controller
 {
+    public function reverse(Request $request, int $journal, PostingService $posting): JsonResponse
+    {
+        $data = $request->validate([
+            'posting_date' => ['required', 'date'],
+            'reason' => ['required', 'string', 'max:160'],
+        ]);
+        abort_if(trim($data['reason']) === '', 422, 'Enter a reversal reason.');
+        return DB::transaction(function () use ($request, $journal, $posting, $data) {
+            $entry = DB::table('journal_entries')->lockForUpdate()->find($journal);
+            abort_unless($entry, 404, 'Journal not found.');
+            abort_unless(in_array($entry->source_type, ['manual_journal', 'account_opening'], true), 422,
+                'Reverse the source transaction for this system-generated journal.');
+            abort_unless($entry->status === 'posted', 422, 'Only posted journals can be reversed.');
+            abort_if($data['posting_date'] < $entry->posting_date, 422, 'Reversal date cannot precede the original journal.');
+            $existing = DB::table('journal_entries')->where('source_type', 'journal_reversal')->where('source_id', $journal)->value('id');
+            if ($existing) return response()->json($this->journal((int) $existing));
+            $lines = DB::table('journal_lines as l')->join('accounts as a', 'a.id', '=', 'l.account_id')
+                ->where('l.journal_entry_id', $journal)->select('a.code as account_code', 'l.debit', 'l.credit')->get()
+                ->map(fn ($line) => ['account_code' => $line->account_code, 'debit' => $line->credit, 'credit' => $line->debit])->all();
+            $id = $posting->post('journal_reversal', $journal, $data['posting_date'],
+                "Reversal of {$entry->number}: " . trim($data['reason']), $lines);
+            DB::table('audit_logs')->insert([
+                'event' => 'journal.reversed', 'entity_type' => 'journal', 'entity_id' => $journal,
+                'payload' => json_encode(['reversal_id' => $id, 'reason' => $data['reason'], 'user_id' => $request->attributes->get('auth_user')?->id]),
+                'created_at' => now(),
+            ]);
+            return response()->json($this->journal($id), 201);
+        });
+    }
+
     public function store(Request $request, PostingService $posting): JsonResponse
     {
         $data = $request->validate([
@@ -21,6 +51,17 @@ final class JournalController extends Controller
             "lines.*.credit" => ["nullable", "numeric", "gte:0"],
             "lines.*.description" => ["nullable", "string", "max:255"],
         ]);
+        foreach ($data['lines'] as $index => $line) {
+            $debit = (float) ($line['debit'] ?? 0);
+            $credit = (float) ($line['credit'] ?? 0);
+            if (($debit > 0) === ($credit > 0) ||
+                abs($debit * 100 - round($debit * 100)) > 0.00001 ||
+                abs($credit * 100 - round($credit * 100)) > 0.00001) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    "lines.$index" => 'Enter either a debit or a credit with at most two decimal places on each line.',
+                ]);
+            }
+        }
         return DB::transaction(function () use ($data, $posting) {
             $sourceId =
                 (int) DB::table("journal_entries")
@@ -48,6 +89,7 @@ final class JournalController extends Controller
     {
         $entry = DB::table("journal_entries")->find($journal);
         abort_unless($entry, 404, "Journal not found.");
+        abort_if(DB::table('journal_entries')->where('source_type', 'journal_reversal')->where('source_id', $journal)->exists(), 422, 'A reversed journal cannot be edited.');
         abort_unless(
             $entry->source_type === "manual_journal",
             422,
@@ -64,6 +106,7 @@ final class JournalController extends Controller
     {
         $entry = DB::table("journal_entries")->find($journal);
         abort_unless($entry, 404, "Journal not found.");
+        abort_if($entry->status === 'posted', 422, 'Posted journals must be reversed to preserve their history.');
         abort_unless(
             $entry->source_type === "manual_journal",
             422,

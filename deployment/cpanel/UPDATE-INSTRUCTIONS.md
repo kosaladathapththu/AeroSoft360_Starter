@@ -1,0 +1,164 @@
+# AeroSoft360 — existing cPanel installation update
+
+Target: https://erp.supuncompanies.com
+Account: /home/camymarket
+
+This ZIP updates the application files. Creating it does not deploy anything.
+
+Latest 13 November update: customer/supplier/product ledger selection uses a
+visible searchable list with empty-state feedback. Ledger movements show all
+matching rows without Next/Previous pagination. The app and public login pages
+include the copyright footer and linked Supun IT Solutions credit. PHP 8.5
+database configuration avoids deprecated constants that corrupted login JSON.
+Includes multi-line journals and journal reversal described below.
+No new database migration or SQL import is required for these changes.
+
+13 November: New Journal Entry supports multiple account rows with individual
+debits, credits and optional memos. Add/remove lines and review live totals;
+each line must have one positive debit or credit, and totals must balance.
+This form update needs no migration or SQL import.
+
+12 November journal reversal update: General Ledger now offers Reverse for
+posted manual journals and account opening journals. Enter a posting date and
+reason, then confirm. The original entry stays posted; a linked opposite entry
+offsets it. Repeat requests return the existing reversal. Posted journals cannot
+be deleted. Other system journals must be reversed through their source workflow.
+No migration or SQL import is required for this journal reversal update.
+After upload, run config:clear, route:clear and view:clear, then hard-refresh.
+Uploading this package does not reverse JV-2611-0354 or change any balance.
+
+Latest update (10 November): compact invoice entry; dashboard simplification;
+transparent Y-mac logo in the top navigation; refined sidebar brand text;
+article-level quotations using the original active article catalog, available
+colours, customer contact details, fixed/quoted prices and line totals.
+Quotation conversion retains article quantities, colours and quoted prices.
+These latest changes require NO new database migration or SQL import.
+After extraction, run config:clear and view:clear as the account owner, then
+hard-refresh the browser. Preserve the live .env, APP_KEY and database.
+This follow-up adds deletion for open quotations and fixes deletion of quotation-
+originated sales orders. These changes require no database migration.
+It contains the new Supun Group portal, four company logos, the separate Y-mac
+login, upcoming pages for the other companies, and the current ERP code.
+This release also includes the latest invoice layout, compact workflow links,
+shared record pagination and customer-first collections with multi-invoice
+allocations, commission selection and dated cheque clearance/return tracking.
+Only Y-mac accepts the existing AeroSoft360 credentials. Other companies do
+not yet have hosted ERP systems or login accounts through this portal.
+
+## Update-only package: preserve live records
+
+This package includes the latest inventory overview, Excel stock-count templates,
+preview and count updates, article/item searches, and collection corrections and
+receipt improvements. It also includes the redesigned Purchasing Overview, full-page
+purchase entry forms and the complete Inventory Overview list without pagination.
+It contains application code and compiled website assets only.
+Local test customers, stock counts, payments and other checking records are not included.
+No database dump, seeders, uploaded workbook or local environment is packaged.
+The inventory feature requires no new migration. The specific collection migrations
+below are needed only if not already installed; Laravel skips recorded migrations.
+Do not run database seeders, migrate:fresh, or import a local SQL/database file.
+Your existing live business records and passwords remain in the hosted database.
+
+## 1. Back up before replacing files
+
+Download a fresh database backup from the live system. In cPanel, back up the
+two existing folders below as well. Keep backups outside public directories.
+Keep the current private `.env` and APP_KEY unchanged.
+
+    /home/camymarket/aerosoft360
+    /home/camymarket/erp.supuncompanies.com
+
+## 2. Upload and extract
+
+Upload this ZIP into `/home/camymarket`, then extract into `/home/camymarket`.
+Choose overwrite for the matching application files. The ZIP already has
+the two directory names directly inside it:
+
+    aerosoft360/                 private backend application code
+    erp.supuncompanies.com/      public built website, assets and brands
+
+Do not extract into `public_html`, into either existing application folder,
+or into the Camy website. Do not delete or replace whole live directories.
+Use the account owner and normal permissions (typically files 0644 and
+directories 0755); preserve the private environment file's restrictions.
+
+This update deliberately excludes `.env`, environment templates, database
+SQL files, bootstrap cache contents and the entire runtime storage folder.
+It preserves the live users, passwords, customer records, balances, uploads,
+sessions and application key. Uploading code does not update database data.
+Do not import SQL, reset the database, seed data or regenerate APP_KEY.
+Earlier collection updates require the migration in step 3 only if it has not already run. It adds collection
+history tables and account 1120 (Cheques in Hand), without rewriting invoices
+or earlier receipts. Stop and resolve any account-code conflict reported by it.
+
+## 3. Apply earlier pending migrations only, then clear cached configuration
+
+The quotation and sales-order deletion changes in this follow-up need no
+migration. The commands below are only for an installation that has not yet
+received the preceding collection and catalogue updates. Do not rerun them if
+those migrations are already recorded as complete.
+
+In cPanel Terminal, use the PHP binary matching the ERP domain:
+
+    cd /home/camymarket/aerosoft360
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan config:clear
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_06_000001_create_customer_collections.php --force
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_09_000001_group_cheques_under_current_assets.php --force
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_09_000002_add_card_collection_charges.php --force
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_09_000003_make_collection_collector_optional.php --force
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_09_000004_add_collection_corrections.php --force
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_10_000001_reconcile_verified_article_catalog.php --force
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan route:clear
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan view:clear
+
+The commands above assume the ERP still uses PHP 8.2 as previously configured.
+If MultiPHP Manager shows a different version, use its corresponding binary.
+If PHP OPcache continues serving old backend code, reload the ERP's PHP-FPM
+pool through the server administrator. Do not restart unrelated applications.
+
+## Current article and inventory changes
+
+The catalogue migration uses the verified Production Pricing sheet from pricing
+ aerosoft (1).xlsx: 195 distinct article codes, with size rows grouped by code.
+It corrects names/categories in place and removes unused Uncategorized records
+and the placeholder category. Referenced legacy records are archived instead
+of deleting their transaction or stock history. It does not change prices,
+quantities, invoice balances, receipts or login accounts. It is tracked by Laravel
+and will not run again after successful installation.
+
+Inventory Item now displays the article code only. Excel stock templates contain
+Article code, Category and Stock, one row per active article. Upload automatically
+previews changes; an explicit confirmation and reason are required to update stock.
+A downloaded template or preview does not update inventory.
+
+## 4. Verify the update
+
+1. Open https://erp.supuncompanies.com in a private browser window, or sign
+   out of the ERP first. Existing signed-in sessions still open the ERP.
+2. The home page should show Y-mac, Supun Traders, Fuji Industries and Camy
+   Smart with their logos. Check on a phone too.
+3. Y-mac should open its separate login page. Sign in with an existing account
+   and verify the dashboard and customer balances.
+4. Each other company should show “Hosting is upcoming” with no password form.
+5. In Collections, open Record collection. Choose a customer, enter the amount,
+   tick invoices and verify full/partial settlements before saving. Cheques use
+   the Cheques & collections tab for dated clearance or a reasoned return.
+   Pending cheques must not increase available cash. Test in staging first.
+   Check invoice entry starts without a preselected article.
+6. Check existing reports, downloads and the database backup function.
+7. Open Inventory Overview: active articles should appear, including unassigned stock.
+   Item should show the code only. Uncategorized entries should be absent.
+   The temporary stock-fill button must be gone. Edit stock opens an inline page.
+   In Bulk Inventory Import, download an Excel template and inspect its Instructions
+   sheet. Download and preview do not change balances. Apply only verified real counts.
+   Raw material count changes require an open accounting period and post journals.
+8. Use Ctrl+F5 if the browser displays the previous page. Keep old hashed
+   assets temporarily so already open browser sessions continue to work.
+
+If checks fail, restore the previous application files from your backup.
+Do not restore or overwrite the business database for a presentation-only
+rollback. Keep the live environment and storage intact.
+
+The existing Laravel 9 backend remains outside vendor security support.
+This update does not upgrade the framework or certify the whole installation
+as security-audited. A supported-framework upgrade remains separate work.

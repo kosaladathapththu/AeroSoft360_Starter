@@ -34,7 +34,7 @@ final class CustomerProfileService
             ->leftJoin("sales_representatives as r", "r.id", "=", "p.collector_sales_rep_id")
             ->leftJoin("accounts as a", "a.id", "=", "p.payment_account_id")
             ->where("p.customer_id", $id)
-            ->where("p.status", "posted")
+            ->when(true, fn($q) => \App\Services\Accounting\ReceiptScope::asOf($q, "p", $asOf))
             ->whereDate("p.receipt_date", "<=", $asOf)
             ->select(
                 "p.*",
@@ -52,7 +52,7 @@ final class CustomerProfileService
             ->join("sales_invoices as i", "i.id", "=", "l.invoice_id")
             ->where("p.customer_id", $id)
             ->where("i.customer_id", $id)
-            ->where("p.status", "posted")
+            ->when(true, fn($q) => \App\Services\Accounting\ReceiptScope::asOf($q, "p", $asOf))
             ->whereDate("p.receipt_date", "<=", $asOf)
             ->select(
                 "l.*",

@@ -742,3 +742,115 @@ th {
   background: #40cabc;
   margin-left: -2px;
 }
+
+.shell > aside .workspace-brand { position: relative; display: flex; flex-direction: column; align-items: flex-start; flex-wrap: nowrap; height: auto; min-height: 0; flex: 0 0 auto; gap: 10px; padding: 20px 24px 18px; }
+.workspace-brand-logo { display: block; width: 100%; max-width: 230px; height: 76px; flex: 0 0 auto; object-fit: contain; object-position: left center; background: transparent; border: 0; border-radius: 0; padding: 0; box-sizing: border-box; }
+.shell > aside .workspace-brand > div { min-width: 0; width: 100%; line-height: 1.5; }
+.shell > aside .workspace-brand b { font-size: 20px; }
+.shell > aside .workspace-brand .mobile-close { position: absolute; right: 8px; top: 8px; }
+
+/* Compact brand header; the dark navigation retains its existing appearance. */
+.shell > aside .workspace-brand {
+  align-items: center;
+  gap: 14px;
+  padding: 24px 22px 22px;
+  background: linear-gradient(145deg, #152d3a, #102230 80%);
+  border-bottom: 1px solid #2b4350;
+}
+.shell > aside .workspace-brand-logo {
+  width: 188px;
+  max-width: calc(100% - 24px);
+  height: 64px;
+  object-position: center;
+}
+.shell > aside .workspace-brand > div {
+  text-align: center;
+  line-height: 1.4;
+}
+.shell > aside .workspace-brand b {
+  color: #f5faf8;
+  font-size: 19px;
+  letter-spacing: -.35px;
+}
+.shell > aside .workspace-brand span {
+  display: block;
+  margin-top: 5px;
+  color: #a9bebf;
+  font-size: 11px;
+  letter-spacing: .2px;
+}
+.shell > aside .workspace-brand::after {
+  content: "";
+  width: 32px;
+  height: 3px;
+  margin-top: 1px;
+  border-radius: 3px;
+  background: #3eb8a4;
+}
+
+/* Product identity in the sidebar, company logo in the main navigation. */
+.shell > aside .workspace-brand {
+  align-items: flex-start;
+  padding: 23px 24px 20px;
+  gap: 10px;
+}
+.shell > aside .workspace-brand > div { text-align: left; }
+.shell > aside .workspace-brand b {
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.2;
+}
+.shell > aside .workspace-brand span {
+  font-family: "DM Sans", "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .35px;
+  margin-top: 7px;
+}
+.topbar-brand-logo {
+  display: block;
+  width: 124px;
+  height: 44px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  margin-right: 20px;
+}
+@media (max-width: 720px) {
+  .shell > main > header .topbar-brand-logo {
+    width: 76px;
+    height: 32px;
+    margin-right: 0;
+  }
+}
+@media (max-width: 480px) {
+  .shell > main > header .topbar-brand-logo { width: 58px; }
+}
+
+/* Compact invoice entry: keep all controls on the same page. */
+.record-workspace-page .modal:has(.simple-invoice-item) .popup-body { padding: 16px 20px; }
+.record-workspace-page .modal:has(.simple-invoice-item) .form-grid { gap: 10px 16px; }
+.record-workspace-page .modal:has(.simple-invoice-item) label { margin-bottom: 0; gap: 5px; font-size: 12px; }
+.record-workspace-page .modal:has(.simple-invoice-item) :is(input:not([type="checkbox"]):not([type="radio"]), select) { min-height: 38px; padding-top: 8px; padding-bottom: 8px; font-size: 13px; }
+.record-workspace-page .modal:has(.simple-invoice-item) .po-lines { padding: 12px; margin-top: 14px; }
+.record-workspace-page .modal:has(.simple-invoice-item) .po-lines-head { padding: 0 0 8px; margin: 0 0 10px; min-height: 0; }
+.record-workspace-page .modal:has(.simple-invoice-item) .po-lines-head b { font-size: 16px; }
+.record-workspace-page .modal:has(.simple-invoice-item) .po-lines-head small { font-size: 11px; margin-top: 3px; }
+.record-workspace-page .modal .simple-invoice-item .invoice-item-title { padding: 6px 12px; }
+.record-workspace-page .modal .simple-invoice-item .invoice-item-header { padding: 10px 12px; gap: 10px; }
+.record-workspace-page .modal .simple-invoice-item .order-method-options button { min-height: 38px; padding: 7px 10px; font-size: 12px; }
+.record-workspace-page .modal .simple-invoice-item .invoice-item-summary { padding: 7px 12px; }
+.record-workspace-page .modal .simple-invoice-item .invoice-item-summary strong { font-size: 17px; }
+.record-workspace-page .modal .simple-invoice-item.empty-article .invoice-item-summary { display: none; }
+.record-workspace-page .modal .simple-invoice-item .invoice-complete-controls { margin: 0 12px 10px; padding: 10px; gap: 10px; }
+.record-workspace-page .modal .simple-invoice-item > .fixed-rate-fields { margin: 0 12px 10px; padding: 10px; }
+.record-workspace-page .modal .simple-invoice-item .set-price-summary > div { padding: 8px 10px; }
+.record-workspace-page .modal .simple-invoice-item .set-price-summary strong { font-size: 16px; }
+.record-workspace-page .modal .simple-invoice-item .set-given-price { padding: 9px; margin-top: 8px; }
+.record-workspace-page .modal:has(.simple-invoice-item) .invoice-add-sticky { margin-top: 8px; }
+.record-workspace-page .modal:has(.simple-invoice-item) :is(.invoice-add-sticky button, .po-lines-head button) { min-height: 36px; padding: 8px 12px; font-size: 13px; box-shadow: none; }
+.record-workspace-page .modal:has(.simple-invoice-item) .invoice-summary { margin-top: 12px; gap: 14px; }
+@media (min-width: 1100px) {
+  .record-workspace-page .modal:has(.simple-invoice-item) .form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

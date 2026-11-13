@@ -739,3 +739,78 @@
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
+
+/* Compact, colourful business overview. */
+.dashboard-overview { gap: 16px; }
+.dashboard-overview .db-header { padding: 20px 24px; border-radius: 18px; background: linear-gradient(110deg,#183e34,#286452); color: #fff; }
+.dashboard-overview .db-header h1 { color: #fff; margin: 6px 0; font-size: 29px; }
+.dashboard-overview .db-header p,.dashboard-overview .db-header .db-eyebrow { color: #d3e6da; }
+.dashboard-overview .db-header .db-primary { background: #f1bb64; color: #392c15; border-color: #f1bb64; }
+.dashboard-overview .db-header .db-secondary { background: #ffffff15; color: #fff; border-color: #ffffff50; }
+.dashboard-overview .db-period-bar { padding: 0; border: 0; background: transparent; }
+.dashboard-overview .db-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.dashboard-overview .db-metric { padding: 16px 18px; gap: 12px; border-top: 3px solid var(--db-accent,#34826d); box-shadow: 0 3px 12px #1c303508; }
+.dashboard-overview .db-forest { background: #eef7f0; --db-accent: #2c805a; }
+.dashboard-overview .db-wine { background: #fcf0f3; --db-accent: #b04b70; }
+.dashboard-overview .db-teal { background: #eaf7f5; --db-accent: #248d80; }
+.dashboard-overview .db-ochre { background: #fff5e6; --db-accent: #c18526; }
+.dashboard-overview .db-slate { background: #f0f4f7; --db-accent: #597581; }
+.dashboard-overview .db-plum { background: #f4effa; --db-accent: #8257aa; }
+.dashboard-overview .db-metric strong { font-size: clamp(19px,1.7vw,27px); }
+.dashboard-overview .db-quick-actions { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+.dashboard-overview .db-quick-actions button { padding: 12px 15px; min-height: 46px; }
+.dashboard-overview .db-panel { padding: 20px; border-radius: 16px; box-shadow: 0 3px 14px #203a2d06; min-width: 0; }
+.dashboard-overview .db-panel-title h2 { font-size: 19px; }
+.dashboard-overview .db-panel-title .db-eyebrow { font-size: 10px; }
+.dashboard-overview .db-main-grid { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); gap: 16px; }
+.db-aging-visual { display: flex; align-items: center; gap: 18px; margin: 14px 0; }
+.db-donut { width: 180px; flex: 0 0 180px; }
+.db-donut svg { display: block; width: 100%; }
+.db-donut-label { font-size: 9px; fill: #6a7c80; letter-spacing: 1px; }
+.db-donut-total { font-size: 23px; font-weight: 800; fill: #254638; }
+.dashboard-overview .db-receivable-split { display: grid; flex: 1; grid-template-columns: 1fr; gap: 12px; margin: 0; padding: 0; border: 0; }
+.dashboard-overview .db-aging-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 16px; }
+.dashboard-overview .db-aging-list button { padding: 9px 0; font-size: 12px; }
+.db-balance-bars { display: grid; gap: 17px; margin-top: 24px; }
+.dashboard-overview .db-balance-bars button { display: grid; gap: 7px; padding: 0; background: transparent; border: 0; text-align: left; color: #253d35; }
+.db-balance-heading { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; font-size: 12px; }
+.db-balance-heading strong { min-width: 0; overflow-wrap: anywhere; }
+.db-balance-heading b { white-space: nowrap; }
+.db-balance-track { height: 9px; border-radius: 20px; background: #f0edf3; overflow: hidden; }
+.db-balance-track i { display: block; height: 100%; border-radius: inherit; }
+.db-balance-bars small { color: #6a7c80; font-size: 11px; }
+.dashboard-overview .db-task-list { max-height: none; overflow: visible; }
+.dashboard-overview .db-task { padding: 11px 0; }
+.dashboard-overview .db-task small { font-size: 11px; }
+@media(max-width:1050px) { .dashboard-overview .db-main-grid { grid-template-columns: 1fr; } }
+@media(max-width:700px) { .dashboard-overview .db-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .dashboard-overview .db-quick-actions { grid-template-columns: repeat(2,minmax(0,1fr)); } .dashboard-overview .db-header { padding: 18px; } .db-aging-visual { flex-wrap: wrap; } .dashboard-overview .db-aging-list { grid-template-columns: 1fr; } }
+@media(max-width:420px) { .dashboard-overview .db-metrics { grid-template-columns: 1fr; } }
+.dashboard-overview .db-age-current { background: #25826b; }
+.dashboard-overview .db-age-early { background: #a9be59; }
+.dashboard-overview .db-age-mid { background: #d09a3b; }
+.dashboard-overview .db-age-late { background: #ce6d42; }
+.dashboard-overview .db-age-old { background: #aa4565; }
+.dashboard-overview .db-age-unknown { background: #8973ad; }
+
+/* Neutral surfaces with restrained motion. */
+.dashboard-overview .db-header { background: #fff; color: #263d36; border: 1px solid #dfe7e4; }
+.dashboard-overview .db-header h1 { color: #263d36; }
+.dashboard-overview .db-header p,.dashboard-overview .db-header .db-eyebrow { color: #667c72; }
+.dashboard-overview .db-header .db-primary { background: #18705b; border-color: #18705b; color: #fff; }
+.dashboard-overview .db-header .db-secondary { background: #fff; border-color: #ccd9d2; color: #345c4e; }
+.dashboard-overview .db-metric { background: #fff; border: 1px solid #dfe7e4; }
+.dashboard-overview .db-metric-top i { background: #f3f5f4; color: #55736a; }
+.dashboard-overview .db-metric strong { color: #263d36; }
+.dashboard-overview .db-header,.dashboard-overview .db-metric,.dashboard-overview .db-panel,.dashboard-overview .db-quick-actions { animation: db-enter 450ms ease-out both; }
+.dashboard-overview .db-metric:nth-child(2) { animation-delay: 40ms; }
+.dashboard-overview .db-metric:nth-child(3) { animation-delay: 80ms; }
+.dashboard-overview .db-metric:nth-child(4) { animation-delay: 120ms; }
+.dashboard-overview .db-metric:nth-child(5) { animation-delay: 160ms; }
+.dashboard-overview .db-metric:nth-child(6) { animation-delay: 200ms; }
+.dashboard-overview .db-metric,.dashboard-overview .db-quick-actions button { transition: transform 180ms ease,box-shadow 180ms ease; }
+.dashboard-overview .db-metric:hover,.dashboard-overview .db-quick-actions button:hover { transform: translateY(-3px); box-shadow: 0 8px 20px #243d3510; }
+.db-balance-track i { transform-origin: left; animation: db-bar-enter 650ms ease-out both; }
+.db-donut { animation: db-enter 600ms ease-out both; }
+@keyframes db-enter { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes db-bar-enter { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .dashboard-overview *, .dashboard-overview *::before, .dashboard-overview *::after { animation: none !important; transition: none !important; } }

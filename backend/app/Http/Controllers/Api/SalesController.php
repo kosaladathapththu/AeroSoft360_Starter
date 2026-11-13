@@ -5,6 +5,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use App\Services\Accounting\CommissionPolicy;
 class SalesController
 {
     public function workspace(): JsonResponse
@@ -166,6 +167,20 @@ class SalesController
             ->latest("a.id")
             ->get();
         return response()->json([
+            "customer_collections" => \Illuminate\Support\Facades\Schema::hasTable('customer_collections')
+                ? DB::table('customer_collections as p')->join('customers as c', 'c.id', '=', 'p.customer_id')
+                    ->leftJoin('sales_representatives as r', 'r.id', '=', 'p.collector_sales_rep_id')
+                    ->leftJoin('accounts as bank', 'bank.id', '=', 'p.cleared_account_id')
+                    ->select('p.*', 'c.name as customer_name', 'r.name as collector_name', 'bank.name as cleared_account_name')->orderByDesc('p.id')->get()
+                : [],
+            "collection_allocations" => \Illuminate\Support\Facades\Schema::hasTable('customer_collection_lines')
+                ? DB::table('customer_collection_lines as l')->join('sales_invoices as i', 'i.id', '=', 'l.invoice_id')
+                    ->leftJoin('sales_representatives as r', 'r.id', '=', 'i.sales_rep_id')
+                    ->join('receipt_allocations as allocation', 'allocation.receipt_id', '=', 'l.receipt_id')
+                    ->join('customer_receipts as receipt', 'receipt.id', '=', 'l.receipt_id')
+                    ->leftJoin('sales_representatives as recipient', 'recipient.id', '=', 'allocation.commission_payee_sales_rep_id')
+                    ->select('l.*', 'i.number as invoice_number', 'i.invoice_date', 'i.total as invoice_total', 'r.name as rep_name', 'allocation.commission_amount', 'allocation.commission_status', 'allocation.commission_decision', 'recipient.name as commission_payee_name', 'receipt.collection_type as settlement_type')->get()
+                : [],
             "opening_accounts" => DB::table("accounts")
                 ->where("type", "equity")
                 ->where("is_postable", true)
@@ -187,7 +202,7 @@ class SalesController
             "orders" => $orders,
             "invoices" => $invoices,
             "receipts" => $receipts,
-            "commissions" => $commissions,
+            "commissions" => $commissions->filter(fn ($row) => ($row->commission_category ?? "direct") !== "head_office")->values(),
         ]);
     }
     public function storeCustomer(Request $r): JsonResponse
@@ -327,6 +342,7 @@ class SalesController
             "sets.*.items.*.quantity" => "required|numeric|gt:0",
             "sets.*.items.*.unit_price" => "required|numeric|min:0",
         ]);
+        abort_if(strtoupper(trim($d["category"])) === "UNCATEGORIZED", 422, "Choose a real article category.");
         $id = DB::transaction(function () use ($d) {
             $first = $d["sets"][0];
             $id = DB::table("articles")->insertGetId([
@@ -389,6 +405,7 @@ class SalesController
             "sets.*.items.*.quantity" => "required|numeric|gt:0",
             "sets.*.items.*.unit_price" => "required|numeric|min:0",
         ]);
+        abort_if(strtoupper(trim($d["category"])) === "UNCATEGORIZED", 422, "Choose a real article category.");
         DB::transaction(function () use ($d, $id) {
             abort_unless(
                 DB::table("articles")->where("id", $id)->exists(),
@@ -1067,6 +1084,7 @@ class SalesController
             "reference" => "nullable|max:80",
             "amount" => "required|numeric|gt:0",
         ]);
+        abort_if($d["payment_method"] === "cheque", 422, "Record cheques through Customer Collections with the cheque date and bank details.");
         $invoice = DB::table("sales_invoices")->find($d["invoice_id"]);
         abort_if(
             $d["amount"] > $invoice->outstanding + 0.001,
@@ -1080,7 +1098,7 @@ class SalesController
             201,
         );
     }
-    private function postReceipt(array $d): array
+    public function postReceipt(array $d, bool $chequeHolding = false): array
     {
         $invoice = DB::table("sales_invoices")->lockForUpdate()->find($d["invoice_id"]);
         abort_unless($invoice, 404, "Invoice not found.");
@@ -1105,7 +1123,9 @@ class SalesController
         abort_unless(
             $cash &&
                 \App\Services\Accounting\AccountPolicy::active($cash) &&
-                \App\Services\Accounting\AccountPolicy::cash($cash),
+                ($chequeHolding
+                    ? $cash->code === "1120" && $cash->type === "asset" && $cash->is_postable && !$cash->is_cash_account
+                    : \App\Services\Accounting\AccountPolicy::cash($cash)),
             422,
             "Choose an active cash or bank account for the collection.",
         );
@@ -1125,7 +1145,7 @@ class SalesController
             "-" .
             str_pad((string) (DB::table("customer_receipts")->count() + 1), 4, "0", STR_PAD_LEFT);
         $rid = DB::table("customer_receipts")->insertGetId([
-            "number" => $num,
+            "number" => $d["receipt_number"] ?? $num,
             "customer_id" => $d["customer_id"],
             "sales_rep_id" => $invoice->sales_rep_id ?? $d["collector_sales_rep_id"],
             "collector_sales_rep_id" => $d["collector_sales_rep_id"],
@@ -1150,8 +1170,8 @@ class SalesController
             ->sum("quantity");
         $collectedRatio = min(1, (float) $d["amount"] / max(0.01, (float) $invoice->total));
         $commissionPieces = round($invoicePieces * $collectedRatio, 4);
-        $rate = (float) ($payee->default_commission_rate ?? 0);
-        $limit = DB::table("commission_settings")->value("max_collection_days") ?? 100;
+        $rate = CommissionPolicy::rate($payee);
+        $limit = CommissionPolicy::days((int) $payee->id);
         $eligible = $days <= (int) $limit;
         $cancelled = $d["commission_decision"] === "cancel";
         $commission = !$cancelled && $eligible ? round($commissionPieces * $rate, 2) : 0;
@@ -1167,6 +1187,7 @@ class SalesController
             "amount" => $d["amount"],
             "days_taken" => $days,
             "commission_pieces" => $commissionPieces,
+            "commission_category" => CommissionPolicy::category($payeeId),
             "commission_rate" => $rate,
             "commission_amount" => $commission,
             "commission_status" => $commissionStatus,
@@ -1222,7 +1243,7 @@ class SalesController
                 $paid = DB::table("receipt_allocations as a")
                     ->join("customer_receipts as p", "p.id", "=", "a.receipt_id")
                     ->where("a.invoice_id", $x->id)
-                    ->where("p.status", "posted")
+                    ->when(true, fn($q) => \App\Services\Accounting\ReceiptScope::asOf($q, "p", $asOf))
                     ->whereDate("p.receipt_date", "<=", $asOf)
                     ->sum("a.amount");
                 $credit = \Illuminate\Support\Facades\Schema::hasTable("sales_returns")
@@ -1256,7 +1277,7 @@ class SalesController
                         "r.collector_sales_rep_id",
                     )
                     ->where("a.invoice_id", $x->id)
-                    ->where("r.status", "posted")
+                    ->when(true, fn($q) => \App\Services\Accounting\ReceiptScope::asOf($q, "r", $asOf))
                     ->whereDate("r.receipt_date", "<=", $asOf)
                     ->orderByDesc("r.receipt_date")
                     ->select(

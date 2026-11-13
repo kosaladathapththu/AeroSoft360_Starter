@@ -1,7 +1,9 @@
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const suites = [
+  "verify-journal-draft.cjs",
   "verify-order-packs.cjs",
+  "verify-collection-plan.cjs",
   "verify-display-references.cjs",
   "verify-customer-order-context.cjs",
   "verify-dashboard.cjs",

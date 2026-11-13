@@ -38,16 +38,20 @@ final class SerialWarrantyService
                 "A serial number is already registered.",
             );
             if (empty($d["sales_invoice_id"])) {
-                $stock = DB::table("finished_goods_stock")
+                $aggregateStocks = DB::table('finished_goods_stock')->where('article_id', $article->id)
+                    ->where(fn ($q) => $q->where('size_label', '__ARTICLE_TOTAL__')->orWhereRaw("SUBSTR(size_label, 1, 11) = ?", ['__COLOUR__:']))
+                    ->lockForUpdate()->get();
+                $articleTotal = $aggregateStocks->isNotEmpty() ? (object) ['quantity' => $aggregateStocks->sum('quantity')] : null;
+                $stock = $articleTotal ?? DB::table("finished_goods_stock")
                     ->where("article_id", $article->id)
                     ->where("size_label", $d["size_label"])
                     ->lockForUpdate()
                     ->first();
-                $registered = DB::table("product_serials")
+                $registeredQuery = DB::table("product_serials")
                     ->where("article_id", $article->id)
-                    ->where("size_label", $d["size_label"])
-                    ->where("status", "available")
-                    ->count();
+                    ->where("status", "available");
+                if (!$articleTotal) $registeredQuery->where("size_label", $d["size_label"]);
+                $registered = $registeredQuery->count();
                 abort_unless(
                     $stock && $registered + count($serials) <= (float) $stock->quantity + 0.00001,
                     422,

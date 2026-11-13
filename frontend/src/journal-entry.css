@@ -1,0 +1,14 @@
+.journal-entry-lines { display: grid; gap: 16px; min-width: 0; }
+.journal-entry-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px; border: 1px solid #bed8d4; border-radius: 12px; background: #edf7f4; color: #14594f; }
+.journal-entry-banner p { margin: 6px 0 0; font-size: 14px; }
+.journal-entry-banner span { font-weight: 700; white-space: nowrap; }
+.journal-entry-scroll { overflow-x: auto; border: 1px solid #d5e2e7; border-radius: 10px; }
+.journal-entry-lines table { width: 100%; min-width: 850px; border-collapse: collapse; }
+.journal-entry-lines th, .journal-entry-lines td { padding: 12px; text-align: left; }
+.journal-entry-lines th { background: #eff5f7; }
+.journal-entry-lines td:nth-child(2) { min-width: 260px; }
+.journal-entry-lines td:nth-child(3), .journal-entry-lines td:nth-child(4) { min-width: 140px; }
+.journal-entry-lines td:nth-child(5) { min-width: 200px; }
+.journal-entry-lines input { width: 100%; }
+.journal-entry-lines tfoot { font-weight: 700; background: #edf7f4; }
+@media (max-width: 700px) { .journal-entry-banner { align-items: flex-start; flex-direction: column; } }

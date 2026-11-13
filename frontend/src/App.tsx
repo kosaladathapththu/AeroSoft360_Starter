@@ -1,3 +1,9 @@
+import { stockAvailability } from "./stock-availability";
+import CommissionCategoriesPage from "./CommissionCategoriesPage";
+import ItemSearchSelect from "./ItemSearchSelect";
+import SiteFooter from "./SiteFooter";
+import JournalEntryLines from "./JournalEntryLines";
+import { emptyJournalLine, journalPayload } from "./journal-draft";
 import DashboardOverview from "./DashboardOverview";
 import CustomerOrderContext from "./CustomerOrderContext";
 import OrderCustomerPicker from "./OrderCustomerPicker";
@@ -13,6 +19,8 @@ import ManualOpeningModal from "./ManualOpeningModal";
 import SalesOrderDetails from "./SalesOrderDetails";
 import ReceivableActionModal from "./ReceivableActionModal";
 import FilteredRecords from "./FilteredRecords";
+import InvoicePagination from "./InvoicePagination";
+import "./invoice-entry.css";
 import { Fragment, FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -46,6 +54,7 @@ import {
 } from "lucide-react";
 import "./styles.css";
 import "./actions.css";
+import "./inventory-overview.css";
 import "./reports.css";
 import PointOfSalePage from "./PointOfSalePage";
 import SerialWarrantyPage from "./SerialWarrantyPage";
@@ -70,6 +79,7 @@ import { reportSearchCatalog, pageSearchKeywords } from "./search-catalog";
 import GlobalSearchRecords from "./GlobalSearchRecords";
 import "./search.css";
 import CollectionFields from "./CollectionFields";
+import CollectionRegister from "./CollectionRegister";
 import PaymentVouchersPage from "./PaymentVouchersPage";
 import ChartOfAccountsPage from "./ChartOfAccountsPage";
 import CashFlowPage from "./CashFlowPage";
@@ -78,6 +88,7 @@ import "./layout-fixes.css";
 import "./form-defaults.css";
 import "./compact-layout.css";
 import "./workspace-entry.css";
+import "./system-colours.css";
 
 const PublicSite = lazy(() => import("./PublicSite"));
 const API =
@@ -287,7 +298,7 @@ export default function App() {
       ],
     },
     {
-      name: "People & Products",
+      name: "Master Data",
       icon: Users,
       items: [
         ["Customers", Building2],
@@ -451,8 +462,7 @@ export default function App() {
     <div className="shell">
       {menu && <button className="scrim" onClick={() => setMenu(false)} />}
       <aside className={menu ? "open" : ""}>
-        <div className="brand">
-          <div className="logo">A</div>
+        <div className="brand workspace-brand">
           <div>
             <b>AeroSoft360</b>
             <span>Finance & Manufacturing ERP</span>
@@ -460,13 +470,6 @@ export default function App() {
           <button className="mobile-close" onClick={() => setMenu(false)}>
             <X />
           </button>
-        </div>
-        <div className="company">
-          <Factory />
-          <div>
-            <b>Supun AeroSoft</b>
-            <span>Colombo 13 · LKR</span>
-          </div>
         </div>
         <nav>
           <label>MAIN MENU</label>
@@ -525,6 +528,7 @@ export default function App() {
       </aside>
       <main>
         <header>
+          <img className="topbar-brand-logo" src="/brands/ymac-smart.png" alt="Y-mac Smart" />
           <button className="menu" onClick={() => setMenu(true)}>
             <Menu />
           </button>
@@ -617,7 +621,7 @@ export default function App() {
             <RefreshCw />
           </button>
         </header>
-        <section className="content">
+        <section className={`content ${page === "Invoices" ? "invoice-list-page" : page === "Inventory Overview" ? "inventory-overview-page" : ""}`}>
           {page !== "Dashboard" && <WorkflowSteps page={page} go={goToPage} />}
           {page === "Purchasing Overview" ? (
             <PurchasingOverview
@@ -694,6 +698,7 @@ export default function App() {
                   "Inventory Overview",
                 ].includes(page) ? (
                 <SalesPage
+                  key={`${page}-${workflowContext.version || 0}`}
                   token={token() || ""}
                   page={page}
                   go={goToPage}
@@ -795,6 +800,18 @@ export default function App() {
                       edit={setEditing}
                       view={setViewing}
                       remove={remove}
+                      reverse={can("accounting.manage") ? async (row) => {
+                        const journal = row as Journal;
+                        const posting_date = prompt("Reversal posting date (YYYY-MM-DD)", new Date().toLocaleDateString("en-CA"));
+                        if (!posting_date) return;
+                        const reason = prompt(`Reason for reversing ${journal.number}`, "Correction of journal entry");
+                        if (!reason?.trim()) return;
+                        if (!(await confirmDialog(`Reverse ${journal.number} on ${posting_date}? This posts an equal and opposite journal and preserves the original.`))) return;
+                        try {
+                          setError("");
+                          await call(`/journals/${row.id}/reverse`, { posting_date, reason });
+                        } catch (e) { setError((e as Error).message); }
+                      } : undefined}
                       receive={
                         profile.permissions.includes("stock.manage")
                           ? (id) => goToPage("Receive Goods", { orderId: id })
@@ -808,6 +825,7 @@ export default function App() {
           )}
         </section>
         <div id="workspace-entry-root" />
+        <SiteFooter />
       </main>
       {modal && (
         <CreateModal
@@ -821,6 +839,7 @@ export default function App() {
               setModal("");
             } catch (e) {
               setError((e as Error).message);
+              throw e;
             }
           }}
         />
@@ -838,6 +857,7 @@ export default function App() {
               setEditing(null);
             } catch (e) {
               setError((e as Error).message);
+              throw e;
             }
           }}
         />
@@ -891,9 +911,10 @@ function SalesPage({
     } | null>(null),
     [pendingPriceFile, setPendingPriceFile] = useState<File | null>(null),
     [pricePreview, setPricePreview] = useState<any>(null),
-    [collectionView, setCollectionView] = useState<"due" | "history">("due"),
+    [collectionView, setCollectionView] = useState<"due" | "history" | "register">("due"),
     [collectionInvoice, setCollectionInvoice] = useState<any>(null),
-    [inventoryQuery, setInventoryQuery] = useState(""),
+    [savedCollectionId, setSavedCollectionId] = useState<number | null>(null),
+    [collectionAction, setCollectionAction] = useState<{ id: number; type: string } | null>(null),
     [inventoryType, setInventoryType] = useState("all"),
     [inventoryCategory, setInventoryCategory] = useState("all"),
     [inventoryRecord, setInventoryRecord] = useState<{ mode: "view" | "edit"; row: any } | null>(
@@ -938,6 +959,7 @@ function SalesPage({
       if (!controller.signal.aborted) setDashboardBusy(false);
     }
   }, [token, dashboardDays]);
+  const [collectionNotice, setCollectionNotice] = useState("");
   const loadSales = useCallback(() => {
     setError("");
     Promise.all([
@@ -984,6 +1006,11 @@ function SalesPage({
           "Request failed.",
       );
     await loadSales();
+    if (path === "customer-collections") {
+      setSavedCollectionId(Number(json.id));
+      setCollectionNotice(`${json.number}: collection saved and invoices allocated.${json.payment_method === "cheque" ? " Cheque pending bank clearance." : ""}`);
+      setCollectionView("register");
+    }
     if (
       method === "POST" &&
       (path === "sales-orders/manual" ||
@@ -1264,6 +1291,15 @@ function SalesPage({
     Commissions: "commission",
     "Finished Goods Stock": "finished_stock",
   };
+  const openReceiptCollection = (receipt: any, type: string): boolean => {
+    if (page !== "Collections" || collectionView !== "history") return false;
+    const allocation = (data.collection_allocations || []).find((line: any) => Number(line.receipt_id) === Number(receipt.id));
+    if (!allocation) return false;
+    setError("");
+    setCollectionAction({ id: Number(allocation.collection_id), type });
+    setCollectionView("register");
+    return true;
+  };
   const heads: any = {
     Customers: ["Customer", "Phone", "Credit terms", "Credit limit", "Status"],
     Salespersons: ["Representative", "Manager", "Channel", "Default rate", "Status"],
@@ -1304,11 +1340,8 @@ function SalesPage({
         : [
             "Receipt",
             "Customer",
-            "Invoice salesperson",
-            "Cash collector",
-            "Date",
-            "Collection type",
-            "Method",
+            "Salesperson / collector",
+            "Date / method",
             "Amount",
           ],
     "Debtors Aging": [
@@ -1344,43 +1377,19 @@ function SalesPage({
       "Unit",
     ],
   };
-  const groupedFinishedStock = Object.values(
-    (data.finished_stock || []).reduce((groups: any, item: any) => {
-      const key = String(item.article_id);
-      if (!groups[key])
-        groups[key] = {
-          ...item,
-          id: `finished-article-${item.article_id}`,
-          record_id: item.article_id,
-          inventory_kind: "finished",
-          type: "Finished goods",
-          item: `${item.article_code} — ${item.article_name}`,
-          category: item.category || "Uncategorized",
-          quantity: 0,
-          unit: "pcs",
-          details: [],
-        };
-      const article = (data.articles || []).find(
-        (entry: any) => Number(entry.id) === Number(item.article_id),
-      );
-      const colours = [
-        ...new Set(
-          (article?.sets || []).flatMap((set: any) =>
-            (set.items || [])
-              .filter((setItem: any) => String(setItem.size_label) === String(item.size_label))
-              .flatMap((setItem: any) => splitColours(setItem.colours || "")),
-          ),
-        ),
-      ] as string[];
-      groups[key].details.push({ ...item, colours });
-      groups[key].quantity += Number(item.quantity || 0);
-      groups[key].variant = `${groups[key].details.length} sizes`;
-      groups[key].size_labels = groups[key].details
-        .map((entry: any) => entry.size_label)
-        .join(", ");
-      return groups;
-    }, {}),
-  ) as any[];
+  const groupedFinishedStock = (data.articles || []).filter((article: any) => article.status !== "inactive").map((article: any) => {
+    const stocked = (data.finished_stock || []).filter((item: any) => Number(item.article_id) === Number(article.id));
+    const colours = [...new Set<string>((article.sets || []).flatMap((set: any) => (set.items || []).flatMap((item: any) => splitColours(item.colours || ""))))];
+    for (const stock of stocked) if (String(stock.size_label).startsWith('__COLOUR__:')) colours.push(String(stock.size_label).slice(11));
+    const details = [...new Set(colours)].map((colour: string) => ({id: colour, colour, quantity: Number(stocked.find((stock: any) => stock.size_label === '__COLOUR__:' + colour)?.quantity || 0)}));
+    const unassigned = stocked.filter((stock: any) => !String(stock.size_label).startsWith('__COLOUR__:')).reduce((sum: number, stock: any) => sum + Number(stock.quantity), 0);
+    details.push({id: '', colour: '', quantity: unassigned});
+    return {id:"finished-article-"+article.id,record_id:article.id,article_code:article.code,article_name:article.name,
+      inventory_kind:"finished",type:"Finished goods",item:article.code,
+      category:article.category || "",quantity:details.reduce((sum:number,item:any)=>sum+item.quantity,0),
+      item_codes:(article.sets || []).flatMap((set:any)=>(set.items || []).map((item:any)=>item.item_code || "")).join(" "),
+      unit:"pcs",details,variant:colours.length ? [...new Set(colours)].join(", ") : "Unassigned colour",size_labels:""};
+  });
   const inventoryRows =
     page === "Inventory Overview"
       ? [
@@ -1392,7 +1401,7 @@ function SalesPage({
             inventory_kind: "raw",
             type: "Raw materials",
             item: `${displayCode(item)} — ${item.name}`,
-            category: item.category || "Uncategorized",
+            category: item.category || "",
             variant: `Batch ${item.batch_number}`,
             quantity: Number(item.quantity || 0),
             unit: "stock units",
@@ -1401,15 +1410,11 @@ function SalesPage({
       : [];
   const inventoryCategories = [...new Set(inventoryRows.map((item: any) => item.category))].sort();
   const visibleInventoryRows = inventoryRows.filter((item: any) => {
-    const query = inventoryQuery.trim().toLowerCase();
+
     return (
       (inventoryType === "all" || item.type === inventoryType) &&
       (inventoryCategory === "all" || item.category === inventoryCategory) &&
-      matchesSearch(item, search) &&
-      (!query ||
-        `${item.item} ${item.category} ${item.variant} ${item.size_labels || ""} ${item.type}`
-          .toLowerCase()
-          .includes(query))
+      matchesSearch(item, search)
     );
   });
   const finishedQuantity = inventoryRows
@@ -1418,11 +1423,13 @@ function SalesPage({
   const rawQuantity = inventoryRows
     .filter((item: any) => item.type === "Raw materials")
     .reduce((sum: number, item: any) => sum + item.quantity, 0);
+  if (page === "Commissions") return <CommissionCategoriesPage token={token} permissions={permissions} />;
+  if (inventoryRecord) return <InventoryRecordModal record={inventoryRecord} close={() => setInventoryRecord(null)} save={post} fail={setError} />;
   return (
     <>
       <div className="heading">
         <div>
-          <span>SALES OPERATIONS</span>
+          <span>{page === "Inventory Overview" ? "INVENTORY & STOCK CONTROL" : "SALES OPERATIONS"}</span>
           <h1>{page}</h1>
           <p>
             {page === "Inventory Overview"
@@ -1468,6 +1475,11 @@ function SalesPage({
               </button>
             )}
             {page === "Invoices" && (
+              <button className="secondary-action" hidden={!permissions.includes("accounting.manage")} onClick={() => { setOpeningMessage(""); setManualOpening(true); }}>
+                <Plus /> Opening balance
+              </button>
+            )}
+            {page === "Invoices" && (
               <button className="secondary-action" onClick={() => setPoInvoiceOpen(true)}>
                 <FileText /> Invoice customer PO
               </button>
@@ -1487,7 +1499,7 @@ function SalesPage({
                   : page === "Finished Goods Stock"
                     ? "Adjust stock"
                     : page === "Invoices"
-                      ? "Create invoice"
+                      ? "New invoice"
                       : page === "Sales Orders"
                         ? "Create sales order"
                         : page === "Pricing List"
@@ -1499,7 +1511,8 @@ function SalesPage({
       </div>
       {error && <div className="error">{error}</div>}
       {orderConfirmation}
-      {["Invoices", "Debtors Aging", "Customers"].includes(page) && permissions.includes("accounting.manage") && (
+      {page === "Collections" && collectionNotice && <div className="success-message" role="status">{collectionNotice}</div>}
+      {["Debtors Aging", "Customers"].includes(page) && permissions.includes("accounting.manage") && (
         <div className="opening-balance-toolbar">
           <div><b>Customer opening balances</b><small>Add an unpaid balance from before system use.</small></div>
           <button className="primary" type="button" onClick={() => { setOpeningMessage(""); setManualOpening(true); }}><Plus /> New opening balance</button>
@@ -1530,9 +1543,10 @@ function SalesPage({
           >
             Payment History <small>{data.receipts.length}</small>
           </button>
+          <button className={collectionView === "register" ? "active" : ""} onClick={() => setCollectionView("register")}>Cheques &amp; collections <small>{(data.customer_collections || []).length}</small></button>
         </div>
       )}
-      {page === "Inventory Overview" ? (
+      {page === "Collections" && collectionView === "register" ? <CollectionRegister data={data} savedId={savedCollectionId} consumeSaved={() => setSavedCollectionId(null)} requestedAction={collectionAction} consumeAction={() => setCollectionAction(null)} canManage={permissions.includes("accounting.manage")} post={post} /> : page === "Inventory Overview" ? (
         <div className="inventory-overview">
           <div className="inventory-summary-grid">
             <button
@@ -1569,41 +1583,17 @@ function SalesPage({
               </span>
             </button>
             <div className="inventory-manage-links">
-              <small>Stock management</small>
+              <div className="inventory-tools-label"><b>Manage your stock</b><small>View quantities or update from Excel</small></div>
               <button type="button" onClick={() => go("Finished Goods Stock")}>
                 Finished goods
               </button>
               <button type="button" onClick={() => go("Raw Material Stock")}>
                 Raw materials
               </button>
-              <button
-                type="button"
-                className="temporary-stock-button"
-                onClick={async () => {
-                  if (!confirm("Set every finished-goods size balance to 50 pieces?")) return;
-                  try {
-                    await post("finished-stock/temporary-fill");
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                }}
-              >
-                Set all to 50 temporarily
-              </button>
+              <button type="button" onClick={() => go("Bulk Inventory Import")}><FileUp size={18} /> Excel import / update <ChevronRight size={16} /></button>
             </div>
           </div>
           <div className="inventory-filters">
-            <label>
-              Search inventory
-              <div>
-                <Search />
-                <input
-                  value={inventoryQuery}
-                  onChange={(event) => setInventoryQuery(event.target.value)}
-                  placeholder="Article, product, size or batch"
-                />
-              </div>
-            </label>
             <label>
               Inventory type
               <select
@@ -1630,7 +1620,7 @@ function SalesPage({
               </select>
             </label>
           </div>
-          <FilteredRecords records={visibleInventoryRows} title="inventory records">
+          <FilteredRecords records={visibleInventoryRows} title="inventory records" paginate={false}>
             {(filteredRows, filtersActive) => (
               <div className="table-card inventory-table-card">
                 <table>
@@ -1715,11 +1705,13 @@ function SalesPage({
           </FilteredRecords>
         </div>
       ) : (
-        <FilteredRecords records={rows} title="records" key={page + collectionView}>
+        <FilteredRecords records={rows} title="records" minimumRows={page === "Pricing List" ? 5 : 1} paginate={page !== "Invoices"} customerSearch={page === "Invoices"} key={page + collectionView}>
           {(filteredRows, filtersActive) => (
+            <InvoicePagination records={filteredRows} enabled={page === "Invoices"}>
+              {(pageRows) => (
             <div
               ref={salesTableRef}
-              className={`table-card sales-table-card ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
+              className={`table-card sales-table-card ${page === "Collections" && collectionView === "history" ? "collection-history-table" : ""} ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
             >
               {page === "Invoices" && <p className="invoice-table-help">Scroll horizontally to see received amounts, outstanding balances, status and actions.</p>}
               <table>
@@ -1737,9 +1729,21 @@ function SalesPage({
                       <td colSpan={heads[page].length + 1}>No records yet.</td>
                     </tr>
                   ) : (
-                    filteredRows.map((r: any) => (
+                    pageRows.map((r: any) => (
                       <Fragment key={r.id}>
-                        <tr>
+                        <tr className={page === "Pricing List" ? "pricing-expand-row" : undefined}
+                          tabIndex={page === "Pricing List" ? 0 : undefined}
+                          aria-expanded={page === "Pricing List" ? expandedPriceArticles.has(r.article_id) : undefined}
+                          onClick={page === "Pricing List" ? () => setExpandedPriceArticles(current => {
+                            const next = new Set(current);
+                            if (next.has(r.article_id)) next.delete(r.article_id); else next.add(r.article_id);
+                            return next;
+                          }) : undefined}
+                          onKeyDown={page === "Pricing List" ? event => {
+                            if (event.target === event.currentTarget && ["Enter", " "].includes(event.key)) {
+                              event.preventDefault(); event.currentTarget.click();
+                            }
+                          } : undefined}>
                           {salesCells(
                             page === "Collections" && collectionView === "due"
                               ? "Collections Due"
@@ -1747,7 +1751,7 @@ function SalesPage({
                             r,
                           )}
                           <td>
-                            <div className="row-actions">
+                            <div className="row-actions" onClick={event => event.stopPropagation()}>
                               {page === "Collections" && collectionView === "due" && (
                                 <button
                                   className="approve"
@@ -1762,6 +1766,8 @@ function SalesPage({
                               {page === "Pricing List" && (
                                 <button
                                   className="icon-action view"
+                                  aria-label={expandedPriceArticles.has(r.article_id) ? "Hide sizes" : "Show sizes"}
+                                  aria-expanded={expandedPriceArticles.has(r.article_id)}
                                   title={
                                     expandedPriceArticles.has(r.article_id)
                                       ? "Hide sizes"
@@ -1800,9 +1806,10 @@ function SalesPage({
                                 !(page === "Collections" && collectionView === "due") && (
                                   <button
                                     className="icon-action view"
-                                    onClick={() => setViewing(r)}
+                                    title={page === "Invoices" ? "View invoice details" : "View details"}
+                                    onClick={() => { if (!openReceiptCollection(r, "view")) setViewing(r); }}
                                   >
-                                    <Eye />
+                                    <Eye />{page === "Invoices" && <span>View</span>}
                                   </button>
                                 )}
                               {page === "Debtors Aging" && permissions.includes("accounting.manage") && (
@@ -1978,11 +1985,11 @@ function SalesPage({
                                   <>
                                     {page === "Invoices" && (
                                       <button
-                                        className="icon-action"
+                                        className="icon-action invoice-print-action"
                                         title="View / print bill"
                                         onClick={() => setBillInvoiceId(Number(r.id))}
                                       >
-                                        <Printer />
+                                        <Printer /><span>Print</span>
                                       </button>
                                     )}
                                     {page === "Invoices" && !r.is_opening_balance && permissions.includes("accounting.manage") && (
@@ -1999,18 +2006,21 @@ function SalesPage({
                                     <button
                                       className="icon-action edit"
                                       title={`Edit ${page}`}
+                                      disabled={page === "Collections" && r.status === "returned"}
                                       onClick={() =>
-                                        page === "Invoices"
+                                        openReceiptCollection(r, "edit") ? undefined : page === "Invoices"
                                           ? setEditingMaster({ type: "invoice", row: r })
                                           : setEditingTransaction({ page, row: r })
                                       }
                                     >
-                                      <Pencil />
+                                      <Pencil />{page === "Invoices" && <span>Edit</span>}
                                     </button>
                                     <button
                                       className="icon-action delete"
                                       title={`Delete ${page}`}
+                                      disabled={page === "Collections" && r.status === "returned"}
                                       onClick={async () => {
+                                        if (openReceiptCollection(r, "void")) return;
                                         if (
                                           !confirm(
                                             `Delete ${r.number}? Related posted records will be checked first.`,
@@ -2030,7 +2040,7 @@ function SalesPage({
                                         }
                                       }}
                                     >
-                                      <Trash2 />
+                                      <Trash2 />{page === "Invoices" && <span>Delete</span>}
                                     </button>
                                   </>
                                 )}
@@ -2077,6 +2087,8 @@ function SalesPage({
                 </tbody>
               </table>
             </div>
+              )}
+            </InvoicePagination>
           )}
         </FilteredRecords>
       )}
@@ -2245,14 +2257,6 @@ function SalesPage({
           <RecordView page={page} row={viewing} close={() => setViewing(null)}
             onReturn={page === "Invoices" && !viewing.is_opening_balance && permissions.includes("accounting.manage") ? () => { setViewing(null); go("Sales Returns", {invoiceId: Number(viewing.id)}); } : undefined} />
         ))}
-      {inventoryRecord && (
-        <InventoryRecordModal
-          record={inventoryRecord}
-          close={() => setInventoryRecord(null)}
-          save={post}
-          fail={setError}
-        />
-      )}
       {pricePreview && (
         <div className="backdrop" onMouseDown={() => !priceImporting && setPricePreview(null)}>
           <div
@@ -2386,25 +2390,23 @@ function InventoryRecordModal({
   fail: (message: string) => void;
 }) {
   const row = record.row;
+  const [localError,setLocalError]=useState("");
+
   return (
-    <div className="backdrop" onMouseDown={close}>
+    <section className="inventory-record-page">
       <form
-        className="modal inventory-record-modal"
+        className="inventory-record-form"
         onMouseDown={(event) => event.stopPropagation()}
         onSubmit={async (event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);
           try {
-            if (row.inventory_kind === "finished")
-              await Promise.all(
-                (row.details || []).map((detail: any) =>
-                  save(
-                    `finished-stock/${detail.id}`,
-                    { quantity: Number(form.get(`quantity_${detail.id}`)) },
-                    "PUT",
-                  ),
-                ),
-              );
+            if (row.inventory_kind === "finished") {
+              await save('articles/' + row.record_id + '/colour-stock', {
+                expected_total: Number(row.quantity), reason: form.get('reason'),
+                colours: row.details.map((detail: any) => ({colour: detail.colour, quantity: Number(form.get('quantity_' + detail.id))}))
+              }, 'PUT');
+            }
             else {
               await save(
                 `stock/${row.record_id}`,
@@ -2419,12 +2421,10 @@ function InventoryRecordModal({
             }
             close();
           } catch (error) {
-            fail((error as Error).message);
+            setLocalError((error as Error).message);
           }
         }}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Business record dialog"
+
       >
         <div className="popup-header">
           <button type="button" className="close" onClick={close} aria-label="Close dialog">
@@ -2434,6 +2434,7 @@ function InventoryRecordModal({
           <h2>{record.mode === "view" ? row.item : `Edit ${row.item}`}</h2>
         </div>
         <div className="popup-body">
+          {localError && <p role="alert" className="error">{localError}</p>}
           <div className="inventory-detail-grid inventory-summary-details">
             <div>
               <small>Inventory type</small>
@@ -2454,44 +2455,17 @@ function InventoryRecordModal({
               <b>{row.article_code || row.code}</b>
             </div>
           </div>
+          {record.mode === "edit" && row.inventory_kind === "finished" && <label>Reason for stock update<input name="reason" required minLength={3} maxLength={255} placeholder="Physical stock count / opening inventory" /></label>}
           {row.inventory_kind === "finished" ? (
-            <div className="inventory-size-details">
-              <div className="inventory-size-head">
-                <b>Size</b>
-                <b>Colours</b>
-                <b>Stock record</b>
-                <b>Available quantity</b>
-              </div>
-              {(row.details || []).map((detail: any) => (
-                <div className="inventory-size-line" key={detail.id}>
-                  <b>Size {detail.size_label}</b>
-                  <div className="inventory-colour-list">
-                    {detail.colours?.length ? (
-                      detail.colours.map((colour: string) => (
-                        <span key={colour}>
-                          <i className="colour-swatch" style={{ background: colourHex(colour) }} />
-                          {colour}
-                        </span>
-                      ))
-                    ) : (
-                      <small>No colour specified</small>
-                    )}
-                  </div>
-                  <span>#{detail.id}</span>
-                  {record.mode === "edit" ? (
-                    <input
-                      name={`quantity_${detail.id}`}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      defaultValue={detail.quantity}
-                      required
-                    />
-                  ) : (
-                    <strong>{Number(detail.quantity).toLocaleString()} pcs</strong>
-                  )}
-                </div>
-              ))}
+            <div className="colour-stock-editor">
+              <p>Enter the total pieces for each colour, across all sizes. Unassigned keeps stock whose colour has not been recorded.</p>
+              <table><thead><tr><th>Colour</th><th>Current stock</th><th>New stock (pieces)</th></tr></thead><tbody>
+                {row.details.map((detail: any) => <tr key={detail.id || 'unassigned'}>
+                  <td><span className="colour-stock-label"><i className="colour-swatch" style={{background: colourHex(detail.colour)}} />{detail.colour || 'Unassigned'}</span></td>
+                  <td>{Number(detail.quantity).toLocaleString()} pcs</td>
+                  <td>{record.mode === 'edit' ? <input aria-label={'Stock for ' + (detail.colour || 'Unassigned')} name={'quantity_' + detail.id} type="number" min="0" max="999999999" step="1" defaultValue={detail.quantity} required /> : <b>{Number(detail.quantity).toLocaleString()} pcs</b>}</td>
+                </tr>)}
+              </tbody></table>
             </div>
           ) : record.mode === "edit" ? (
             <div className="inventory-edit-fields">
@@ -2550,13 +2524,13 @@ function InventoryRecordModal({
             </button>
             {record.mode === "edit" && (
               <button className="primary" type="submit">
-                <Check /> Save all sizes
+                <Check /> Save stock
               </button>
             )}
           </div>
         </div>
       </form>
-    </div>
+    </section>
   );
 }
 function SalesTransactionEditModal({
@@ -2822,10 +2796,11 @@ function salesCells(page: string, r: any) {
       <>
         <td className="invoice-reference-cell">
           <b>{invoiceReference(r)}</b>
+          <small className="invoice-list-sale-type">{r.sale_type} sale</small>
           {r.is_opening_balance && <small className="invoice-reference-kind">Opening receivable</small>}
           {Number(r.returned_amount || 0) > 0 && <small className="invoice-return-marker">Returned credit: {money(r.returned_amount)}</small>}
         </td>
-        <td>{r.customer_name}</td>
+        <td><span>{r.customer_name}</span><small className="invoice-list-rep">{r.rep_name || "No salesperson"}</small></td>
         <td>{r.rep_name}</td>
         <td>
           {r.invoice_date}
@@ -2844,13 +2819,11 @@ function salesCells(page: string, r: any) {
       <>
         <td>
           <b>{invoiceReference(r)}</b>
+          <small>{r.status === "returned" ? "Reversed / returned" : (r.collection_type || "regular").replaceAll("_", " ")}</small>
         </td>
         <td>{r.customer_name}</td>
-        <td>{r.invoice_rep_name}</td>
-        <td>{r.collector_name || r.invoice_rep_name}</td>
-        <td>{r.receipt_date}</td>
-        <td>{(r.collection_type || "regular").replaceAll("_", " ")}</td>
-        <td>{r.payment_method.replaceAll("_", " ")}</td>
+        <td>{r.invoice_rep_name || "Not assigned"}<small>Collector: {r.collector_name || "Not assigned"}</small></td>
+        <td>{r.receipt_date}<small>{r.payment_method.replaceAll("_", " ")}</small></td>
         <td>{money(r.amount)}</td>
       </>
     );
@@ -4091,14 +4064,6 @@ function SalesCreateModal({
             set.items.some((item: any) => Number(item.unit_price || 0) > 0)),
       ),
   );
-  const defaultInvoiceArticle = invoicableArticles[0] || data.articles?.[0];
-  const defaultInvoiceSet =
-    defaultInvoiceArticle?.sets?.find(
-      (set: any) =>
-        set.status !== "inactive" &&
-        (Number(set.set_price || 0) > 0 ||
-          set.items?.some((item: any) => Number(item.unit_price || 0) > 0)),
-    ) || defaultInvoiceArticle?.sets?.[0];
   const [invoiceLines, setInvoiceLines] = useState<any[]>(
     initial?.lines?.length
       ? [...new Set(initial.lines.map((line: any) => Number(line.article_id)))].map(
@@ -4152,8 +4117,8 @@ function SalesCreateModal({
         )
       : [
           {
-            article_id: Number(defaultInvoiceArticle?.id || 0),
-            set_template_id: Number(defaultInvoiceSet?.id || 0),
+            article_id: 0,
+            set_template_id: 0,
             colour: "",
             sets: 1,
             order_mode: "badge",
@@ -4167,8 +4132,8 @@ function SalesCreateModal({
     setInvoiceLines((lines) => [
       ...lines,
       {
-        article_id: Number(defaultInvoiceArticle?.id || 0),
-        set_template_id: Number(defaultInvoiceSet?.id || 0),
+        article_id: 0,
+        set_template_id: 0,
         colour: "",
         sets: 1,
         order_mode: "badge",
@@ -4551,6 +4516,11 @@ function SalesCreateModal({
         return;
       }
     } else if (type === "invoice") {
+      if (invoiceLines.some((line: any) => !Number(line.article_id))) {
+        showNotice("Choose an article for every invoice item before saving.");
+        setBusy(false);
+        return;
+      }
       if (
         invoiceLines.some((line: any) => {
           const article = data.articles.find(
@@ -4658,17 +4628,21 @@ function SalesCreateModal({
         notes: f.get("notes"),
       };
     } else {
-      path = "customer-receipts";
+      path = "customer-collections";
       body = {
-        invoice_id: Number(f.get("invoice_id")),
-        collector_sales_rep_id: Number(f.get("collector_sales_rep_id")),
+        request_key: f.get("request_key"),
+        customer_id: Number(f.get("customer_id")),
+        allocations: JSON.parse(String(f.get("allocations") || "[]")),
+        cheque_number: f.get("cheque_number"),
+        cheque_bank: f.get("cheque_bank"),
+        cheque_date: f.get("cheque_date"),
+        collector_sales_rep_id: Number(f.get("collector_sales_rep_id")) || null,
         payment_account_id: Number(f.get("payment_account_id")) || null,
         receipt_date: f.get("receipt_date"),
-        collection_type: f.get("collection_type"),
         payment_method: f.get("payment_method"),
-        commission_decision: f.get("commission_decision"),
         reference: f.get("reference"),
         amount: Number(f.get("amount")),
+        deduct_card_charge: f.get("deduct_card_charge") === "on",
       };
     }
     try {
@@ -5093,7 +5067,7 @@ function SalesCreateModal({
               <div className="form-row">
                 <label>
                   Article
-                  <select
+                  <ItemSearchSelect
                     name="article_id"
                     value={inventoryArticleId}
                     onChange={(event) => setInventoryArticleId(Number(event.target.value))}
@@ -5104,7 +5078,7 @@ function SalesCreateModal({
                         {displayCode(article)} — {article.name}
                       </option>
                     ))}
-                  </select>
+                  </ItemSearchSelect>
                 </label>
                 <label>
                   Size
@@ -5792,11 +5766,7 @@ function SalesCreateModal({
                                   />
                                   <span>
                                     {Number(
-                                      (data.finished_stock || []).find(
-                                        (stock: any) =>
-                                          Number(stock.article_id) === Number(line.article_id) &&
-                                          stock.size_label === item.size_label,
-                                      )?.quantity || 0,
+                                      stockAvailability(data.finished_stock || [], line.article_id, item.size_label, line.colour || ""),
                                     ).toLocaleString()}
                                   </span>
                                   {itemColours.length ? (
@@ -5869,11 +5839,7 @@ function SalesCreateModal({
                                   <span><small>Fixed: {money(fixedItemRate(line, item))}</small><br /><b>Given: {money(givenItemRate(line, item))}</b></span>
                                   <span>
                                     {Number(
-                                      (data.finished_stock || []).find(
-                                        (stock: any) =>
-                                          Number(stock.article_id) === Number(line.article_id) &&
-                                          stock.size_label === item.size_label,
-                                      )?.quantity || 0,
+                                      stockAvailability(data.finished_stock || [], line.article_id, item.size_label, line.colour || ""),
                                     ).toLocaleString()}
                                   </span>
                                 </div>
@@ -6097,14 +6063,11 @@ function SalesCreateModal({
                   );
                   const stockForSize = (size: any) =>
                     Number(
-                      (data.finished_stock || []).find(
-                        (stock: any) =>
-                          Number(stock.article_id) === Number(line.article_id) &&
-                          String(stock.size_label) === String(size),
-                      )?.quantity || 0,
+                      stockAvailability(data.finished_stock || [], line.article_id, size, line.colour || ""),
                     );
                   return (
-                    <div className="invoice-item-card" key={index}>
+                    <div className={`invoice-item-card simple-invoice-item ${article ? "has-article" : "empty-article"}`} key={index}>
+                      <div className="invoice-item-title"><b>Item {index + 1}</b><small>{article ? `${displayCode(article)} — ${article.name}` : "Select an article below"}</small></div>
                       <div className="invoice-item-header">
                         <label>
                           Article
@@ -6434,6 +6397,9 @@ function SalesCreateModal({
                             <strong>{stockForSize(item.size_label)} pcs</strong>
                           </span>
                         ))}
+                      </div>
+                      <div className="invoice-item-summary">
+                        <div><small>Item total</small><strong>{money(line.order_mode === "custom" ? customTotal : Number(line.sets || 0) * setPrice)}</strong></div>
                       </div>
                     </div>
                   );
@@ -7017,6 +6983,7 @@ function Records({
   edit,
   remove,
   receive,
+  reverse,
 }: {
   page: string;
   rows: RecordRow[];
@@ -7025,6 +6992,7 @@ function Records({
   edit: (row: RecordRow) => void;
   remove: (row: RecordRow) => void;
   receive?: (id: number) => void;
+  reverse?: (row: RecordRow) => void;
 }) {
   let heads: string[] = [];
   if (page === "Suppliers")
@@ -7146,14 +7114,18 @@ function Records({
                           >
                             <Pencil />
                           </button>
-                          <button
+                          {(page !== "General Ledger" || row.status !== "posted") && <button
                             className="icon-action delete"
                             title="Delete"
                             onClick={() => remove(row)}
                           >
                             <Trash2 />
-                          </button>
+                          </button>}
                         </>
+                      )}
+                      {page === "General Ledger" && reverse && row.status === "posted" &&
+                        ["manual_journal", "account_opening"].includes(row.source_type) && (
+                        <button className="secondary-action" onClick={() => reverse(row)}>Reverse</button>
                       )}
                     </div>
                   </td>
@@ -7184,6 +7156,7 @@ function CreateModal({
   submit: (url: string, body: any) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [journalLines, setJournalLines] = useState([emptyJournalLine(), emptyJournalLine()]);
   const [purchaseLines, setPurchaseLines] = useState<PurchaseDraftLine[]>([
     { material_id: 0, quantity: "", unit_cost: "" },
   ]);
@@ -7234,10 +7207,7 @@ function CreateModal({
         await submit("/journals", {
           posting_date: f.get("posting_date"),
           description: f.get("description"),
-          lines: [
-            { account_code: f.get("debit_account"), debit: Number(f.get("amount")), credit: 0 },
-            { account_code: f.get("credit_account"), debit: 0, credit: Number(f.get("amount")) },
-          ],
+          lines: journalPayload(journalLines),
         });
       if (type === "stock_adjustment")
         await submit("/stock-adjustments", {
@@ -7327,7 +7297,7 @@ function CreateModal({
           <div className="form-row">
             <label>
               Material
-              <select name="material_id" required defaultValue="">
+              <ItemSearchSelect name="material_id" required defaultValue="">
                 <option value="" disabled>
                   Select material
                 </option>
@@ -7336,7 +7306,7 @@ function CreateModal({
                     {displayCode(material)} — {material.name}
                   </option>
                 ))}
-              </select>
+              </ItemSearchSelect>
             </label>
             <label>
               Batch number
@@ -7392,43 +7362,12 @@ function CreateModal({
                 defaultValue={new Date().toISOString().slice(0, 10)}
               />
             </label>
-            <label>
-              Amount (LKR)
-              <input name="amount" required type="number" min="0.01" step="0.01" />
-            </label>
           </div>
           <label>
             Description
             <input name="description" required maxLength={255} />
           </label>
-          <div className="form-row">
-            <label>
-              Debit account
-              <select name="debit_account" required defaultValue="">
-                <option value="" disabled>
-                  Select account
-                </option>
-                {data.accounts.map((account) => (
-                  <option value={account.code} key={account.id}>
-                    {displayCode(account)} — {account.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Credit account
-              <select name="credit_account" required defaultValue="">
-                <option value="" disabled>
-                  Select account
-                </option>
-                {data.accounts.map((account) => (
-                  <option value={account.code} key={account.id}>
-                    {displayCode(account)} — {account.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <JournalEntryLines accounts={data.accounts} lines={journalLines} change={setJournalLines} />
         </>
       )}
     </ModalShell>
@@ -8001,25 +7940,24 @@ function ModalShell({
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   children: React.ReactNode;
 }) {
+  const [submitError, setSubmitError] = useState("");
   return (
-    <div className="backdrop" onMouseDown={close}>
+    <WorkspaceEntry>
       <form
         className="modal"
-        onSubmit={onSubmit}
+        onSubmit={async (event) => {
+          setSubmitError("");
+          try { await onSubmit(event); } catch (error) { setSubmitError((error as Error).message); }
+        }}
         onMouseDown={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Business record dialog"
       >
         <div className="popup-header">
-          <button type="button" className="close" onClick={close} aria-label="Close dialog">
-            <X />
-          </button>
+          <button type="button" className="workspace-entry-back" onClick={close}><ArrowLeft size={17} /> Back to records</button>
           <span>CONTROLLED TRANSACTION</span>
           <h2>{title}</h2>
         </div>
         <div className="popup-body">
-          <p>Review the information before saving this business record.</p>
+          {submitError && <p role="alert" className="error">{submitError}</p>}
           {children}
         </div>
         <div className="popup-footer">
@@ -8034,7 +7972,7 @@ function ModalShell({
           </div>
         </div>
       </form>
-    </div>
+    </WorkspaceEntry>
   );
 }
 function GrnFields({ orders }: { orders: Order[] }) {

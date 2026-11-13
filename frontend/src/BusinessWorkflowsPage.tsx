@@ -1,9 +1,13 @@
+import ItemSearchSelect from "./ItemSearchSelect";
+import InventoryCountImport from "./InventoryCountImport";
 import { displayCode, displayReferenceValue } from "./representative-reference";
+import { createPortal } from "react-dom";
+import OrderCustomerPicker from "./OrderCustomerPicker";
 import FilteredRecords from "./FilteredRecords";
 import { recordFields } from "./record-filters";
 import { matchesSearch } from "./search";
 import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Check, Eye, FileDown, Plus, Printer, RefreshCw, X } from "lucide-react";
+import { Check, Eye, FileDown, Plus, Printer, RefreshCw, Trash2, X } from "lucide-react";
 import {
   financeCsv,
   financeMoney as money,
@@ -304,6 +308,28 @@ export default function BusinessWorkflowsPage({
                         <button onClick={() => setModal({ kind: "quote-cancel", row: q })}>
                           Cancel
                         </button>
+                        <button
+                          className="workflow-delete"
+                          disabled={busy}
+                          title="Delete quotation"
+                          aria-label={`Delete quotation ${q.number}`}
+                          onClick={async () => {
+                            if (
+                              !window.confirm(
+                                `Delete quotation ${q.number}? This cannot be undone.`,
+                              )
+                            )
+                              return;
+                            try {
+                              await mutate(`quotations/${q.id}`, undefined, "DELETE");
+                              setNotice(`${q.number} deleted.`);
+                            } catch (e) {
+                              setError((e as Error).message);
+                            }
+                          }}
+                        >
+                          <Trash2 aria-hidden="true" />
+                        </button>
                       </>
                     )}
                     {q.sales_order_id && (
@@ -580,7 +606,7 @@ export default function BusinessWorkflowsPage({
             )}
             {page === "Bulk Inventory Import" && (
               <BulkImport
-                canManage={can("stock.manage")}
+                api={api} token={token} canManage={can("stock.manage")}
                 busy={busy}
                 save={(body: any) => mutate("bulk-stock-import", body)}
               />
@@ -623,6 +649,7 @@ export default function BusinessWorkflowsPage({
       )}
       {modal && (
         <WorkflowModal
+          pageMode={quotes}
           title={
             modal.kind === "quote"
               ? modal.row
@@ -728,15 +755,19 @@ export default function BusinessWorkflowsPage({
               <p>
                 Valid {modal.row.quotation_date} to {modal.row.valid_until} · {modal.row.sale_type}
               </p>
+              <div className="quote-customer-details">
+                <span>{[data.customers?.find((c: any) => Number(c.id) === Number(modal.row.customer_id))?.address, data.customers?.find((c: any) => Number(c.id) === Number(modal.row.customer_id))?.phone, data.customers?.find((c: any) => Number(c.id) === Number(modal.row.customer_id))?.email].filter(Boolean).join(" | ")}</span>
+                <span>Salesperson: {data.reps?.find((r: any) => Number(r.id) === Number(modal.row.sales_rep_id))?.name || "Not assigned"}</span>
+              </div>
               <WorkflowTable
                 values={modal.row.lines}
                 columns={[
                   ["code", "Article"],
                   ["name", "Product"],
-                  ["size_label", "Size"],
                   ["colour", "Colour"],
                   ["quantity", "Pieces"],
-                  ["rate", "Unit price", "money"],
+                  ["fixed_rate", "Fixed price / piece", "money"],
+                  ["rate", "Quoted price / piece", "money"],
                   ["total", "Amount", "money"],
                 ]}
               />
@@ -744,7 +775,7 @@ export default function BusinessWorkflowsPage({
                 <span>Quotation total</span>
                 <strong>{money(modal.row.total)}</strong>
               </div>
-              <p>{modal.row.notes}</p>
+              <p style={{ whiteSpace: "pre-wrap" }}>{modal.row.notes}</p>
               {modal.row.sales_order && (
                 <button onClick={() => go("Sales Orders")}>
                   Sales order {modal.row.sales_order} →
@@ -916,15 +947,21 @@ export function WorkflowTable({
   values,
   columns,
   actions,
+  minimumRows = 1,
+  paginate = true,
 }: {
   values: any[];
   columns: Column[];
   actions?: (row: any) => ReactNode;
+  minimumRows?: number;
+  paginate?: boolean;
 }) {
   const availableFields = recordFields(values);
   return (
     <FilteredRecords
       records={values}
+      paginate={paginate}
+      minimumRows={minimumRows}
       title="records"
       key={columns.map(([key]) => key).join(",")}
       fields={columns.map(([key, label, type]) => ({
@@ -994,12 +1031,31 @@ export function WorkflowModal({
   children,
   busy,
   close,
+  pageMode = false,
 }: {
   title: string;
   children: ReactNode;
   busy: boolean;
   close: () => void;
+  pageMode?: boolean;
 }) {
+  const heading = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (pageMode) { heading.current?.focus(); window.scrollTo({ top: 0 }); }
+  }, [pageMode]);
+  if (pageMode) {
+    const content = <div className="record-workspace-page" ref={heading} tabIndex={-1}>
+      <section className="modal workflow-modal quotation-workspace" aria-label={title}>
+        <div className="popup-header">
+          <button type="button" className="workspace-entry-back secondary" disabled={busy} onClick={close}>Back to quotations</button>
+          <h2>{title}</h2>
+        </div>
+        <div className="popup-body workflow-modal-content">{children}</div>
+      </section>
+    </div>;
+    const target = document.getElementById("workspace-entry-root");
+    return target ? createPortal(content, target) : content;
+  }
   return (
     <div
       className="backdrop"
@@ -1069,18 +1125,26 @@ export function SimpleForm({
 }
 
 function QuoteForm({ data, initial, user, busy, save }: any) {
+  const [customerId, setCustomerId] = useState(Number(initial?.customer_id || 0));
   const [lines, setLines] = useState<any[]>(
-    initial?.lines || [{ set_item_id: "", quantity: 1, rate: 0, colour: "" }],
+    initial?.lines || [{ article_id: "", quantity: 1, rate: 0, colour: "" }],
   );
   const change = (index: number, patch: any) =>
     setLines(lines.map((line, i) => (i === index ? { ...line, ...patch } : line)));
+  const customer = (data.customers || []).find((c: any) => Number(c.id) === customerId);
+  const [quoteDate, setQuoteDate] = useState(initial?.quotation_date || today());
+  const defaultValidity = new Date();
+  defaultValidity.setDate(defaultValidity.getDate() + 14);
+  const [validUntil, setValidUntil] = useState(initial?.valid_until || defaultValidity.toISOString().slice(0, 10));
+  const totalPieces = lines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
   return (
     <SimpleForm
       busy={busy}
       label="Save quotation"
+      submitDisabled={!customerId || !lines.length || lines.some((line) => !line.article_id && !line.set_item_id)}
       submit={(f) =>
         save({
-          customer_id: Number(f.get("customer_id")),
+          customer_id: customerId,
           sales_rep_id: Number(f.get("sales_rep_id")),
           quotation_date: f.get("quotation_date"),
           valid_until: f.get("valid_until"),
@@ -1091,20 +1155,10 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
         })
       }
     >
+      <h3 className="quote-section-title">Customer and quotation details</h3>
       <div className="form-row">
-        <label>
-          Customer
-          <select name="customer_id" required defaultValue={initial?.customer_id || ""}>
-            <option value="" disabled>
-              Choose customer
-            </option>
-            {data.customers.map((c: any) => (
-              <option key={c.id} value={c.id}>
-                {displayCode(c)} — {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <OrderCustomerPicker customers={data.customers || []} selectedId={customerId}
+          select={setCustomerId} help="Search by customer name, code or phone, then choose a customer." />
         <label>
           Salesperson
           <select
@@ -1127,6 +1181,11 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
           </select>
         </label>
       </div>
+      {customer && <div className="quote-customer-details">
+        <strong>{customer.name}</strong>
+        <span>{[customer.address, customer.phone, customer.email].filter(Boolean).join(" | ") || "No contact details recorded"}</span>
+        <span>Credit terms: {customer.credit_days == null ? "Not set" : customer.credit_days + " days"}</span>
+      </div>}
       <div className="form-row">
         <label>
           Quotation date
@@ -1134,7 +1193,8 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
             name="quotation_date"
             type="date"
             required
-            defaultValue={initial?.quotation_date || today()}
+            value={quoteDate}
+            onChange={(e) => { setQuoteDate(e.target.value); if (validUntil < e.target.value) setValidUntil(e.target.value); }}
           />
         </label>
         <label>
@@ -1143,7 +1203,9 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
             name="valid_until"
             type="date"
             required
-            defaultValue={initial?.valid_until || today()}
+            min={quoteDate}
+            value={validUntil}
+            onChange={(e) => setValidUntil(e.target.value)}
           />
         </label>
       </div>
@@ -1154,53 +1216,65 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
           <option value="cash">Cash</option>
         </select>
       </label>
-      <h3>Quoted products and sizes</h3>
-      {lines.map((line, index) => (
+      <h3 className="quote-section-title">Articles, quantities and prices</h3>
+      <p className="quote-help">Choose each article, enter pieces, then adjust the quoted price if needed. Fixed prices remain visible; your price list is unchanged.</p>
+      {lines.map((line, index) => {
+        const articleId = Number(line.article_id || data.items.find((i: any) => Number(i.id) === Number(line.set_item_id))?.article_id || 0);
+        const article = data.articles.find((i: any) => Number(i.id) === articleId);
+        const colours = Array.from(new Set<string>((data.items || [])
+          .filter((i: any) => Number(i.article_id) === articleId)
+          .flatMap((i: any) => String(i.colours || "").split(/[,;\n]+/).map((c: string) => c.trim()).filter(Boolean))));
+        return (
         <div className="workflow-quote-line" key={index}>
           <label>
-            Article / size
-            <select
+            Article
+            <ItemSearchSelect
               required
-              value={line.set_item_id}
+              value={line.article_id || data.items.find((i: any) => Number(i.id) === Number(line.set_item_id))?.article_id || ""}
               onChange={(e) => {
-                const item = data.items.find((i: any) => i.id === Number(e.target.value));
+                const item = data.articles.find((i: any) => i.id === Number(e.target.value));
                 change(index, {
-                  set_item_id: Number(e.target.value),
-                  rate: Number(item?.unit_price || 0),
+                  article_id: Number(e.target.value),
+                  set_item_id: null,
+                  colour: "",
+                  rate: Number(item?.selling_price || 0),
+                  fixed_rate: Number(item?.selling_price || 0),
                 });
               }}
             >
               <option value="" disabled>
-                Choose size
+                Choose article
               </option>
-              {data.items.map((i: any) => (
+              {data.articles.map((i: any) => (
                 <option key={i.id} value={i.id}>
-                  {displayCode(i)} · {i.name} · Size {i.size_label} · {money(i.unit_price)}
+                  {i.code}
                 </option>
               ))}
-            </select>
+            </ItemSearchSelect>
+            {article && <span className="quote-article-meta">{article.category || article.name}{Number(article.pieces_per_set) > 0 ? " / " + article.pieces_per_set + " pieces per set" : ""}</span>}
           </label>
           <label>
-            Colour
-            <input
-              maxLength={80}
-              value={line.colour || ""}
-              onChange={(e) => change(index, { colour: e.target.value })}
-            />
+            Colour / variant
+            {colours.length > 0 ? <select value={line.colour || ""} onChange={(e) => change(index, { colour: e.target.value })}>
+              <option value="">Choose colour (optional)</option>
+              {line.colour && !colours.includes(line.colour) && <option value={line.colour}>{line.colour}</option>}
+              {colours.map((colour) => <option key={colour} value={colour}>{colour}</option>)}
+            </select> : <input placeholder={article ? "Enter colour (optional)" : "Choose article first"} disabled={!article} maxLength={80} value={line.colour || ""} onChange={(e) => change(index, { colour: e.target.value })} />}
           </label>
           <label>
             Pieces
             <input
               type="number"
               required
-              min="0.01"
-              step="0.01"
+              min="1"
+              step="1"
               value={line.quantity}
               onChange={(e) => change(index, { quantity: Number(e.target.value) })}
             />
           </label>
+          <div className="quote-fixed-price"><span>Fixed price / piece</span><strong>{(line.article_id || line.set_item_id) ? money(line.fixed_rate ?? data.articles.find((i: any) => Number(i.id) === Number(line.article_id))?.selling_price ?? 0) : "Choose an article"}</strong></div>
           <label>
-            Price / piece
+            Given price / piece
             <input
               type="number"
               min="0"
@@ -1210,6 +1284,7 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
               onChange={(e) => change(index, { rate: Number(e.target.value) })}
             />
           </label>
+          <div className="quote-line-total"><span>Line total</span><strong>{money(Number(line.quantity || 0) * Number(line.rate || 0))}</strong></div>
           <button
             type="button"
             disabled={lines.length === 1}
@@ -1218,15 +1293,15 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
             Remove line
           </button>
         </div>
-      ))}
+      ); })}
       <button
         type="button"
-        onClick={() => setLines([...lines, { set_item_id: "", quantity: 1, rate: 0, colour: "" }])}
+        onClick={() => setLines([...lines, { article_id: "", quantity: 1, rate: 0, colour: "" }])}
       >
-        <Plus /> Add size
+        <Plus /> Add article
       </button>
       <div className="workflow-summary">
-        <span>Offer total</span>
+        <span>{lines.length} lines / {totalPieces} pieces - Quotation total (LKR)</span>
         <strong>
           {money(
             lines.reduce((sum, line) => sum + Math.round(line.quantity * line.rate * 100) / 100, 0),
@@ -1234,8 +1309,8 @@ function QuoteForm({ data, initial, user, busy, save }: any) {
         </strong>
       </div>
       <label>
-        Notes
-        <textarea name="notes" maxLength={2000} defaultValue={initial?.notes} />
+        Terms and notes
+        <textarea name="notes" rows={4} maxLength={2000} placeholder="Payment terms, delivery lead time, delivery location, exclusions and special conditions for this offer." defaultValue={initial?.notes} />
       </label>
       {initial && (
         <label>
@@ -1606,46 +1681,39 @@ function MasterData({ page, data, canManage, busy, save }: any) {
   const [article, setArticle] = useState("");
   const selected = data.articles.find((a: any) => a.id === Number(article));
   return (
-    <>
-      <p className="report-note">
-        Shared product classifications are used by the existing article/pricing records. Existing
-        category and unit values are retained. Assign classifications below without changing prices
-        or stock.
-      </p>
+    <div className="simple-master-data">
+      {canManage && <section className="master-create-bar">
+        <SimpleForm busy={busy} label={`Add ${kind}`} submit={async f => {
+          await save("catalog-terms", { kind, name: f.get("name") });
+        }}>
+          <label>{page === "Categories" ? "Category name" : `New ${kind}`}
+            <input name="name" required maxLength={kind === "unit" ? 20 : 80} placeholder={`Enter ${kind} name`} />
+          </label>
+        </SimpleForm>
+      </section>}
       <WorkflowTable
-        values={data.terms.filter((t: any) => t.kind === kind)}
+        minimumRows={5}
+        values={data.terms.filter((t: any) => t.kind === kind).map((t: any) => ({...t, status: Number(t.active) ? "Active" : "Inactive"}))}
         columns={[
           ["name", page],
-          ["active", "Active"],
+          ["status", "Status"],
         ]}
       />
       {canManage && (
-        <div className="master-data-panels">
-          <section className="master-data-panel">
-            <h2>Add {kind}</h2>
-            <SimpleForm
-              busy={busy}
-              label={`Add ${kind}`}
-              submit={(f) => save("catalog-terms", { kind, name: f.get("name") })}
-            >
-              <label>
-                New {kind}
-                <input name="name" required maxLength={kind === "unit" ? 20 : 80} />
-              </label>
-            </SimpleForm>
-          </section>
+        <details className="master-link-details">
+          <summary>Assign classifications to an article</summary>
           <section className="master-data-panel">
             <h2>Link classifications to an article</h2>
             <label>
               Article
-              <select value={article} onChange={(e) => setArticle(e.target.value)}>
+              <ItemSearchSelect value={article} onChange={(e) => setArticle(e.target.value)}>
                 <option value="">Select article</option>
                 {data.articles.map((a: any) => (
                   <option key={a.id} value={a.id}>
                     {displayCode(a)} · {a.name}
                   </option>
                 ))}
-              </select>
+              </ItemSearchSelect>
             </label>
             {selected && (
               <SimpleForm
@@ -1697,18 +1765,20 @@ function MasterData({ page, data, canManage, busy, save }: any) {
               </SimpleForm>
             )}
           </section>
-        </div>
+        </details>
       )}
-    </>
+    </div>
   );
 }
 
-function BulkImport({ canManage, busy, save }: any) {
+function BulkImport({ api, token, canManage, busy, save }: any) {
   const [rows, setRows] = useState<any[]>([]),
     [error, setError] = useState(""),
     [key, setKey] = useState("");
   return (
     <>
+      {canManage && <InventoryCountImport api={api} token={token} />}
+      <details className="stock-import-advanced"><summary>Advanced: add stock using CSV</summary><h2>Stock additions (CSV)</h2>
       <p className="report-note">
         Import positive stock additions by existing material or article code. Raw additions post the
         existing inventory adjustment journal; finished additions use the existing size-based stock
@@ -1791,6 +1861,7 @@ function BulkImport({ canManage, busy, save }: any) {
           )}
         </SimpleForm>
       )}
+      </details>
     </>
   );
 }
@@ -1819,6 +1890,13 @@ function Subledger({
     [data, setData] = useState<any>(null),
     [error, setError] = useState("");
   const output = useRef<HTMLDivElement>(null);
+  const [partySearch, setPartySearch] = useState("");
+  useEffect(() => {
+    setKind(page === "Customer Ledgers" ? "customer" : page === "Supplier Ledgers" ? "supplier" : "raw");
+    setId("");
+    setVariant("");
+    setPartySearch("");
+  }, [page]);
   useEffect(() => {
     let active = true;
     financeRequest(api, token, `business-workflows?as_of=${today()}`)
@@ -1863,6 +1941,7 @@ function Subledger({
             : "articles"
     ] || [];
   const stock = kind === "raw" || kind === "finished";
+  const matchingParties = options.filter((option: any) => matchesSearch([displayCode(option), ...Object.values(option)], partySearch));
   const columns: Column[] = stock
     ? [
         ["date", "Date"],
@@ -1910,23 +1989,23 @@ function Subledger({
             </select>
           </label>
         )}
-        <label className="ledger-party-field">
+        <div className="ledger-party-field">
+          <label htmlFor="ledger-party-search">
           {stock ? "Product" : "Party"}
-          <select
-            value={id}
-            onChange={(e) => {
-              setId(e.target.value);
-              setVariant("");
-            }}
-          >
-            <option value="">Choose {stock ? "product" : "party"}</option>
-            {options.map((o: any) => (
-              <option key={o.id} value={o.id}>
-                {displayCode(o)} · {o.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <input id="ledger-party-search" type="search" value={partySearch}
+            placeholder={`Search ${stock ? "product" : kind} name or code`}
+            onChange={event => setPartySearch(event.target.value)} />
+          </label>
+          <div className="ledger-party-results" aria-label={`Choose ${stock ? "product" : kind}`}>
+            {!metadata ? <p role="status">{error ? "Could not load the list." : "Loading records…"}</p> :
+              matchingParties.length ? matchingParties.map((option: any) => <button
+                key={option.id} type="button" aria-pressed={id === String(option.id)}
+                onClick={() => { setId(String(option.id)); setVariant(""); }}>
+                <strong>{displayCode(option)}</strong><span>{option.name}</span>
+                {id === String(option.id) && <Check size={16} aria-label="Selected" />}
+              </button>) : <p role="status">No matching {stock ? "products" : `${kind}s`} in this database. Try another name or code.</p>}
+          </div>
+        </div>
         {stock && (
           <label>
             Batch / size (optional)
@@ -1982,6 +2061,7 @@ function Subledger({
       {!id && (
         <p>Choose a {stock ? "product" : "customer/supplier"} to view its linked movements.</p>
       )}
+      {id && !data && !error && from <= to && <p role="status">Loading ledger movements…</p>}
       {data && (
         <div ref={output} className="subledger-output">
           <h2>
@@ -1993,6 +2073,7 @@ function Subledger({
           </div>
           <WorkflowTable
             values={data.rows.filter((r: any) => matchesSearch(r, search))}
+            paginate={false}
             columns={columns}
             actions={(r) => <button onClick={() => go(r.source_page)}>Open source module →</button>}
           />

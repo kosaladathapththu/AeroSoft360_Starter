@@ -1,0 +1,18 @@
+const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), vm = require('node:vm'), ts = require('typescript');
+const helpers = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/journal-draft.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports: helpers });
+const line = (account_code, debit = '', credit = '', description = '') => ({ account_code, debit, credit, description });
+const split = [line('5400', '100.10', '', ' Office supplies '), line('5300', '200.20'), line('1000', '', '300.30')];
+assert.equal(helpers.journalPayload(split).length, 3);
+assert.equal(helpers.journalPayload(split)[0].description, 'Office supplies');
+assert.equal(helpers.journalTotals(split).difference, 0);
+assert.equal(helpers.journalPayload(split)[2].credit, 300.30);
+assert.throws(() => helpers.journalPayload([line('5400', '1'), line('1000', '', '2')]), /must match/);
+assert.throws(() => helpers.journalPayload([line('5400', '1', '1'), line('1000', '1', '1')]), /either a debit or a credit/);
+assert.throws(() => helpers.journalPayload([line('5400'), line('1000')]), /either a debit or a credit/);
+assert.throws(() => helpers.journalPayload([line('', '1'), line('1000', '', '1')]), /select an account/);
+assert.throws(() => helpers.journalPayload([line('5400', '-1'), line('1000', '', '-1')]), /either a debit or a credit/);
+assert.throws(() => helpers.journalPayload([line('5400', '0.001'), line('1000', '', '0.001')]), /two decimal/);
+assert.throws(() => helpers.journalPayload([line('5400', 'NaN'), line('1000', '', '1')]), /either a debit or a credit/);
+assert.throws(() => helpers.journalPayload([line('5400', '1')]), /at least two/);
+console.log('12 multi-line journal checks passed.');

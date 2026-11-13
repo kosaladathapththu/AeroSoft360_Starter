@@ -1,0 +1,30 @@
+/* Receipt-specific print layout; other financial reports retain their styles. */
+body { font: 11pt/1.45 Arial, Helvetica, sans-serif; color: #26362e; }
+.document-heading { margin: 12px 0; }
+.document-heading h1 { font-size: 22pt; }
+.document-heading p, .document-meta, .document-reference, .document-end { display: none; }
+.document-content .receipt-customer { font-size: 16pt; margin: 16px 0 10px; }
+.receipt-payment-details { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; row-gap: 8px; margin-bottom: 18px; }
+.receipt-payment-details p { margin: 0; }
+.receipt-payment-details span { display: block; color: #647268; font-size: 9pt; }
+.receipt-payment-details b { display: block; font-size: 11pt; font-weight: 600; }
+.receipt-payment-summary { display: flex; gap: 30px; padding: 15px 18px; margin: 16px 0 22px; background: #f0f4ef; border: 1px solid #aebeb0; border-radius: 6px; break-inside: avoid; }
+.receipt-payment-summary > span { display: block; flex: 1; font-size: 10pt; }
+.receipt-payment-summary strong { display: block; margin-top: 5px; font-size: 18pt; color: #224b35; }
+.receipt-payment-summary small { display: block; font-size: 9pt; margin-top: 4px; }
+.document-content h3 { font-size: 12pt; margin: 20px 0 10px; break-after: avoid; }
+.document-content h4 { font-size: 11pt; margin: 16px 0 8px; break-after: avoid; }
+.document-content table { font-size: 10pt; margin: 0; width: 100%; table-layout: auto; }
+.document-content th { background: #e8eee7; color: #243c2c; font-size: 8.5pt; letter-spacing: 0; white-space: normal; }
+.document-content th, .document-content td { padding: 10px 8px; vertical-align: top; border-bottom: 1px solid #c7d0c7; }
+.document-content td small { display: block; font-size: 8.5pt; color: #657167; margin-top: 3px; }
+.receipt-settlement-table td:not(:first-child) { white-space: nowrap; }
+.receipt-settlement-table td:last-child { white-space: normal; }
+.receipt-note { font-size: 9pt; color: #5c695f; margin: 10px 0 16px; }
+.collection-receipt-invoice { margin: 16px 0; }
+.receipt-closing { break-inside: avoid; margin-top: 18px; }
+.receipt-allocated-total { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 2px solid #46654e; margin: 0; }
+.receipt-allocated-total strong { font-size: 15pt; }
+.receipt-signatures { display: flex; justify-content: space-between; gap: 32px; margin-top: 28px; font-size: 9pt; }
+.receipt-signatures span { width: 45%; }
+.receipt-signatures b { display: block; margin-top: 14px; font-weight: normal; }

@@ -1,3 +1,4 @@
+import ItemSearchSelect from "./ItemSearchSelect";
 import { displayCode } from "./representative-reference";
 import { financeMoney } from "./finance-utils";
 export type PurchaseDraftLine = { material_id: number; quantity: string; unit_cost: string };
@@ -23,7 +24,7 @@ export default function PurchaseOrderLines({
         <div className="purchase-draft-line" key={index}>
           <label>
             Material
-            <select
+            <ItemSearchSelect
               value={line.material_id || ""}
               onChange={(e) => update(index, "material_id", e.target.value)}
               required
@@ -38,7 +39,7 @@ export default function PurchaseOrderLines({
                   {displayCode(m)} — {m.name}
                 </option>
               ))}
-            </select>
+            </ItemSearchSelect>
           </label>
           <div className="form-row">
             <label>

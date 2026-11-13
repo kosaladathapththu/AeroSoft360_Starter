@@ -32,7 +32,7 @@ final class DashboardService
             ->get();
         $paid = DB::table("receipt_allocations as a")
             ->join("customer_receipts as r", "r.id", "=", "a.receipt_id")
-            ->where("r.status", "posted")
+            ->when(true, fn($q) => \App\Services\Accounting\ReceiptScope::asOf($q, "r", $asOf))
             ->whereDate("r.receipt_date", "<=", $asOf)
             ->select("a.invoice_id")
             ->selectRaw("SUM(a.amount) as amount")
@@ -85,7 +85,7 @@ final class DashboardService
         );
         $receipts = DB::table("customer_receipts as r")
             ->join("customers as c", "c.id", "=", "r.customer_id")
-            ->where("r.status", "posted")
+            ->when(true, fn($q) => \App\Services\Accounting\ReceiptScope::asOf($q, "r", $asOf))
             ->where("r.is_opening_balance", false)
             ->whereBetween("r.receipt_date", [$from, $asOf])
             ->select(
@@ -214,42 +214,23 @@ final class DashboardService
 
     private function stock(): array
     {
-        $variants = DB::table("article_set_items as i")
-            ->join("article_set_templates as t", "t.id", "=", "i.set_template_id")
-            ->join("articles as a", "a.id", "=", "t.article_id")
-            ->where("a.status", "active")
-            ->where("t.status", "active")
-            ->select("a.id as article_id", "a.code", "a.name", "i.size_label")
-            ->distinct()
-            ->get();
-        $balances = DB::table("finished_goods_stock")
-            ->get()
-            ->keyBy(fn($s) => $s->article_id . ":" . $s->size_label);
-        $low = 0;
-        $out = 0;
-        $unrecorded = 0;
-        $pieces = 0;
-        foreach ($variants as $variant) {
-            $record = $balances->get($variant->article_id . ":" . $variant->size_label);
-            if (!$record) {
+        $articles = DB::table('articles')->where('status', 'active')->get();
+        $balances = DB::table('finished_goods_stock')->get()->groupBy('article_id');
+        $low = $out = $unrecorded = 0;
+        $pieces = 0.0;
+        foreach ($articles as $article) {
+            $records = $balances->get($article->id, collect());
+            if ($records->isEmpty()) {
                 $unrecorded++;
                 continue;
             }
-            $quantity = (float) $record->quantity;
+            $pool = $records->firstWhere('size_label', '__ARTICLE_TOTAL__');
+            $quantity = (float) $records->sum('quantity');
             $pieces += $quantity;
-            if ($quantity <= 0) {
-                $out++;
-            } elseif ($quantity <= 5) {
-                $low++;
-            }
+            if ($quantity <= 0) $out++;
+            elseif ($quantity <= 5) $low++;
         }
-        return [
-            "pieces" => $pieces,
-            "low" => $low,
-            "out" => $out,
-            "unrecorded" => $unrecorded,
-            "threshold" => 5,
-            "variants" => $variants->count(),
-        ];
+        return ['pieces' => $pieces, 'low' => $low, 'out' => $out,
+            'unrecorded' => $unrecorded, 'threshold' => 5, 'variants' => $articles->count()];
     }
 }

@@ -294,6 +294,7 @@ final class RetailReportService
             ->join("customers as c", "c.id", "=", "r.customer_id")
             ->join("sales_representatives as rep", "rep.id", "=", "r.sales_rep_id")
             ->whereBetween("r.receipt_date", [$from, $to])
+            ->when(true, fn($q) => \App\Services\Accounting\ReceiptScope::asOf($q, "r", $to))
             ->when(
                 Schema::hasColumn("customer_receipts", "is_opening_balance"),
                 fn($q) => $q->where("r.is_opening_balance", false),

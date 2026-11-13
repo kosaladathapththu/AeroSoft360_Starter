@@ -1,0 +1,33 @@
+@media print {
+  .screen-record-navigation { display: none !important; }
+}
+@media screen {
+  tr[data-screen-page-hidden="true"] { display: none !important; }
+  .content:has(.screen-record-page) .heading { margin-bottom: 10px; align-items: center; }
+  .content:has(.screen-record-page) .heading h1 { font-size: 25px; }
+  .content:has(.screen-record-page) .heading p,
+  .content:has(.screen-record-page) .heading > div > span { display: none; }
+  .screen-record-page > div > .table-card { margin-bottom: 0; }
+  .screen-record-page > div > .table-card > table > thead > tr > th { padding: 11px 12px; font-size: 11px; }
+  .screen-record-page > div > .table-card > table > tbody > tr > td { padding: 10px 12px; font-size: 13px; height: 64px; }
+  .screen-record-navigation { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; color: #536c70; font-size: 12px; }
+  .screen-record-navigation > div { display: flex; gap: 6px; align-items: center; }
+  .screen-record-navigation :is(button, select) { border: 1px solid #accac2; border-radius: 6px; background: #edf6f1; color: #23634e; padding: 6px 10px; min-height: 34px; font-size: 12px; }
+  .screen-record-navigation label { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .screen-record-navigation button:disabled { opacity: .45; cursor: default; }
+  @media(max-width:650px) {
+    .screen-record-navigation { flex-direction: column; align-items: start; }
+    .screen-record-navigation > div { flex-wrap: wrap; }
+  }
+}
+
+/* Clear page navigation, including an explicit inactive state. */
+@media screen {
+  .shell .screen-record-navigation button:not(:disabled) { background: #176344; color: #fff; border: 1px solid #176344; font-weight: 700; min-height: 40px; padding: 8px 14px; }
+  .shell .screen-record-navigation button:not(:disabled):hover { background: #104a32; }
+  .shell .screen-record-navigation button:disabled { opacity: 1; background: #e5e9e7; color: #69756f; border-color: #c7d0ca; }
+  .shell .screen-record-navigation select { background: #fff; color: #203d30; border: 2px solid #6f9482; font-weight: 700; }
+  .pricing-expand-row { cursor: pointer; }
+  .pricing-expand-row:focus-visible { outline: 2px solid #176344; outline-offset: -3px; }
+  .pricing-expand-row:hover > td { background: #e5f1e9; }
+}

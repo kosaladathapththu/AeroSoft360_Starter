@@ -240,6 +240,7 @@ final class SalesReturnService
                         $id,
                         $lineId,
                         $data["return_date"],
+                        (string) ($line->colour ?? ""),
                     );
                 }
                 foreach ($serialIds as $serialId) {

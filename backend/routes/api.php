@@ -54,6 +54,10 @@ Route::prefix("v1")->group(function (): void {
             \App\Http\Controllers\Api\QuotationController::class,
             "update",
         ])->middleware("permission:accounting.manage");
+        Route::delete("/quotations/{id}", [
+            \App\Http\Controllers\Api\QuotationController::class,
+            "delete",
+        ])->middleware("permission:accounting.manage");
         Route::post("/quotations/{id}/convert", [
             \App\Http\Controllers\Api\QuotationController::class,
             "convert",
@@ -102,6 +106,9 @@ Route::prefix("v1")->group(function (): void {
             \App\Http\Controllers\Api\BusinessWorkflowController::class,
             "stopRecurring",
         ])->middleware("permission:accounting.manage");
+        Route::get('/inventory-count/template', [\App\Http\Controllers\Api\InventoryCountController::class, 'template'])->middleware('permission:stock.manage');
+        Route::post('/inventory-count/preview', [\App\Http\Controllers\Api\InventoryCountController::class, 'preview'])->middleware('permission:stock.manage');
+        Route::post('/inventory-count/apply', [\App\Http\Controllers\Api\InventoryCountController::class, 'apply'])->middleware('permission:stock.manage');
         Route::post("/bulk-stock-import", [
             \App\Http\Controllers\Api\BusinessWorkflowController::class,
             "bulkStock",
@@ -276,6 +283,10 @@ Route::prefix("v1")->group(function (): void {
             AccountingSalesController::class,
             "deleteInvoice",
         ])->middleware("permission:accounting.manage");
+        Route::post("/customer-collections", [\App\Http\Controllers\Api\CustomerCollectionController::class, "store"])->middleware("permission:accounting.manage");
+        Route::post("/customer-collections/{id}/cheque", [\App\Http\Controllers\Api\CustomerCollectionController::class, "transition"])->middleware("permission:accounting.manage");
+        Route::post("/customer-collections/{id}/void", [\App\Http\Controllers\Api\CustomerCollectionController::class, "voidPayment"])->middleware("permission:accounting.manage");
+        Route::post("/customer-collections/{id}/correct", [\App\Http\Controllers\Api\CustomerCollectionController::class, "correct"])->middleware("permission:accounting.manage");
         Route::post("/customer-receipts", [
             AccountingSalesController::class,
             "receipt",
@@ -288,6 +299,11 @@ Route::prefix("v1")->group(function (): void {
             AccountingSalesController::class,
             "deleteReceipt",
         ])->middleware("permission:accounting.manage");
+        Route::get('/commission-categories', [\App\Http\Controllers\Api\CommissionCategoryController::class, 'index'])->middleware('permission:workspace.view');
+        Route::get('/commission-categories/status', [\App\Http\Controllers\Api\CommissionCategoryController::class, 'status'])->middleware('permission:workspace.view');
+        Route::post('/commission-categories/unlock', [\App\Http\Controllers\Api\CommissionCategoryController::class, 'unlock'])->middleware(['permission:workspace.view', 'throttle:5,1']);
+        Route::post('/commission-categories/lock', [\App\Http\Controllers\Api\CommissionCategoryController::class, 'lock'])->middleware('permission:workspace.view');
+        Route::put('/commission-categories/settings', [\App\Http\Controllers\Api\CommissionCategoryController::class, 'settings'])->middleware(['permission:admin.manage', 'throttle:5,1']);
         Route::post("/commissions/manual", [
             AccountingSalesController::class,
             "manualCommission",
@@ -312,6 +328,7 @@ Route::prefix("v1")->group(function (): void {
             AccountingSalesController::class,
             "updateCommissionSettings",
         ])->middleware("permission:accounting.manage");
+        Route::put('/articles/{id}/colour-stock', [\App\Http\Controllers\Api\ColourStockController::class, 'update'])->middleware('permission:stock.manage');
         Route::post("/finished-stock-adjustments", [
             AccountingSalesController::class,
             "adjustFinishedStock",
@@ -323,10 +340,6 @@ Route::prefix("v1")->group(function (): void {
         Route::delete("/finished-stock/{id}", [
             AccountingSalesController::class,
             "deleteFinishedStock",
-        ])->middleware("permission:stock.manage");
-        Route::post("/finished-stock/temporary-fill", [
-            AccountingSalesController::class,
-            "temporaryFillFinishedStock",
         ])->middleware("permission:stock.manage");
         Route::get("/sales/aging", [SalesController::class, "aging"])->middleware(
             "permission:workspace.view",
@@ -371,6 +384,7 @@ Route::prefix("v1")->group(function (): void {
         Route::post("/stock-adjustments", [StockAdjustmentController::class, "store"])->middleware(
             "permission:stock.manage",
         );
+        Route::post('/journals/{journal}/reverse', [JournalController::class, 'reverse'])->middleware('permission:accounting.manage');
         Route::post("/journals", [JournalController::class, "store"])->middleware(
             "permission:accounting.manage",
         );

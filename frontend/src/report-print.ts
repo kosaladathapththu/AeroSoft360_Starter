@@ -7,6 +7,7 @@ type PrintReport = {
   from: string;
   to: string;
   source: HTMLElement;
+  styles?: string;
 };
 
 const company = "SUPUN AEROSOFT (PVT) LTD";
@@ -131,6 +132,7 @@ export function buildReportDocument(report: PrintReport, generated = new Date())
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(report.title)} - AeroSoft360</title>
 <style>${reportStyles}
+${report.styles || ""}
 @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 12mm 12mm 18mm;
   @bottom-left { content: "SUPUN AEROSOFT (PVT) LTD | AeroSoft360 ERP"; font: 8pt Arial, sans-serif; color: #52616c; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial, sans-serif; color: #52616c; }

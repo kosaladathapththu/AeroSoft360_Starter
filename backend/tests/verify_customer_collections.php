@@ -1,0 +1,263 @@
+<?php
+// Isolated receipt checks using an in-memory database.
+require __DIR__ . "/../vendor/autoload.php";
+$app = require __DIR__ . "/../bootstrap/app.php";
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+config([
+    "database.default" => "sqlite",
+    "database.connections.sqlite" => [
+        "driver" => "sqlite",
+        "database" => ":memory:",
+        "prefix" => "",
+    ],
+]);
+Illuminate\Support\Facades\DB::purge("sqlite");
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Api\SalesController;
+
+$tables = [
+    "accounts" => ["code", "type", "is_postable", "is_active", "is_cash_account"],
+    "sales_invoices" => [
+        "customer_id",
+        "sales_rep_id",
+        "invoice_date",
+        "total",
+        "received_amount",
+        "outstanding",
+        "status",
+        "updated_at",
+    ],
+    "sales_representatives" => ["name", "default_commission_rate"],
+    "sales_invoice_lines" => ["sales_invoice_id", "quantity"],
+    "commission_settings" => ["max_collection_days"],
+    "customer_receipts" => [
+        "payment_account_id",
+        "number",
+        "customer_id",
+        "sales_rep_id",
+        "collector_sales_rep_id",
+        "receipt_date",
+        "collection_type",
+        "payment_method",
+        "reference",
+        "amount",
+        "status",
+        "created_at",
+        "updated_at",
+    ],
+    "receipt_allocations" => [
+        "receipt_id",
+        "invoice_id",
+        "commission_payee_sales_rep_id",
+        "amount",
+        "days_taken",
+        "commission_pieces",
+        "commission_rate",
+        "commission_amount",
+        "commission_status",
+        "commission_decision",
+        "created_at",
+        "updated_at",
+    ],
+];
+foreach ($tables as $name => $columns) {
+    Schema::create($name, function ($schema) use ($columns) {
+        $schema->id();
+        foreach ($columns as $column) {
+            $schema->string($column)->nullable();
+        }
+    });
+}
+// All test data below is isolated in SQLite memory; no real database is migrated.
+Schema::table('accounts', function ($t) { foreach (['name','parent_id','is_system','cash_flow_activity','description','created_at','updated_at'] as $column) $t->string($column)->nullable(); });
+Schema::table('sales_representatives', fn($t) => $t->string('status')->default('active'));
+Schema::table('sales_invoices', function ($t) { $t->string('number')->nullable(); $t->decimal('returned_amount',18,2)->default(0); $t->boolean('is_opening_balance')->default(false); });
+foreach ([
+    'customers' => ['name','code'],
+    'accounting_periods' => ['starts_on','ends_on','status'],
+    'journal_entries' => ['number','accounting_period_id','source_type','source_id','posting_date','description','status','posted_at','created_at','updated_at'],
+    'journal_lines' => ['journal_entry_id','account_id','debit','credit','description','created_at','updated_at'],
+    'audit_logs' => ['event','entity_type','entity_id','payload','created_at'],
+] as $name => $columns) {
+    Schema::create($name, function ($t) use ($columns) { $t->id(); foreach ($columns as $column) $t->string($column)->nullable(); });
+}
+foreach (['1000','1100','2260','5300'] as $code) DB::table('accounts')->insert([
+    'code'=>$code,'name'=>$code,'type'=>$code==='2260'?'liability':($code==='5300'?'expense':'asset'),
+    'is_active'=>1,'is_postable'=>1,'is_cash_account'=>$code==='1000'?1:0,
+]);
+DB::table('customers')->insert([['id'=>1,'name'=>'Customer One','code'=>'CUS-001'],['id'=>2,'name'=>'Customer Two','code'=>'CUS-002']]);
+DB::table('sales_representatives')->insert(['id'=>1,'name'=>'Representative','status'=>'active','default_commission_rate'=>1]);
+DB::table('commission_settings')->insert(['max_collection_days'=>100]);
+DB::table('accounting_periods')->insert(['starts_on'=>'2026-01-01','ends_on'=>'2026-12-31','status'=>'open']);
+(require __DIR__.'/../database/migrations/2026_11_06_000001_create_customer_collections.php')->up();
+(require __DIR__.'/../database/migrations/2026_11_09_000002_add_card_collection_charges.php')->up();
+(require __DIR__.'/../database/migrations/2026_11_09_000004_add_collection_corrections.php')->up();
+$controller = new App\Http\Controllers\Api\CustomerCollectionController();
+$sales = new SalesController();
+$posting = new App\Services\Accounting\PostingService();
+function check($value, $label) { if (!$value) throw new RuntimeException($label); echo "PASS $label\n"; }
+function reject($callback, $label) {
+    try { $callback(); } catch (Illuminate\Validation\ValidationException | Symfony\Component\HttpKernel\Exception\HttpException $error) { echo "PASS $label\n"; return; }
+    throw new RuntimeException("Accepted invalid action: $label");
+}
+function invoice($id, $customer=1, $opening=false) {
+    DB::table('sales_invoices')->insert(['id'=>$id,'customer_id'=>$customer,'sales_rep_id'=>1,'invoice_date'=>'2026-10-01','number'=>'INV-'.$id,'total'=>1000,'received_amount'=>0,'outstanding'=>1000,'status'=>'unpaid','is_opening_balance'=>$opening]);
+    DB::table('sales_invoice_lines')->insert(['sales_invoice_id'=>$id,'quantity'=>10]);
+}
+function body($ids, $cheque=false) {
+    return ['request_key'=>(string) Illuminate\Support\Str::uuid(),'customer_id'=>1,'collector_sales_rep_id'=>1,'receipt_date'=>'2026-10-28','payment_method'=>$cheque?'cheque':'cash','payment_account_id'=>1,'amount'=>1500,
+        'cheque_number'=>$cheque?'CHQ-123':null,'cheque_bank'=>$cheque?'Test Bank':null,'cheque_date'=>$cheque?'2026-11-03':null,
+        'allocations'=>[['invoice_id'=>$ids[0],'amount'=>1000,'commission_decision'=>'invoice_salesperson'],['invoice_id'=>$ids[1],'amount'=>500,'commission_decision'=>'cancel']]];
+}
+function receive($body) { global $controller,$sales,$posting; return $controller->store(Request::create('/','POST',$body),$sales,$posting)->getData(true); }
+function action($id,$type,$date='2026-11-04') { global $controller,$posting; return $controller->transition(Request::create('/','POST',['action'=>$type,'date'=>$date,'bank_account_id'=>1,'reason'=>'Bank returned cheque']),$id,$posting)->getData(true); }
+function balance($code) { $account=DB::table('accounts')->where('code',$code)->value('id');return round((float) DB::table('journal_lines')->where('account_id',$account)->sum('debit')-(float) DB::table('journal_lines')->where('account_id',$account)->sum('credit'),2); }
+invoice(1);invoice(2);$cash=body([1,2]);$result=receive($cash);
+check($result['number']==='COL-000001','readable collection number');
+check(DB::table('customer_receipts')->count()===2 && DB::table('customer_collection_lines')->count()===2,'one collection produces two linked invoice allocations');
+check((float)DB::table('sales_invoices')->where('id',1)->value('outstanding')===0.0 && (float)DB::table('sales_invoices')->where('id',2)->value('outstanding')===500.0,'full and partial settlements calculated correctly');
+check(balance('1000')===1500.0 && balance('5300')===10.0,'cash and only ticked commission posted');
+receive($cash);check(DB::table('customer_collections')->count()===1,'retry does not duplicate payment');
+$changed=$cash;$changed['amount']=1400;reject(fn()=>receive($changed),'reused key cannot silently accept a different payment');
+invoice(3);invoice(4);$cheque=receive(body([3,4],true));
+check(balance('1120')===1500.0 && balance('1000')===1500.0,'held cheque is an asset but does not increase cash');
+check(balance('5300')===10.0,'held cheque does not accrue commission');
+reject(fn()=>action($cheque['id'],'clear','2026-11-02'),'post-dated cheque cannot clear early');
+DB::table('accounting_periods')->update(['status'=>'closed']);reject(fn()=>action($cheque['id'],'clear'),'closed period blocks cheque clearance');DB::table('accounting_periods')->update(['status'=>'open']);
+check(DB::table('customer_collections')->where('id',$cheque['id'])->value('status')==='held','failed clearance retains held state');
+action($cheque['id'],'clear');check(balance('1120')===0.0 && balance('1000')===3000.0 && balance('5300')===20.0,'clearance transfers asset to bank and releases commission');
+reject(fn()=>action($cheque['id'],'clear'),'duplicate clearance rejected');
+DB::table('accounting_periods')->update(['status'=>'closed']);reject(fn()=>action($cheque['id'],'return','2026-11-05'),'closed period blocks cheque return');DB::table('accounting_periods')->update(['status'=>'open']);
+action($cheque['id'],'return','2026-11-05');
+check(balance('1000')===1500.0 && balance('1120')===0.0 && balance('5300')===10.0,'bank return passes through cheque holding and reverses commission');
+check((float)DB::table('sales_invoices')->where('id',3)->value('outstanding')===1000.0 && (float)DB::table('sales_invoices')->where('id',4)->value('outstanding')===1000.0,'returned cheque reopens exact invoice balances');
+reject(fn()=>action($cheque['id'],'return','2026-11-05'),'duplicate return rejected');
+$before=DB::table('receipt_allocations as a')->join('customer_receipts as r','r.id','=','a.receipt_id')->whereIn('a.invoice_id',[3,4]);
+App\Services\Accounting\ReceiptScope::asOf($before,'r','2026-11-04');
+check((float)$before->sum('a.amount')===1500.0,'historical aging retains receipt before its return');
+$after=DB::table('receipt_allocations as a')->join('customer_receipts as r','r.id','=','a.receipt_id')->whereIn('a.invoice_id',[3,4]);
+App\Services\Accounting\ReceiptScope::asOf($after,'r','2026-11-05');
+check((float)$after->sum('a.amount')===0.0,'aging excludes returned cheque from its return date');
+invoice(5);invoice(6);$held=receive(body([5,6],true));action($held['id'],'return','2026-11-01');
+check(balance('1120')===0.0 && balance('1000')===1500.0,'uncleared return restores debt without touching bank');
+invoice(7);invoice(8,2);$invalid=body([7,8]);$count=DB::table('customer_collections')->count();
+reject(fn()=>receive($invalid),'cross-customer allocation rejected');
+check(DB::table('customer_collections')->count()===$count && (float)DB::table('sales_invoices')->where('id',7)->value('outstanding')===1000.0,'invalid second invoice rolls back entire collection');
+$invalid=body([7,2]);$invalid['amount']=1400;reject(fn()=>receive($invalid),'unallocated payment rejected');
+$invalid=body([7,2]);$invalid['allocations'][1]['amount']=600;$invalid['amount']=1600;reject(fn()=>receive($invalid),'stale or overpaid invoice rejected under lock');
+$invalid=body([7,2]);$invalid['allocations'][1]['invoice_id']=7;reject(fn()=>receive($invalid),'duplicate invoice rejected');
+$invalid=body([7,2]);$invalid['payment_account_id']=2;reject(fn()=>receive($invalid),'non-cash posting account cannot receive cash');
+DB::table('accounting_periods')->update(['status'=>'closed']);reject(fn()=>receive(body([7,2])),'closed accounting period rolls back collection');DB::table('accounting_periods')->update(['status'=>'open']);
+$managed=DB::table('customer_collection_lines')->value('receipt_id');
+reject(fn()=>(new App\Http\Controllers\Api\AccountingSalesController())->deleteReceipt($managed),'legacy deletion cannot break collection history');
+foreach(DB::table('journal_entries')->get() as $journal) {
+    $debit=(float)DB::table('journal_lines')->where('journal_entry_id',$journal->id)->sum('debit');
+    $credit=(float)DB::table('journal_lines')->where('journal_entry_id',$journal->id)->sum('credit');
+    check(abs($debit-$credit)<0.001,'balanced journal '.$journal->number);
+}
+check(!App\Services\Accounting\AccountPolicy::cash(DB::table('accounts')->where('code','1120')->first()),'cheque holding excluded from cash policy');
+$ledger=(new App\Http\Controllers\Api\SubledgerController())->ledger(Request::create('/','GET',['kind'=>'customer','id'=>1,'from'=>'2026-01-01','to'=>'2026-11-06']))->getData(true);
+check(abs($ledger['closing']+1500)<0.001,'customer subledger includes dated cheque return reversals');
+echo "Customer collection and cheque lifecycle checks passed.\n";
+// Existing single-invoice/POS callers are routed through the same cheque holding workflow.
+$single = Request::create('/', 'POST', ['invoice_id'=>7,'collector_sales_rep_id'=>1,'receipt_date'=>'2026-10-28', 'payment_method'=>'cheque','amount'=>200,'commission_decision'=>'invoice_salesperson','cheque_number'=>'POS-CHQ','cheque_bank'=>'Test Bank','cheque_date'=>'2026-11-03']);
+$adapted=(new App\Http\Controllers\Api\AccountingSalesController())->receipt($single,$sales,$posting)->getData(true);
+check($adapted['collection']['status']==='held' && (float)$adapted['receipt']['amount']===200.0,'single-invoice cheque caller uses collection holding account');
+check(balance('1000')===1500.0 && balance('1120')===200.0,'single-invoice cheque cannot accidentally post to cash');
+// Cheque commission belongs to the actual clearance period, not the earlier receipt month.
+$earned = new ReflectionMethod(App\Services\Payroll\AttendancePayrollService::class, 'commissionFor');
+$earned->setAccessible(true);
+$payroll = new App\Services\Payroll\AttendancePayrollService();
+action($adapted['collection']['id'],'clear');
+check($earned->invoke($payroll,'Representative','2026-10-01','2026-10-31')===10.0,'payroll excludes uncleared cheque commission from receipt month');
+check($earned->invoke($payroll,'Representative','2026-11-01','2026-11-30')===2.0,'payroll includes eligible cheque commission in clearance month');
+// The customer may close the newer bill and partially pay the older bill.
+invoice(9); invoice(10);
+DB::table('sales_invoices')->where('id',9)->update(['total'=>161900,'outstanding'=>161900]);
+DB::table('sales_invoices')->where('id',10)->update(['total'=>97000,'outstanding'=>97000]);
+$manual=body([9,10]);$manual['amount']=180000;
+$manual['allocations'][0]['amount']=83000;
+$manual['allocations'][1]['amount']=97000;
+receive($manual);
+check((float)DB::table('sales_invoices')->where('id',9)->value('outstanding')===78900.0,'manual allocation leaves chosen LKR 78,900 on the older bill');
+check((float)DB::table('sales_invoices')->where('id',10)->value('outstanding')===0.0,'manual allocation fully closes chosen LKR 97,000 invoice');
+
+invoice(11); invoice(12);
+$card = body([11,12]); $card['payment_method']='card'; $card['deduct_card_charge']=true;
+$beforeBank=balance('1000'); $beforeExpense=balance('5500');
+$charged=receive($card);
+check((float)$charged['bank_charge_amount']===45.0 && (float)$charged['bank_charge_rate']===3.0,'card charge calculated server-side at 3 percent of gross collection');
+check(balance('1000')-$beforeBank===1455.0 && balance('5500')-$beforeExpense===45.0,'card bank receives net and charges debit expense');
+check((float)DB::table('sales_invoices')->where('id',11)->value('outstanding')===0.0 && (float)DB::table('sales_invoices')->where('id',12)->value('outstanding')===500.0,'bank charge does not reduce customer invoice settlement');
+$beforeRetry=balance('5500'); receive($card);
+check(balance('5500')===$beforeRetry,'card retry does not duplicate expense');
+invoice(13); invoice(14); $noFee=body([13,14]); $noFee['payment_method']='card'; $noFee['deduct_card_charge']=false;
+$beforeBank=balance('1000'); $beforeExpense=balance('5500'); receive($noFee);
+check(balance('1000')-$beforeBank===1500.0 && balance('5500')===$beforeExpense,'unticked card charge receives full amount without expense');
+$notCard=body([13,14]); $notCard['deduct_card_charge']=true;
+reject(fn()=>receive($notCard),'card charge rejected for non-card payment');
+$journal=DB::table('journal_entries')->where('source_type','card_collection_charge')->first();
+check((float)DB::table('journal_lines')->where('journal_entry_id',$journal->id)->sum('debit')===(float)DB::table('journal_lines')->where('journal_entry_id',$journal->id)->sum('credit'),'card charge journal balances');
+
+// Imported records or deleted gaps must not make numbering repeat a used number.
+DB::table('journal_entries')->insert(['number'=>'JV-2610-9999','source_type'=>'numbering_fixture','source_id'=>1]);
+$numbered=$posting->post('numbering_test',1,'2026-10-28','Numbering regression',[
+    ['account_code'=>'1000','debit'=>10,'credit'=>0], ['account_code'=>'1100','debit'=>0,'credit'=>10],
+]);
+check(DB::table('journal_entries')->where('id',$numbered)->value('number')==='JV-2610-10000','journal number follows highest existing suffix rather than row count');
+check($posting->post('numbering_test',1,'2026-10-28','Retry',[])===$numbered,'journal retry returns original posting');
+$journalCount=DB::table('journal_entries')->count();
+reject(fn()=>$posting->post('invalid_account_test',1,'2026-10-28','Must roll back',[
+    ['account_code'=>'1000','debit'=>10,'credit'=>0], ['account_code'=>'MISSING','debit'=>0,'credit'=>10],
+]),'invalid posting account rejected');
+check(DB::table('journal_entries')->count()===$journalCount,'failed journal posting rolls back header and lines');
+
+invoice(15); invoice(16); $unassigned=body([15,16]); unset($unassigned['collector_sales_rep_id']);
+$optional=receive($unassigned);
+check($optional['collector_sales_rep_id']===null,'collection accepts an omitted collector without inventing one');
+check(DB::table('customer_receipts')->whereIn('id',DB::table('customer_collection_lines')->where('collection_id',$optional['id'])->pluck('receipt_id'))->whereNotNull('collector_sales_rep_id')->count()===0,'linked receipts preserve unassigned collector');
+invoice(17); invoice(18); $missingCollector=body([17,18]); $missingCollector['collector_sales_rep_id']=null;
+$missingCollector['allocations'][0]['commission_decision']='collector';
+reject(fn()=>receive($missingCollector),'collector commission requires an assigned collector');
+
+// Corrections reverse every accounting leg atomically and retain original receipts.
+Illuminate\Support\Carbon::setTestNow('2026-11-09 12:00:00');
+invoice(19); invoice(20); $editable=body([19,20]); $editable['payment_method']='card'; $editable['deduct_card_charge']=true;
+$bankBefore=balance('1000'); $feeBefore=balance('5500'); $commissionBefore=balance('5300');
+$record=receive($editable);
+$snapshot=DB::table('customer_collection_lines')->where('collection_id',$record['id'])->first();
+check((float)$snapshot->balance_before===1000.0 && (float)$snapshot->balance_after===0.0 && json_decode($snapshot->invoice_snapshot,true)!==null,'receipt stores immutable before/after balances and invoice items');
+$voidRequest=Request::create('/','POST',['reason'=>'Incorrect payment entered']);
+$controller->voidPayment($voidRequest,$record['id'],$posting);
+check(balance('1000')===$bankBefore && balance('5500')===$feeBefore && balance('5300')===$commissionBefore,'deletion reverses net cash, bank charge and commission');
+check((float)DB::table('sales_invoices')->find(19)->outstanding===1000.0 && (float)DB::table('sales_invoices')->find(20)->outstanding===1000.0,'deletion restores exact invoice balances');
+$journalCount=DB::table('journal_entries')->count(); $controller->voidPayment($voidRequest,$record['id'],$posting);
+check(DB::table('journal_entries')->count()===$journalCount,'repeated deletion does not double reverse');
+$historical=DB::table('customer_receipts as r'); App\Services\Accounting\ReceiptScope::asOf($historical,'r','2026-11-08');
+check($historical->whereIn('r.id',DB::table('customer_collection_lines')->where('collection_id',$record['id'])->pluck('receipt_id'))->count()===2,'voided receipt remains in historical aging before reversal');
+invoice(21); invoice(22); $oldBody=body([21,22]); $old=receive($oldBody);
+$replacement=$oldBody; $replacement['request_key']=(string)Illuminate\Support\Str::uuid(); $replacement['receipt_date']='2026-11-09'; $replacement['reason']='Correct allocated invoice amounts';
+$replacement['allocations'][0]['amount']=600; $replacement['allocations'][1]['amount']=900;
+$corrected=$controller->correct(Request::create('/','POST',$replacement),$old['id'],$sales,$posting)->getData(true);
+check($corrected['replaces_collection_id']===$old['id'] && DB::table('customer_collections')->find($old['id'])->status==='void','edit retains reversed original and links replacement');
+check((float)DB::table('sales_invoices')->find(21)->outstanding===400.0 && (float)DB::table('sales_invoices')->find(22)->outstanding===100.0,'edited allocations update exact replacement balances');
+$count=DB::table('customer_collections')->count();
+$retry=$controller->correct(Request::create('/','POST',$replacement),$old['id'],$sales,$posting)->getData(true);
+check($retry['id']===$corrected['id'] && DB::table('customer_collections')->count()===$count,'correction retry is idempotent');
+invoice(23); invoice(24); $badBody=body([23,24]); $bad=receive($badBody); $badBody['request_key']=(string)Illuminate\Support\Str::uuid(); $badBody['receipt_date']='2026-11-09'; $badBody['reason']='Bad correction'; $badBody['amount']=1;
+reject(fn()=>$controller->correct(Request::create('/','POST',$badBody),$bad['id'],$sales,$posting),'invalid replacement rejected');
+check(DB::table('customer_collections')->find($bad['id'])->status==='received' && (float)DB::table('sales_invoices')->find(23)->outstanding===0.0,'failed correction rolls back original reversal');
+reject(fn()=>$controller->voidPayment(Request::create('/','POST',['reason'=>' ']),$bad['id'],$posting),'deletion requires a meaningful reason');
+
+// A cleared cheque must reverse both bank transfer and deferred commission.
+invoice(25); invoice(26); $clearedBody=body([25,26],true); $clearedBody['cheque_number']='VOID-TEST-25';
+$bankBefore=balance('1000'); $holdingBefore=balance('1120'); $commissionBefore=balance('5300');
+$cleared=receive($clearedBody); action($cleared['id'],'clear','2026-11-09');
+$controller->voidPayment(Request::create('/','POST',['reason'=>'Duplicate cleared cheque']),$cleared['id'],$posting);
+check(balance('1000')===$bankBefore && balance('1120')===$holdingBefore && balance('5300')===$commissionBefore,'deleting cleared cheque reverses bank, holding account and released commission');
+DB::table('accounting_periods')->update(['status'=>'closed']);
+reject(fn()=>$controller->voidPayment($voidRequest,$bad['id'],$posting),'closed period blocks payment deletion');
+check(DB::table('customer_collections')->find($bad['id'])->status==='received','closed period failure preserves original payment');
+DB::table('accounting_periods')->update(['status'=>'open']);

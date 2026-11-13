@@ -17,6 +17,24 @@
   font-size: 12px;
   font-weight: 700;
 }
+.workflow-actions button.workflow-delete {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border-color: #efb9bf;
+  color: #aa3343;
+}
+.workflow-actions button.workflow-delete:hover {
+  background: #fff1f2;
+  border-color: #dc8791;
+}
+.workflow-actions button.workflow-delete:focus-visible {
+  outline: 2px solid #aa3343;
+  outline-offset: 2px;
+}
 .workflow-table {
   overflow: auto;
   margin: 16px 0;
@@ -184,3 +202,30 @@
     grid-template-columns: 1fr;
   }
 }
+
+.simple-master-data .master-create-bar { padding: 16px 20px; margin-bottom: 16px; border: 1px solid #b9cfc2; border-left: 4px solid #176344; border-radius: 10px; background: #fff; }
+.simple-master-data .master-create-bar .workflow-form { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.simple-master-data .master-create-bar fieldset { flex: 1; min-width: 220px; margin: 0; padding: 0; }
+.simple-master-data .master-create-bar .workflow-form-footer { padding: 0; margin: 0; border: 0; }
+.simple-master-data .master-create-bar label { margin: 0; }
+.simple-master-data .master-link-details { margin-top: 18px; border: 1px solid #c8d8ce; border-radius: 10px; background: #fff; }
+.simple-master-data .master-link-details > summary { padding: 14px 18px; font-weight: 700; color: #28523b; cursor: pointer; }
+.simple-master-data .master-link-details .master-data-panel { border: 0; margin: 0; box-shadow: none; }
+.simple-master-data .master-link-details h2 { display: none; }
+
+.quotation-workspace .quote-section-title { margin: 8px 0 16px; color: #245b46; font-size: 18px; }
+.quotation-workspace .quote-help { color: #62766c; font-size: 13px; margin: -6px 0 16px; }
+.quote-customer-details { display: grid; gap: 6px; padding: 14px 18px; margin: 0 0 18px; border-left: 3px solid #398268; border-radius: 8px; background: #edf5f0; color: #365646; font-size: 13px; }
+.quotation-workspace .workflow-quote-line { grid-template-columns: minmax(240px, 2.5fr) minmax(100px, 1fr) 85px minmax(115px, 1fr) minmax(130px, 1fr) minmax(120px, 1fr) auto; background: white; padding: 16px; align-items: end; }
+.quote-fixed-price, .quote-line-total { display: grid; align-content: center; gap: 8px; min-height: 76px; padding: 10px; border-radius: 8px; background: #f1f5f2; }
+.quote-fixed-price span, .quote-line-total span { font-size: 12px; color: #60746a; }
+.quote-fixed-price strong, .quote-line-total strong { font-size: 14px; color: #264e3c; }
+@media (max-width: 1400px) { .quotation-workspace .workflow-quote-line { grid-template-columns: repeat(3, minmax(0, 1fr)); } .quotation-workspace .workflow-quote-line label:first-child { grid-column: span 2; } }
+@media (max-width: 650px) { .quotation-workspace .workflow-quote-line { grid-template-columns: repeat(2, minmax(0, 1fr)); } .quotation-workspace .workflow-quote-line label:first-child { grid-column: 1 / -1; } }
+.quote-article-meta { display: block; color: #61766a; font-size: 12px; line-height: 1.5; margin-top: 6px; font-weight: 500; }
+.ledger-party-results { max-height: 220px; overflow-y: auto; margin-top: 8px; border: 1px solid #d3e1e7; border-radius: 8px; background: white; }
+.ledger-party-results > button { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; border-bottom: 1px solid #e8eef1; border-radius: 0; padding: 10px 12px; text-align: left; background: white; color: #244b5c; white-space: normal; }
+.ledger-party-results > button:hover, .ledger-party-results > button[aria-pressed="true"] { background: #e9f6f2; color: #17685f; }
+.ledger-party-results > button strong { flex-shrink: 0; }
+.ledger-party-results > button span { flex: 1; }
+.ledger-party-results > p { padding: 12px; margin: 0; font-size: 14px; }

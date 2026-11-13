@@ -1,5 +1,3 @@
-import { displayCode } from "./representative-reference";
-import { useState } from "react";
 import {
   ArrowDownLeft,
   ArrowRight,
@@ -7,18 +5,15 @@ import {
   Banknote,
   Boxes,
   CalendarDays,
-  Check,
   ClipboardList,
   FileText,
   Plus,
   RefreshCw,
-  ShoppingCart,
   Wallet,
 } from "lucide-react";
 import { financeMoney as money } from "./finance-utils";
 import { WorkflowGo } from "./workflow";
 import { matchesSearch } from "./search";
-import FilteredRecords from "./FilteredRecords";
 import "./dashboard.css";
 
 type Props = {
@@ -48,86 +43,7 @@ export default function DashboardOverview({
   createOrder,
   search,
 }: Props) {
-  const [activity, setActivity] = useState("invoices");
-  const [taskGroup, setTaskGroup] = useState("All");
   const period = `${date(data.period.from)} – ${date(data.period.to)}`;
-  const tasks = [
-    {
-      group: "Sales",
-      title: "Orders to dispatch",
-      count: data.dispatch_count,
-      detail: `${number(data.dispatch_pieces)} pieces still to supply`,
-      page: "Sales Orders",
-    },
-    {
-      group: "Finance",
-      title: "Overdue invoices",
-      count: data.overdue_count,
-      detail: `${money(data.overdue_total)} across overdue invoices`,
-      page: "Collections",
-    },
-    {
-      group: "Finance",
-      title: "Credit terms missing",
-      count: data.terms_missing_count,
-      detail: "Set due dates to complete customer aging",
-      page: "Debtors Aging",
-    },
-    {
-      group: "Inventory",
-      title: "Stock quantities not recorded",
-      count: data.stock.unrecorded,
-      detail: "Article sizes need a verified opening count",
-      page: "Bulk Inventory Import",
-    },
-    {
-      group: "Inventory",
-      title: "Out of stock",
-      count: data.stock.out,
-      detail: "Recorded article sizes with no available pieces",
-      page: "Finished Goods Stock",
-    },
-    {
-      group: "Inventory",
-      title: "Low stock",
-      count: data.stock.low,
-      detail: `${data.stock.threshold} pieces or fewer per article size`,
-      page: "Finished Goods Stock",
-    },
-    {
-      group: "Purchasing",
-      title: "Purchase orders to approve",
-      count: data.draft_purchase_orders,
-      detail: "Draft supplier orders awaiting review",
-      page: "Purchase Orders",
-    },
-    {
-      group: "Purchasing",
-      title: "Deliveries to receive",
-      count: data.awaiting_goods,
-      detail: "Approved or partly received purchase orders",
-      page: "Receive Goods",
-    },
-    {
-      group: "Purchasing",
-      title: "Supplier bills to register",
-      count: data.unbilled_receipts,
-      detail: "Posted GRNs without a purchase invoice",
-      page: "Supplier Invoices",
-    },
-    {
-      group: "Finance",
-      title: "Supplier payments overdue",
-      count: data.supplier_overdue_count,
-      detail: `${money(data.supplier_payables)} total supplier payables`,
-      page: "All Payables",
-    },
-  ].filter(
-    (task) =>
-      task.count > 0 &&
-      (taskGroup === "All" || task.group === taskGroup) &&
-      matchesSearch(task, search),
-  );
   const metrics = [
     {
       title: "Accounts receivable",
@@ -186,14 +102,13 @@ export default function DashboardOverview({
     ["90_plus", "Over 90 days", "old"],
     ["terms_not_set", "Terms not set", "unknown"],
   ];
-  const activityRows = activity === "invoices" ? data.recent_invoices : data.recent_receipts;
   return (
     <div className="dashboard-overview" aria-busy={busy}>
       <header className="db-header">
         <div>
           <span className="db-eyebrow">YOUR BUSINESS AT A GLANCE</span>
           <h1>Business overview</h1>
-          <p>What needs attention, what came in, and what happens next.</p>
+          <p>Sales, payments and stock. One clear view.</p>
         </div>
         <div className="db-header-actions">
           <button
@@ -258,11 +173,9 @@ export default function DashboardOverview({
       <section className="db-quick-actions" aria-label="Frequently used pages">
         {[
           ["Collections", "Record collection", ArrowDownLeft],
-          ["Point of Sale", "Counter sale", ShoppingCart],
           ["Purchase Orders", "Purchase orders", ClipboardList],
           ["Payment Vouchers", "Payment vouchers", Wallet],
           ["Inventory Overview", "Inventory", Boxes],
-          ["Reports", "Business reports", FileText],
         ].map(([page, label, Icon]: any) => (
           <button type="button" key={page} onClick={() => go(page)}>
             <Icon />
@@ -271,90 +184,6 @@ export default function DashboardOverview({
           </button>
         ))}
       </section>
-      <div className="db-main-grid">
-        <section className="db-panel db-trend">
-          <div className="db-panel-title">
-            <div>
-              <span className="db-eyebrow">PERIOD ACTIVITY</span>
-              <h2>Sales and collections</h2>
-            </div>
-            <span>{period}</span>
-          </div>
-          <div className="db-chart-legend">
-            <span>
-              <i className="db-dot db-dot-sales" />
-              Sales invoices
-            </span>
-            <span>
-              <i className="db-dot db-dot-cash" />
-              Customer collections
-            </span>
-          </div>
-          <ActivityChart rows={data.trend} />
-          <div className="db-trend-foot">
-            <span>
-              Return credits in this period <strong>{money(data.period_return_credits)}</strong>
-            </span>
-            <button type="button" onClick={() => go("Reports")}>
-              Open reports <ArrowRight />
-            </button>
-          </div>
-          <p className="db-note">
-            Opening balances are excluded from sales. Collections may settle earlier invoices; these
-            are separate activity measures.
-          </p>
-        </section>
-        <section className="db-panel db-attention">
-          <div className="db-panel-title">
-            <div>
-              <span className="db-eyebrow">NEXT ACTIONS</span>
-              <h2>Needs attention</h2>
-            </div>
-            <select
-              aria-label="Filter tasks by area"
-              value={taskGroup}
-              onChange={(event) => setTaskGroup(event.target.value)}
-            >
-              {["All", "Sales", "Finance", "Inventory", "Purchasing"].map((group) => (
-                <option key={group}>{group}</option>
-              ))}
-            </select>
-          </div>
-          <div className="db-task-list">
-            {tasks.length ? (
-              tasks.map((task) => (
-                <button
-                  type="button"
-                  className="db-task"
-                  key={task.title}
-                  onClick={() => go(task.page)}
-                >
-                  <span
-                    className={`db-task-number ${task.group === "Finance" ? "db-task-wine" : ""}`}
-                  >
-                    {number(task.count)}
-                  </span>
-                  <span>
-                    <strong>{task.title}</strong>
-                    <small>{task.detail}</small>
-                  </span>
-                  <ArrowRight />
-                </button>
-              ))
-            ) : (
-              <div className="db-empty">
-                <Check />
-                <strong>No tasks in this selection</strong>
-                <p>Try another area or clear the top search.</p>
-              </div>
-            )}
-          </div>
-          <p className="db-note">
-            Recorded finished stock: <strong>{number(data.stock.pieces)} pieces</strong>. Sizes
-            without a recorded count are listed separately.
-          </p>
-        </section>
-      </div>
       <div className="db-main-grid">
         <section className="db-panel">
           <div className="db-panel-title">
@@ -366,29 +195,13 @@ export default function DashboardOverview({
               View aging <ArrowRight />
             </button>
           </div>
-          <div className="db-receivable-split">
-            <span>
-              Opening receivables<strong>{money(data.opening_receivables_total)}</strong>
-            </span>
-            <span>
-              Sales invoice balances<strong>{money(data.sales_receivables_total)}</strong>
-            </span>
-          </div>
-          {data.outstanding_total > 0 && (
-            <div className="db-aging-bar" role="img" aria-label="Receivables distribution by age">
-              {aging.map(
-                ([key, label, tone]) =>
-                  data.aging[key] > 0 && (
-                    <span
-                      key={key}
-                      className={`db-age-${tone}`}
-                      style={{ width: `${(data.aging[key] / data.outstanding_total) * 100}%` }}
-                      title={`${label}: ${money(data.aging[key])}`}
-                    />
-                  ),
-              )}
+          <div className="db-aging-visual">
+            <ReceivablesChart aging={data.aging} total={data.outstanding_total} />
+            <div className="db-receivable-split">
+              <span>Opening balances<strong>{money(data.opening_receivables_total)}</strong></span>
+              <span>Sales balances<strong>{money(data.sales_receivables_total)}</strong></span>
             </div>
-          )}
+          </div>
           <div className="db-aging-list">
             {aging.map(([key, label, tone]) => (
               <button type="button" onClick={() => go("Debtors Aging")} key={key}>
@@ -417,229 +230,40 @@ export default function DashboardOverview({
               Ledgers <ArrowRight />
             </button>
           </div>
-          <FilteredRecords
-            records={data.top_customers.filter((row: any) => matchesSearch(row, search))}
-            title="priority customers"
-            fields={[
-              { key: "code", label: "Customer code" },
-              { key: "customer", label: "Customer" },
-              { key: "outstanding", label: "Outstanding", kind: "number" },
-              { key: "overdue", label: "Overdue", kind: "number" },
-            ]}
-          >
-            {(rows) => (
-              <div className="db-customer-list">
-                {rows.map((customer: any, index: number) => (
-                  <button
-                    type="button"
-                    key={customer.id}
-                    onClick={() => go("Customers", { query: customer.code })}
-                  >
-                    <span className="db-rank">{index + 1}</span>
-                    <span className="db-customer-name">
-                      <strong>{customer.customer}</strong>
-                      <small>
-                        {displayCode(customer)} · {customer.invoices} open balances
-                      </small>
-                    </span>
-                    <span className="db-customer-amount">
-                      <strong>{money(customer.outstanding)}</strong>
-                      <small>
-                        {customer.overdue > 0
-                          ? `${money(customer.overdue)} overdue`
-                          : "No dated overdue balance"}
-                      </small>
-                    </span>
-                  </button>
-                ))}
-                {!rows.length && (
-                  <p className="db-note">No outstanding customers in this selection.</p>
-                )}
-              </div>
-            )}
-          </FilteredRecords>
+          <div className="db-balance-bars" aria-label="Largest customer balances chart">
+            {data.top_customers.filter((row: any) => matchesSearch(row, search)).map((customer: any, index: number) => (
+              <button type="button" key={customer.id} onClick={() => go("Customers", { query: customer.code })}>
+                <span className="db-balance-heading"><strong>{customer.customer}</strong><b>{money(customer.outstanding)}</b></span>
+                <span className="db-balance-track"><i style={{width: Math.max(0, Math.min(100, customer.outstanding / Math.max(1, ...data.top_customers.map((c: any) => Number(c.outstanding))) * 100)) + "%", background: ["#7350a2", "#21866c", "#d18a32", "#b8536e", "#52818b"][index % 5]}} /></span>
+                <small>{customer.invoices} open invoices{customer.overdue > 0 ? " / " + money(customer.overdue) + " overdue" : ""}</small>
+              </button>
+            ))}
+            {!data.top_customers.filter((row: any) => matchesSearch(row, search)).length && <p className="db-note">No matching customer balances.</p>}
+          </div>
           <p className="db-note">
             Top five by outstanding amount. {number(data.customers_count)} active customer accounts
             in the system.
           </p>
         </section>
       </div>
-      <section className="db-panel db-activity">
-        <div className="db-panel-title">
-          <div>
-            <span className="db-eyebrow">LATEST DOCUMENTS</span>
-            <h2>Recent activity</h2>
-          </div>
-          <div className="db-period-options">
-            <button
-              type="button"
-              aria-pressed={activity === "invoices"}
-              onClick={() => setActivity("invoices")}
-            >
-              Invoices
-            </button>
-            <button
-              type="button"
-              aria-pressed={activity === "collections"}
-              onClick={() => setActivity("collections")}
-            >
-              Collections
-            </button>
-          </div>
-        </div>
-        <FilteredRecords
-          key={activity}
-          records={activityRows.filter((row: any) => matchesSearch(row, search))}
-          title="recent documents"
-          fields={
-            activity === "invoices"
-              ? [
-                  { key: "number", label: "Invoice" },
-                  { key: "customer_name", label: "Customer" },
-                  { key: "invoice_date", label: "Date", kind: "date" },
-                  { key: "total", label: "Total", kind: "number" },
-                  { key: "outstanding", label: "Outstanding", kind: "number" },
-                ]
-              : [
-                  { key: "number", label: "Receipt" },
-                  { key: "customer_name", label: "Customer" },
-                  { key: "receipt_date", label: "Date", kind: "date" },
-                  { key: "amount", label: "Received", kind: "number" },
-                ]
-          }
-        >
-          {(rows) => (
-            <div className="db-activity-grid">
-              {rows.map((row: any) => (
-                <button
-                  type="button"
-                  className="db-document"
-                  key={row.id}
-                  onClick={() =>
-                    go(activity === "invoices" ? "Invoices" : "Collections", { query: row.number })
-                  }
-                >
-                  <i>{activity === "invoices" ? <FileText /> : <ArrowDownLeft />}</i>
-                  <span>
-                    <strong>{row.number}</strong>
-                    <small>{row.customer_name}</small>
-                    <small>{date(row.invoice_date || row.receipt_date)}</small>
-                  </span>
-                  <b>{money(activity === "invoices" ? row.total : row.amount)}</b>
-                  <ArrowUpRight />
-                </button>
-              ))}
-              {!rows.length && (
-                <p className="db-note">No {activity} recorded for this period and search.</p>
-              )}
-            </div>
-          )}
-        </FilteredRecords>
-        <p className="db-note">
-          Latest eight documents in the selected period. Opening balance documents are excluded.
-        </p>
-      </section>
+
     </div>
   );
 }
 
-function ActivityChart({ rows }: { rows: { date: string; sales: number; collections: number }[] }) {
-  const max = Math.max(0, ...rows.flatMap((row) => [row.sales, row.collections]));
-  if (!max)
-    return (
-      <div className="db-chart-empty">
-        <FileText />
-        <strong>No sales or collections in this period</strong>
-        <span>
-          New posted activity will appear here. Imported opening debt is shown in receivables.
-        </span>
-      </div>
-    );
-  const points = (key: "sales" | "collections") =>
-    rows
-      .map(
-        (row, index) =>
-          `${55 + (index / Math.max(1, rows.length - 1)) * 590},${190 - (row[key] / max) * 155}`,
-      )
-      .join(" ");
-  return (
-    <div className="db-chart">
-      <svg
-        viewBox="0 0 670 230"
-        role="img"
-        aria-label="Daily sales invoices and customer collections in LKR"
-      >
-        <title>Daily sales and collections</title>
-        {[0, 0.5, 1].map((fraction) => (
-          <g key={fraction}>
-            <line
-              x1="55"
-              y1={190 - fraction * 155}
-              x2="645"
-              y2={190 - fraction * 155}
-              stroke="#e5ebe8"
-            />
-            <text x="47" y={194 - fraction * 155} textAnchor="end">
-              {new Intl.NumberFormat("en", {
-                notation: "compact",
-                maximumFractionDigits: 1,
-              }).format(max * fraction)}
-            </text>
-          </g>
-        ))}
-        <polyline
-          points={points("sales")}
-          fill="none"
-          stroke="#187b62"
-          strokeWidth="3"
-          strokeLinejoin="round"
-        />
-        <polyline
-          points={points("collections")}
-          fill="none"
-          stroke="#b67b21"
-          strokeWidth="3"
-          strokeLinejoin="round"
-          strokeDasharray="7 4"
-        />
-        {[0, Math.floor((rows.length - 1) / 2), rows.length - 1].map((index) => (
-          <text
-            key={index}
-            x={55 + (index / Math.max(1, rows.length - 1)) * 590}
-            y="218"
-            textAnchor={index === 0 ? "start" : index === rows.length - 1 ? "end" : "middle"}
-          >
-            {date(rows[index].date)}
-          </text>
-        ))}
-      </svg>
-      <details>
-        <summary>View daily figures</summary>
-        <FilteredRecords records={rows} title="activity days">
-          {(filteredRows) => (
-            <div className="table-card">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Sales invoiced</th>
-                    <th>Collections</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.map((row) => (
-                    <tr key={row.date}>
-                      <td>{row.date}</td>
-                      <td>{money(row.sales)}</td>
-                      <td>{money(row.collections)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </FilteredRecords>
-      </details>
-    </div>
-  );
+function ReceivablesChart({ aging, total }: { aging: Record<string, number>; total: number }) {
+  const segments = ["current", "1_30", "31_60", "61_90", "90_plus", "terms_not_set"];
+  const colours = ["#25826b", "#a9be59", "#d09a3b", "#ce6d42", "#aa4565", "#8973ad"];
+  let offset = 0;
+  return <div className="db-donut" role="img" aria-label={"Receivables distribution by age. Total " + money(total)}>
+    <svg viewBox="0 0 180 180"><circle cx="90" cy="90" r="68" fill="none" stroke="#edf0ed" strokeWidth="20" />
+      {segments.map((key, index) => {
+        const share = total > 0 ? Math.max(0, Number(aging[key] || 0)) / total * 100 : 0;
+        const start = offset; offset += share;
+        return <circle key={key} cx="90" cy="90" r="68" pathLength="100" fill="none" stroke={colours[index]} strokeWidth="20" strokeDasharray={share + " " + (100 - share)} strokeDashoffset={-start} transform="rotate(-90 90 90)"><title>{key.replace(/_/g, " ") + ": " + money(aging[key])}</title></circle>;
+      })}
+      <text x="90" y="86" textAnchor="middle" className="db-donut-label">RECEIVABLES</text>
+      <text x="90" y="108" textAnchor="middle" className="db-donut-total">{new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(total || 0)}</text>
+    </svg>
+  </div>;
 }
