@@ -61,6 +61,7 @@ import SerialWarrantyPage from "./SerialWarrantyPage";
 import BusinessWorkflowsPage, { workflowPages } from "./BusinessWorkflowsPage";
 import { printReport, reportTotals } from "./report-print";
 import "./tables.css";
+import "./general-ledger.css";
 import "./popups.css";
 import { confirmDialog, showNotice } from "./AppDialogs";
 import InvoiceBill from "./InvoiceBill";
@@ -7022,7 +7023,7 @@ function Records({
   return (
     <FilteredRecords records={rows} title="records" key={page}>
       {(filteredRows, filtersActive) => (
-        <div className="table-card">
+        <div className={`table-card${page === "General Ledger" ? " general-ledger-table" : ""}`}>
           <table>
             <thead>
               <tr>
@@ -7074,25 +7075,25 @@ function Records({
                     </>
                   ) : (
                     <>
-                      <td>
+                      <td data-label="Journal">
                         <b>{row.number}</b>
                       </td>
-                      <td>{row.posting_date}</td>
-                      <td>{row.description}</td>
-                      <td>
+                      <td data-label="Posting date">{row.posting_date}</td>
+                      <td data-label="Description">{row.description}</td>
+                      <td data-label="Debit">
                         {money(
                           row.lines.reduce((s: number, l: JournalLine) => s + Number(l.debit), 0),
                         )}
                       </td>
-                      <td>
+                      <td data-label="Credit">
                         {money(
                           row.lines.reduce((s: number, l: JournalLine) => s + Number(l.credit), 0),
                         )}
                       </td>
-                      <td>{status(row.status)}</td>
+                      <td data-label="Status">{status(row.status)}</td>
                     </>
                   )}
-                  <td>
+                  <td data-label="Actions">
                     <div className="row-actions">
                       {page === "Purchase Orders" && row.status === "draft" && (
                         <button className="approve" onClick={() => approve(row.id)}>

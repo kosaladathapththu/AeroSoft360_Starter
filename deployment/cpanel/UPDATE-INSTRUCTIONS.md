@@ -5,6 +5,11 @@ Account: /home/camymarket
 
 This ZIP updates the application files. Creating it does not deploy anything.
 
+General Ledger layout follow-up: the table fits the workspace without horizontal
+scrolling, wraps descriptions/actions, and uses labelled cards on narrow screens.
+No migration, SQL import or transaction cleanup is required. This ZIP does not
+contain or execute the one-time journal cleanup command. Preserve all live data.
+
 Latest follow-up: invoices show article and colour without size columns; matching
 article/colour/rate rows are combined for display only. Stock size records remain
 unchanged. Full record lists replace Next/Previous pagination across the app.

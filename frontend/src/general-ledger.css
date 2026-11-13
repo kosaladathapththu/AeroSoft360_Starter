@@ -1,0 +1,21 @@
+.table-card.general-ledger-table { width: 100%; min-width: 0; overflow: visible; scrollbar-gutter: auto; }
+.general-ledger-table table { width: 100%; min-width: 0; max-width: 100%; table-layout: fixed; }
+.general-ledger-table :is(th, td) { min-width: 0; max-width: none; padding: 12px 10px; white-space: normal; overflow-wrap: anywhere; vertical-align: middle; }
+.general-ledger-table th:nth-child(1) { width: 13%; }
+.general-ledger-table th:nth-child(2) { width: 10%; }
+.general-ledger-table th:nth-child(3) { width: 27%; }
+.general-ledger-table th:nth-child(4), .general-ledger-table th:nth-child(5) { width: 13%; }
+.general-ledger-table th:nth-child(6) { width: 8%; }
+.general-ledger-table th:nth-child(7) { width: 16%; }
+.general-ledger-table td { font-size: 13px; line-height: 1.5; }
+.general-ledger-table td:nth-child(4), .general-ledger-table td:nth-child(5) { font-variant-numeric: tabular-nums; }
+.general-ledger-table .row-actions { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.general-ledger-table .row-actions > button { min-width: 0; max-width: 100%; white-space: normal; }
+@media screen and (max-width: 1100px) {
+  .general-ledger-table table, .general-ledger-table tbody { display: block; }
+  .general-ledger-table thead { display: none; }
+  .general-ledger-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid #cbd9df; }
+  .general-ledger-table tbody td { display: block; width: auto; border: 0; }
+  .general-ledger-table td[data-label="Description"], .general-ledger-table td[data-label="Actions"], .general-ledger-table td[colspan] { grid-column: 1 / -1; }
+  .general-ledger-table td[data-label]::before { content: attr(data-label); display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #5f7480; margin-bottom: 5px; }
+}
