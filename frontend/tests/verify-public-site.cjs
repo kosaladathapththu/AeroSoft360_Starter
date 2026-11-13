@@ -16,10 +16,31 @@ const code = ts.transpileModule(source, {
     target: ts.ScriptTarget.ES2020,
   },
 }).outputText;
+const footerSource = fs.readFileSync(
+  path.join(__dirname, "../src/SiteFooter.tsx"),
+  "utf8",
+);
+const footerCode = ts.transpileModule(footerSource, {
+  compilerOptions: {
+    module: ts.ModuleKind.CommonJS,
+    jsx: ts.JsxEmit.ReactJSX,
+    target: ts.ScriptTarget.ES2020,
+  },
+}).outputText;
+const footerModule = {};
+vm.runInNewContext(footerCode, {
+  exports: footerModule,
+  require: (name) => (name.endsWith(".css") ? {} : require(name)),
+});
+const loadModule = (name) => {
+  if (name.endsWith(".css")) return {};
+  if (name === "./SiteFooter") return footerModule;
+  return require(name);
+};
 const mod = {};
 vm.runInNewContext(code, {
   exports: mod,
-  require: (name) => (name.endsWith(".css") ? {} : require(name)),
+  require: loadModule,
 });
 const home = renderToStaticMarkup(React.createElement(mod.HomePage));
 const login = renderToStaticMarkup(
@@ -94,7 +115,7 @@ async function checkLogin(status, result, expected) {
                 ];
               },
             }
-          : require(name),
+          : loadModule(name),
   });
   const tree = fixture.SignInPage({
     api: "/api",
