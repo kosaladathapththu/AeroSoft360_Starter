@@ -360,6 +360,35 @@
 .receipt-signatures b { display: block; margin-top: 14px; }
 @media (max-width: 700px) { .receipt-payment-details { grid-template-columns: 1fr 1fr; } .receipt-payment-summary { flex-wrap: wrap; } }
 
+/* Fit all nine due-payment columns into the available workspace. */
+@media screen {
+  .shell .collection-due-table { width: 100%; min-width: 0; overflow: visible; scrollbar-gutter: auto; container-type: inline-size; }
+  .shell .collection-due-table table { width: 100%; min-width: 0; table-layout: fixed; }
+  .shell .collection-due-table :is(th, td) { min-width: 0; width: auto; height: auto; padding: 12px 8px; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+  .shell .collection-due-table th { font-size: 10px; }
+  .shell .collection-due-table th:nth-child(1) { width: 12%; }
+  .shell .collection-due-table th:nth-child(2) { width: 20%; }
+  .shell .collection-due-table th:nth-child(3) { width: 9%; }
+  .shell .collection-due-table th:nth-child(4) { width: 10%; }
+  .shell .collection-due-table th:nth-child(5) { width: 11%; }
+  .shell .collection-due-table th:nth-child(6) { width: 9%; }
+  .shell .collection-due-table th:nth-child(7) { width: 11%; }
+  .shell .collection-due-table th:nth-child(8) { width: 8%; }
+  .shell .collection-due-table th:nth-child(9) { width: 10%; }
+  .shell .collection-due-table :is(.row-actions, .status) { min-width: 0; max-width: 100%; white-space: normal; flex-wrap: wrap; }
+  .shell .collection-due-table .row-actions > button { min-width: 0; max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; padding: 7px; font-size: 11px; }
+  .shell .collection-due-table .row-actions svg { flex-shrink: 0; width: 14px; }
+  @container (max-width: 1050px) {
+    .shell .collection-due-table thead { display: none; }
+    .shell .collection-due-table tbody { display: grid; gap: 12px; }
+    .shell .collection-due-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid #cbd9df; }
+    .shell .collection-due-table tbody td { display: block; border: 0; text-align: left; }
+    .shell .collection-due-table tbody td::before { content: attr(data-label); display: block; margin-bottom: 5px; font-size: 10px; font-weight: 700; color: #536c70; }
+    .shell .collection-due-table tbody td:last-child { grid-column: 1 / -1; }
+    .shell .collection-due-table tbody td[colspan] { grid-column: 1 / -1; }
+  }
+}
+
 /* Compact collection lists: every action stays inside its column. */
 @media screen and (min-width: 900px) {
   .shell .collection-register.collection-section { padding: 16px; margin: 10px 0; }

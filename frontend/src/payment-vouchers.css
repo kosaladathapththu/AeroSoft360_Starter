@@ -43,6 +43,15 @@
 .voucher-table {
   overflow: auto;
 }
+.voucher-table .icon-action.delete {
+  width: auto;
+  min-width: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
 .voucher-table td small {
   display: block;
   margin-top: 5px;

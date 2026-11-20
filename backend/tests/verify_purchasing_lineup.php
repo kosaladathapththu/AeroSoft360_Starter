@@ -7,6 +7,32 @@ use App\Services\Procurement\GoodsReceiptService;
 use App\Services\Procurement\SupplierBalance;
 
 $procurement = new ProcurementController();
+$createdMaterial = $procurement
+    ->storeMaterial(
+        req([
+            "code" => "GLUE-SUPER-01",
+            "name" => "Super Glue",
+            "category" => "raw_material",
+            "unit" => "PCS",
+        ]),
+    )
+    ->getData(true);
+check(
+    $createdMaterial["id"] > 0 &&
+        DB::table("materials")->where("id", $createdMaterial["id"])->value("name") === "Super Glue",
+    "Material can be added from the purchase order workflow",
+);
+rejects(
+    fn() => $procurement->storeMaterial(
+        req([
+            "code" => "GLUE-SUPER-01",
+            "name" => "Duplicate Glue",
+            "category" => "raw_material",
+            "unit" => "PCS",
+        ]),
+    ),
+    "Material code must be unique",
+);
 $flowOrder = $procurement
     ->storePurchaseOrder(
         req([

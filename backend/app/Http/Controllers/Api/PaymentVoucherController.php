@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 use App\Services\Accounting\PaymentVoucherService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class PaymentVoucherController
 {
@@ -15,6 +16,28 @@ final class PaymentVoucherController
             ->orderBy("l.id")
             ->get()
             ->groupBy("payment_voucher_id");
+        $revisionByOriginal = collect();
+        $revisionByReplacement = collect();
+        if (Schema::hasTable("payment_voucher_revisions")) {
+            $revisions = DB::table("payment_voucher_revisions as r")
+                ->join("payment_vouchers as original", "original.id", "=", "r.original_voucher_id")
+                ->leftJoin(
+                    "payment_vouchers as replacement",
+                    "replacement.id",
+                    "=",
+                    "r.replacement_voucher_id",
+                )
+                ->select(
+                    "r.*",
+                    "original.number as original_number",
+                    "replacement.number as replacement_number",
+                )
+                ->get();
+            $revisionByOriginal = $revisions->keyBy("original_voucher_id");
+            $revisionByReplacement = $revisions
+                ->filter(fn($revision) => $revision->replacement_voucher_id)
+                ->keyBy("replacement_voucher_id");
+        }
         $vouchers = DB::table("payment_vouchers as v")
             ->join("accounts as a", "a.id", "=", "v.payment_account_id")
             ->leftJoin("goods_receipts as g", "g.id", "=", "v.goods_receipt_id")
@@ -29,8 +52,13 @@ final class PaymentVoucherController
             )
             ->latest("v.id")
             ->get()
-            ->map(function ($v) use ($lines) {
+            ->map(function ($v) use ($lines, $revisionByOriginal, $revisionByReplacement) {
                 $v->lines = $lines->get($v->id, collect())->values();
+                $fromRevision = $revisionByReplacement->get($v->id);
+                $toRevision = $revisionByOriginal->get($v->id);
+                $v->revised_from_number = $fromRevision?->original_number;
+                $v->revised_to_number = $toRevision?->replacement_number;
+                $v->revision_date = $fromRevision?->revision_date ?? $toRevision?->revision_date;
                 return $v;
             });
         $paid = DB::table("payment_vouchers")
@@ -90,7 +118,22 @@ final class PaymentVoucherController
             422,
             "Enter a reason for editing this voucher.",
         );
-        $service->save($this->validate($request), $id, $request->attributes->get("auth_user")?->id);
+        $updatedId = $service->save(
+            $this->validate($request),
+            $id,
+            $request->attributes->get("auth_user")?->id,
+        );
+        return response()->json(["id" => $updatedId]);
+    }
+    public function delete(Request $request, int $id, PaymentVoucherService $service)
+    {
+        $data = $request->validate(["reason" => "required|string|max:500"]);
+        abort_if(
+            trim($data["reason"]) === "",
+            422,
+            "Enter a reason for deleting this draft.",
+        );
+        $service->deleteDraft($id, $data["reason"], $request->attributes->get("auth_user")?->id);
         return response()->json(["id" => $id]);
     }
     public function post(Request $request, int $id, PaymentVoucherService $service)
@@ -125,6 +168,7 @@ final class PaymentVoucherController
             "reference" => "nullable|string|max:100",
             "description" => "required|string|max:500",
             "reason" => "nullable|string|max:500",
+            "revision_date" => "nullable|date",
             "lines" => "required|array|min:1|max:100",
             "lines.*.account_id" => "required_if:kind,expense|nullable|integer|exists:accounts,id",
             "lines.*.description" => "required|string|max:255",

@@ -273,10 +273,10 @@ export default function App() {
     const json = await r.json().catch(() => ({}));
     if (!r.ok)
       throw new Error(
-        json.message ||
-          Object.values(json.errors || {})
-            .flat()
-            .join(" ") ||
+        Object.values(json.errors || {})
+          .flat()
+          .join(" ") ||
+          json.message ||
           "Request failed",
       );
     await load();
@@ -841,6 +841,7 @@ export default function App() {
           type={modal}
           data={data}
           close={() => setModal("")}
+          createMaterial={(body) => call("/materials", body)}
           submit={async (url, body) => {
             try {
               setError("");
@@ -1720,9 +1721,8 @@ function SalesPage({
               {(pageRows) => (
             <div
               ref={salesTableRef}
-              className={`table-card sales-table-card ${page === "Collections" && collectionView === "history" ? "collection-history-table" : ""} ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
+              className={`table-card sales-table-card ${page === "Collections" ? (collectionView === "history" ? "collection-history-table" : "collection-due-table") : ""} ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
             >
-              {page === "Invoices" && <p className="invoice-table-help">Scroll horizontally to see received amounts, outstanding balances, status and actions.</p>}
               <table>
                 <thead>
                   <tr>
@@ -1759,7 +1759,7 @@ function SalesPage({
                               : page,
                             r,
                           )}
-                          <td>
+                          <td data-label={page === "Collections" && collectionView === "due" ? "Actions" : undefined}>
                             <div className="row-actions" onClick={event => event.stopPropagation()}>
                               {page === "Collections" && collectionView === "due" && (
                                 <button
@@ -2839,18 +2839,18 @@ function salesCells(page: string, r: any) {
   if (page === "Collections Due")
     return (
       <>
-        <td>
+        <td data-label="Invoice">
           <b>{invoiceReference(r)}</b>
         </td>
-        <td>{r.customer_name}</td>
-        <td>{r.rep_name}</td>
-        <td>{r.due_date || "Terms not set"}</td>
-        <td>{money(r.total)}</td>
-        <td>{money(r.received_amount)}</td>
-        <td>
+        <td data-label="Customer">{r.customer_name}</td>
+        <td data-label="Salesperson">{r.rep_name}</td>
+        <td data-label="Due date">{r.due_date || "Terms not set"}</td>
+        <td data-label="Invoice total">{money(r.total)}</td>
+        <td data-label="Paid">{money(r.received_amount)}</td>
+        <td data-label="To be paid">
           <b>{money(r.outstanding)}</b>
         </td>
-        <td>{status(Number(r.received_amount) > 0 ? "part paid" : "unpaid")}</td>
+        <td data-label="Status">{status(Number(r.received_amount) > 0 ? "part paid" : "unpaid")}</td>
       </>
     );
   if (page === "Debtors Aging")
@@ -7162,11 +7162,13 @@ function CreateModal({
   data,
   close,
   submit,
+  createMaterial,
 }: {
   type: string;
   data: Workspace;
   close: () => void;
   submit: (url: string, body: any) => Promise<void>;
+  createMaterial: (body: { code: string; name: string; category: string; unit: string }) => Promise<Material>;
 }) {
   const [busy, setBusy] = useState(false);
   const [journalLines, setJournalLines] = useState([emptyJournalLine(), emptyJournalLine()]);
@@ -7301,6 +7303,7 @@ function CreateModal({
             materials={data.materials}
             lines={purchaseLines}
             change={setPurchaseLines}
+            createMaterial={createMaterial}
           />
         </>
       ) : type === "grn" ? (

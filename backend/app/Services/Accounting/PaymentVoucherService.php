@@ -2,6 +2,7 @@
 namespace App\Services\Accounting;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class PaymentVoucherService
 {
@@ -14,9 +15,9 @@ final class PaymentVoucherService
                 $old = DB::table("payment_vouchers")->lockForUpdate()->find($id);
                 abort_unless($old, 404, "Voucher not found.");
                 abort_unless(
-                    $old->status === "draft",
+                    in_array($old->status, ["draft", "posted"], true),
                     422,
-                    "Only draft vouchers can be edited. Cancel a posted voucher with a reason instead.",
+                    "Cancelled vouchers cannot be edited.",
                 );
             }
             $fund = DB::table("accounts")
@@ -102,38 +103,164 @@ final class PaymentVoucherService
                 422,
                 "Enter a payee and payment purpose.",
             );
+            if ($id && $old->status === "posted") {
+                return $this->revisePosted($old, $values, $lines, $data, $user);
+            }
             if ($id) {
                 DB::table("payment_vouchers")->where("id", $id)->update($values);
             } else {
                 $id = DB::table("payment_vouchers")->insertGetId(
                     $values + ["status" => "draft", "created_by" => $user, "created_at" => now()],
                 );
-                DB::table("payment_vouchers")
-                    ->where("id", $id)
-                    ->update([
-                        "number" =>
-                            "PV-" .
-                            str_replace("-", "", substr($data["payment_date"], 0, 7)) .
-                            "-" .
-                            str_pad((string) $id, 6, "0", STR_PAD_LEFT),
-                    ]);
+                $this->assignNumber($id, $data["payment_date"]);
             }
-            DB::table("payment_voucher_lines")->where("payment_voucher_id", $id)->delete();
-            foreach ($lines as $line) {
-                DB::table("payment_voucher_lines")->insert([
-                    "payment_voucher_id" => $id,
-                    "account_id" => $line["account_id"],
-                    "description" => $line["description"],
-                    "amount" => $line["amount"],
-                    "created_at" => now(),
-                    "updated_at" => now(),
-                ]);
-            }
+            $this->storeLines($id, $lines);
             $this->audit($id, $user, isset($old) ? "updated" : "created", [
                 "reason" => $data["reason"] ?? null,
             ]);
             return $id;
         });
+    }
+
+    public function deleteDraft(int $id, string $reason, ?int $user): void
+    {
+        DB::transaction(function () use ($id, $reason, $user) {
+            $voucher = DB::table("payment_vouchers")->lockForUpdate()->find($id);
+            abort_unless($voucher, 404, "Voucher not found.");
+            abort_unless($voucher->status === "draft", 422, "Only draft vouchers can be deleted.");
+            abort_if(trim($reason) === "", 422, "Enter a reason for deleting this draft.");
+            if (Schema::hasTable("payment_voucher_revisions")) {
+                abort_if(
+                    DB::table("payment_voucher_revisions")
+                        ->where("replacement_voucher_id", $id)
+                        ->exists(),
+                    422,
+                    "A replacement draft cannot be deleted. Edit it or post and cancel it to preserve the correction history.",
+                );
+            }
+
+            $lines = DB::table("payment_voucher_lines")
+                ->where("payment_voucher_id", $id)
+                ->get()
+                ->map(fn($line) => (array) $line)
+                ->all();
+            $this->audit($id, $user, "deleted", [
+                "reason" => trim($reason),
+                "voucher" => (array) $voucher,
+                "lines" => $lines,
+            ]);
+            DB::table("payment_voucher_lines")->where("payment_voucher_id", $id)->delete();
+            DB::table("payment_vouchers")->where("id", $id)->delete();
+        });
+    }
+
+    private function revisePosted(object $old, array $values, array $lines, array $data, ?int $user): int
+    {
+        $reason = trim((string) ($data["reason"] ?? ""));
+        abort_if($reason === "", 422, "Enter a reason for editing this posted voucher.");
+        $revisionDate = $data["revision_date"] ?? null;
+        abort_unless($revisionDate, 422, "Choose an accounting adjustment date.");
+        abort_if(
+            $revisionDate < $old->payment_date,
+            422,
+            "Adjustment date cannot precede the original payment date.",
+        );
+        abort_if(
+            $values["payment_date"] < $revisionDate,
+            422,
+            "Replacement payment date cannot precede the adjustment date.",
+        );
+
+        $receiptIds = array_values(
+            array_unique(
+                array_filter([$old->goods_receipt_id, $values["goods_receipt_id"]]),
+            ),
+        );
+        if ($receiptIds) {
+            DB::table("goods_receipts")
+                ->whereIn("id", $receiptIds)
+                ->orderBy("id")
+                ->lockForUpdate()
+                ->get();
+        }
+        if ($values["goods_receipt_id"]) {
+            $receipt = DB::table("goods_receipts")
+                ->where("id", $values["goods_receipt_id"])
+                ->where("status", "posted")
+                ->first();
+            abort_unless($receipt, 422, "Choose a posted supplier receipt.");
+            $paidByOtherVouchers = DB::table("payment_vouchers")
+                ->where("goods_receipt_id", $receipt->id)
+                ->where("status", "posted")
+                ->where("id", "<>", $old->id)
+                ->sum("total");
+            $available =
+                (float) $receipt->total -
+                (float) $paidByOtherVouchers -
+                \App\Services\Procurement\SupplierBalance::returned($receipt->id);
+            abort_if(
+                (float) $values["total"] > $available + 0.001,
+                422,
+                "Replacement payment exceeds the supplier receipt balance.",
+            );
+        }
+
+        $reversalJournalId = $this->cancel($old->id, $reason, $revisionDate, $user);
+        $replacementId = DB::table("payment_vouchers")->insertGetId(
+            $values + ["status" => "draft", "created_by" => $user, "created_at" => now()],
+        );
+        $this->assignNumber($replacementId, $values["payment_date"]);
+        $this->storeLines($replacementId, $lines);
+        DB::table("payment_voucher_revisions")->insert([
+            "original_voucher_id" => $old->id,
+            "replacement_voucher_id" => $replacementId,
+            "revision_date" => $revisionDate,
+            "reason" => $reason,
+            "reversal_journal_id" => $reversalJournalId,
+            "created_by" => $user,
+            "created_at" => now(),
+            "updated_at" => now(),
+        ]);
+        $this->audit($old->id, $user, "revised", [
+            "replacement_voucher_id" => $replacementId,
+            "revision_date" => $revisionDate,
+            "reason" => $reason,
+            "reversal_journal_id" => $reversalJournalId,
+        ]);
+        return $replacementId;
+    }
+
+    private function assignNumber(int $id, string $paymentDate): void
+    {
+        $prefix = "PV-" . str_replace("-", "", substr($paymentDate, 0, 7)) . "-";
+        $last = DB::table("payment_vouchers")
+            ->where("number", "like", $prefix . "%")
+            ->lockForUpdate()
+            ->pluck("number")
+            ->reduce(function (int $highest, string $number) use ($prefix): int {
+                $suffix = substr($number, strlen($prefix));
+                return ctype_digit($suffix) ? max($highest, (int) $suffix) : $highest;
+            }, 0);
+        DB::table("payment_vouchers")
+            ->where("id", $id)
+            ->update([
+                "number" => $prefix . str_pad((string) ($last + 1), 6, "0", STR_PAD_LEFT),
+            ]);
+    }
+
+    private function storeLines(int $id, array $lines): void
+    {
+        DB::table("payment_voucher_lines")->where("payment_voucher_id", $id)->delete();
+        foreach ($lines as $line) {
+            DB::table("payment_voucher_lines")->insert([
+                "payment_voucher_id" => $id,
+                "account_id" => $line["account_id"],
+                "description" => $line["description"],
+                "amount" => $line["amount"],
+                "created_at" => now(),
+                "updated_at" => now(),
+            ]);
+        }
     }
 
     public function post(int $id, ?int $user): void
@@ -229,9 +356,9 @@ final class PaymentVoucherService
         });
     }
 
-    public function cancel(int $id, string $reason, string $date, ?int $user): void
+    public function cancel(int $id, string $reason, string $date, ?int $user): ?int
     {
-        DB::transaction(function () use ($id, $reason, $date, $user) {
+        return DB::transaction(function () use ($id, $reason, $date, $user) {
             $v = DB::table("payment_vouchers")->lockForUpdate()->find($id);
             abort_unless($v, 404, "Voucher not found.");
             abort_if($v->status === "void", 422, "Voucher is already cancelled.");
@@ -288,6 +415,7 @@ final class PaymentVoucherService
                 "date" => $date,
                 "journal_id" => $journalId,
             ]);
+            return $journalId;
         });
     }
     private function audit(int $id, ?int $user, string $action, array $extra): void

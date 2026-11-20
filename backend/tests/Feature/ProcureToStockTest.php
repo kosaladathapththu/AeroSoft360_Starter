@@ -15,6 +15,35 @@ final class ProcureToStockTest extends TestCase
         parent::setUp();
         $this->seed(DatabaseSeeder::class);
     }
+
+    public function test_material_can_be_created_for_a_purchase_order(): void
+    {
+        $this->withoutMiddleware();
+        $response = $this->postJson("/api/v1/materials", [
+            "code" => "GLUE-SUPER-01",
+            "name" => "Super Glue",
+            "category" => "raw_material",
+            "unit" => "PCS",
+        ])->assertCreated();
+
+        $materialId = $response->json("id");
+        $this->assertDatabaseHas("materials", [
+            "id" => $materialId,
+            "code" => "GLUE-SUPER-01",
+            "name" => "Super Glue",
+            "category" => "raw_material",
+            "unit" => "PCS",
+            "active" => true,
+        ]);
+
+        $this->postJson("/api/v1/materials", [
+            "code" => "GLUE-SUPER-01",
+            "name" => "Duplicate Glue",
+            "category" => "raw_material",
+            "unit" => "PCS",
+        ])->assertUnprocessable();
+    }
+
     public function test_approved_po_can_be_partially_received_into_batch_stock_and_balanced_ledger(): void
     {
         $supplier = $this->postJson("/api/v1/suppliers", [
