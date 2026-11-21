@@ -15,6 +15,12 @@ their original journal and cancellation reversal; only eligible drafts can be
 deleted. This display/confirmation update needs no new migration or SQL import.
 After upload, clear caches as described below and hard-refresh the browser.
 
+Payment Vouchers now includes a Full payment vouchers report button. It downloads
+an Excel workbook with Summary, Vouchers and Payment lines sheets for all vouchers,
+independent of page filters. Original, cancelled and net posted amounts are separate;
+the workbook includes reasons, revision links, journal references and reversal checks.
+This report requires no database migration or SQL import.
+
 20 November validation: production build and all 16 frontend suites passed;
 17 of 20 standalone backend suites passed, including payment vouchers and
 cash flow. The full release check is not green: collection-payment fixtures

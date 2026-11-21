@@ -6,6 +6,7 @@ import { WorkflowContext } from "./workflow";
 import { createPortal } from "react-dom";
 import {
   Check,
+  Download,
   Eye,
   FileText,
   Loader2,
@@ -47,6 +48,7 @@ export default function PaymentVouchersPage({
   const [cancelling, setCancelling] = useState<any>(null);
   const [deleting, setDeleting] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [filter, setFilter] = useState("all");
   const load = useCallback(async () => {
     const response = await fetch(`${api}/payment-vouchers`, {
@@ -109,6 +111,31 @@ export default function PaymentVouchersPage({
       setError((err as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+  const downloadReport = async () => {
+    setExporting(true);
+    setError("");
+    try {
+      const response = await fetch(`${api}/payment-vouchers/export`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.message || "Unable to download payment voucher report.");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Payment-Vouchers-Report-${today()}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setExporting(false);
     }
   };
   if (!data)
@@ -197,6 +224,15 @@ export default function PaymentVouchersPage({
             <option value="void">Cancelled</option>
           </select>
         </label>
+        <button
+          type="button"
+          className="secondary-action"
+          disabled={exporting}
+          title="Download all vouchers, summary, payment lines and reversal checks; page filters do not apply"
+          onClick={downloadReport}
+        >
+          {exporting ? <Loader2 /> : <Download />} {exporting ? "Preparing report…" : "Full payment vouchers report"}
+        </button>
         <button
           type="button"
           className="secondary-action"

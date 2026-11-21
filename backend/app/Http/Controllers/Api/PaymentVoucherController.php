@@ -8,6 +8,21 @@ use Illuminate\Support\Facades\Schema;
 
 final class PaymentVoucherController
 {
+    public function export(\App\Services\Reporting\PaymentVoucherExporter $exporter)
+    {
+        $book = $exporter->make();
+        return response()->streamDownload(function () use ($book) {
+            try {
+                (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save('php://output');
+            } finally {
+                $book->disconnectWorksheets();
+            }
+        }, 'Payment-Vouchers-Report-'.now()->timezone('Asia/Colombo')->format('Y-m-d').'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
     public function index()
     {
         $lines = DB::table("payment_voucher_lines as l")

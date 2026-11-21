@@ -359,3 +359,45 @@ check(
         DB::table("audit_logs")->where("event", "payment_voucher.cancelled")->exists(),
     "posting and cancellation keep audit events",
 );
+
+// The full report must include all vouchers, even drafts and replaced originals.
+$exporter = new \App\Services\Reporting\PaymentVoucherExporter();
+$book = $exporter->make();
+$report = $book->getSheetByName('Vouchers');
+$reportRows = $report->toArray(null, true, false, false);
+$exported = collect(array_slice($reportRows, 4))->keyBy(fn ($row) => $row[0]);
+$cancelledNumber = DB::table('payment_vouchers')->where('id', $replacementId)->value('number');
+$cancelledRow = $exported->get($cancelledNumber);
+check($book->getSheetCount() === 3 && $exported->count() === DB::table('payment_vouchers')->count(),
+    'full report includes every voucher and all three sheets');
+check((float) $cancelledRow[7] === 175.0 && (float) $cancelledRow[8] === 175.0 &&
+    (float) $cancelledRow[9] === 0.0 && (float) $cancelledRow[10] === 0.0 && $cancelledRow[19] === 'Reversed to zero',
+    'report retains original and cancelled values but zeroes net payments with verified reversals');
+check($exported->get(DB::table('payment_vouchers')->where('id', $id)->value('number'))[16] === $cancelledNumber,
+    'report includes replacement voucher history');
+$expectedNet = (float) DB::table('payment_vouchers')->where('status', 'posted')->sum('total');
+check(abs((float) $book->getSheetByName('Summary')->getCell('D9')->getValue() - $expectedNet) < 0.001,
+    'report summary reconciles to posted payments only');
+check($book->getSheetByName('Payment lines')->getHighestDataRow() - 4 === DB::table('payment_voucher_lines')->count(),
+    'report includes every original payment line');
+$unsafeId = $service->save(array_replace($expense, ['payee' => '=1+1']), null, 42);
+$unsafeBook = $exporter->make();
+$unsafeNumber = DB::table('payment_vouchers')->where('id', $unsafeId)->value('number');
+$unsafeSheet = $unsafeBook->getSheetByName('Vouchers');
+for ($r = 5; $r <= $unsafeSheet->getHighestDataRow(); $r++) {
+    if ($unsafeSheet->getCell('A'.$r)->getValue() === $unsafeNumber) {
+        check($unsafeSheet->getCell('D'.$r)->getDataType() === \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING,
+            'report treats user text as text rather than executable spreadsheet formulas');
+    }
+}
+$stream = $controller->export($exporter);
+ob_start();
+$stream->sendContent();
+$xlsx = ob_get_clean();
+check(str_starts_with($xlsx, 'PK') && str_contains($stream->headers->get('Content-Disposition'), '.xlsx'),
+    'report endpoint streams an Excel workbook attachment');
+// A broken reversal must be visible instead of silently claiming zero ledger effect.
+DB::table('journal_lines')->where('journal_entry_id', $reversal)->where('account_id', $ids['1000'])->increment('debit', 1);
+$broken = $exporter->make()->getSheetByName('Vouchers')->toArray(null, true, false, false);
+check(collect(array_slice($broken, 4))->contains(fn ($row) => $row[19] === 'CHECK REQUIRED'),
+    'report flags inconsistent reversal journals');

@@ -394,6 +394,8 @@ Route::prefix("v1")->group(function (): void {
         Route::get("/payment-vouchers", [PaymentVoucherController::class, "index"])->middleware(
             "permission:workspace.view",
         );
+        Route::get('/payment-vouchers/export', [PaymentVoucherController::class, 'export'])
+            ->middleware('permission:workspace.view');
         Route::get("/accounts", [AccountController::class, "index"])->middleware(
             "permission:workspace.view",
         );
