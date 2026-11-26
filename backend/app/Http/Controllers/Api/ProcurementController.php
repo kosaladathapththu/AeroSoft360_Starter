@@ -76,6 +76,20 @@ final class ProcurementController extends Controller
         return response()->json(DB::table("suppliers")->find($id), 201);
     }
 
+    public function storeMaterial(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            "code" => ["required", "string", "max:40", Rule::unique("materials", "code")],
+            "name" => ["required", "string", "max:160"],
+            "category" => ["required", "string", "max:30"],
+            "unit" => ["required", "string", "max:20"],
+        ]);
+        $id = DB::table("materials")->insertGetId(
+            $data + ["active" => true, "created_at" => now(), "updated_at" => now()],
+        );
+        return response()->json(DB::table("materials")->find($id), 201);
+    }
+
     public function updateSupplier(Request $request, int $supplier): JsonResponse
     {
         abort_unless(

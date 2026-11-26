@@ -22,7 +22,7 @@ export default function FilteredRecords<T extends Record<string, any>>({
   fields: configuredFields,
   title = "records",
   customerSearch = false,
-  paginate = true,
+  paginate = false,
   minimumRows = 1,
   children,
 }: Props<T>) {

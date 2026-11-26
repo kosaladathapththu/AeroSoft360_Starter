@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Loader2, Printer, RefreshCw, X } from "lucide-react";
 import "./invoice-bill.css";
 import { displayCode } from "./representative-reference";
+import { invoiceDisplayLines } from "./invoice-display-lines";
 
 const money = (value: unknown) =>
   `LKR ${Number(value || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -16,6 +17,7 @@ const date = (value: string) =>
     : "—";
 
 export function BillDocument({ invoice }: { invoice: any }) {
+  const lines = invoiceDisplayLines(invoice.lines);
   const quantity = invoice.lines.reduce((sum: number, line: any) => sum + Number(line.quantity), 0);
   return (
     <article className="bill-document">
@@ -77,8 +79,7 @@ export function BillDocument({ invoice }: { invoice: any }) {
         <thead>
           <tr>
             <th>#</th>
-            <th>Item / description</th>
-            <th>Size</th>
+            <th>Article / description</th>
             <th>Colour</th>
             <th>Qty</th>
             <th>Fixed rate</th>
@@ -87,14 +88,13 @@ export function BillDocument({ invoice }: { invoice: any }) {
           </tr>
         </thead>
         <tbody>
-          {invoice.lines.map((line: any, index: number) => (
+          {lines.map((line: any, index: number) => (
             <tr key={line.id}>
               <td>{index + 1}</td>
               <td>
                 <b>{line.article_code}</b>
                 <span>{line.article_name}</span>
               </td>
-              <td>{line.size_label}</td>
               <td>{line.colour || "—"}</td>
               <td>{Number(line.quantity).toLocaleString()}</td>
               <td>{line.fixed_rate == null ? "Not recorded" : money(line.fixed_rate)}</td>
@@ -104,7 +104,7 @@ export function BillDocument({ invoice }: { invoice: any }) {
           ))}
           {invoice.lines.length === 0 && (
             <tr>
-              <td colSpan={8}>
+              <td colSpan={7}>
                 This invoice has no saved item breakdown. The recorded totals are shown below.
               </td>
             </tr>
@@ -115,7 +115,7 @@ export function BillDocument({ invoice }: { invoice: any }) {
         <div className="bill-note">
           <b>
             {invoice.lines.length > 0
-              ? `${quantity.toLocaleString()} pieces · ${invoice.lines.length} item lines`
+              ? `${quantity.toLocaleString()} pieces · ${lines.length} item lines`
               : "Item breakdown unavailable"}
           </b>
           <p>Please quote {invoice.number} when making payment.</p>
@@ -207,7 +207,7 @@ export function BillDocument({ invoice }: { invoice: any }) {
           <table className="bill-items">
             <thead>
               <tr>
-                <th>Article / size</th>
+                <th>Article</th>
                 <th>Serial number</th>
                 <th>Warranty start</th>
                 <th>Warranty until</th>
@@ -217,7 +217,7 @@ export function BillDocument({ invoice }: { invoice: any }) {
               {invoice.serials.map((serial: any) => (
                 <tr key={serial.id}>
                   <td>
-                    {serial.article_code} / {serial.size_label}
+                    {serial.article_code}
                   </td>
                   <td>{serial.serial_number}</td>
                   <td>{date(serial.warranty_starts_on)}</td>

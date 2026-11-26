@@ -289,6 +289,46 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
+
+  .purchase-material-field {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+  }
+  .purchase-material-field > label {
+    flex: 1;
+    min-width: 0;
+  }
+  .purchase-material-field > .secondary-action {
+    padding: 6px 10px;
+    white-space: nowrap;
+  }
+  .purchase-new-material {
+    display: grid;
+    gap: 12px;
+    margin: 12px 0;
+    padding: 14px;
+    border: 1px solid #c9dfd8;
+    border-radius: 10px;
+    background: #fff;
+  }
+  .purchase-new-material .form-row {
+    margin: 0;
+  }
+  .purchase-new-material-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .purchase-new-material .report-note {
+    margin: 0;
+  }
+  @media (max-width: 600px) {
+    .purchase-material-field {
+      align-items: stretch;
+      flex-direction: column;
+    }
+  }
   @media (max-width: 720px) {
     .shell > main > header {
       height: auto;

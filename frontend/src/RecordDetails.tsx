@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from "react";
 import { X } from "lucide-react";
 import { financeMoney } from "./finance-utils";
 import { representativeReference, displayCode, displayReferenceValue } from "./representative-reference";
+import { invoiceDisplayLines } from "./invoice-display-lines";
 
 const labels: Record<string, string> = {
   number: "Document number", rep_name: "Salesperson", invoice_rep_name: "Invoice salesperson",
@@ -44,7 +45,8 @@ export default function RecordDetails({ page, row, close, onReturn }: { page: st
   const entries = Object.entries(row).filter(([key, value]) => !hidden.has(key) && key !== "id" && !key.endsWith("_id") && (value == null || typeof value !== "object"));
   const amounts = entries.filter(([key]) => moneyKey.test(key) && (!row.is_opening_balance || ["total", "received_amount", "outstanding", "returned_amount"].includes(key)));
   const information = entries.filter(([key]) => !moneyKey.test(key) && key !== "number");
-  const lines: any[] = Array.isArray(row.lines) ? row.lines : Array.isArray(row.items) ? row.items : [];
+  const sourceLines: any[] = Array.isArray(row.lines) ? row.lines : Array.isArray(row.items) ? row.items : [];
+  const lines = page === "Invoices" ? invoiceDisplayLines(sourceLines) : sourceLines;
   const candidateColumns = ["article_code", "article_name", "material_name", "account_name", "name", "size_label", "colour", "order_mode", "sets", "pieces", "quantity", "invoiced_quantity", "fixed_rate", "rate", "unit_price", "unit_cost", "debit", "credit", "net_salary", "line_total"];
   const columns = candidateColumns.filter((key) => lines.some((line) => line[key] != null));
   return <div className="backdrop" onMouseDown={close}>

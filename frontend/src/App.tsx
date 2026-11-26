@@ -61,6 +61,7 @@ import SerialWarrantyPage from "./SerialWarrantyPage";
 import BusinessWorkflowsPage, { workflowPages } from "./BusinessWorkflowsPage";
 import { printReport, reportTotals } from "./report-print";
 import "./tables.css";
+import "./general-ledger.css";
 import "./popups.css";
 import { confirmDialog, showNotice } from "./AppDialogs";
 import InvoiceBill from "./InvoiceBill";
@@ -88,6 +89,7 @@ import "./layout-fixes.css";
 import "./form-defaults.css";
 import "./compact-layout.css";
 import "./workspace-entry.css";
+import "./customer-po-entry.css";
 import "./system-colours.css";
 
 const PublicSite = lazy(() => import("./PublicSite"));
@@ -272,10 +274,10 @@ export default function App() {
     const json = await r.json().catch(() => ({}));
     if (!r.ok)
       throw new Error(
-        json.message ||
-          Object.values(json.errors || {})
-            .flat()
-            .join(" ") ||
+        Object.values(json.errors || {})
+          .flat()
+          .join(" ") ||
+          json.message ||
           "Request failed",
       );
     await load();
@@ -412,7 +414,15 @@ export default function App() {
           : page === "General Ledger"
             ? "journal"
             : "purchase order";
-    if (!(await confirmDialog(`Delete this ${kind}? This action cannot be undone.`))) return;
+    let deleteBody: { reason: string } | undefined;
+    if (page === "General Ledger") {
+      const reason = prompt("Reason for permanently deleting this journal and its linked original/reversal", "Entered by mistake");
+      if (!reason?.trim()) return;
+      deleteBody = { reason: reason.trim() };
+    }
+    if (!(await confirmDialog(page === "General Ledger"
+      ? "Permanently delete this journal, its original/linked reversal and all their lines? This changes balances and reports, including historical dates. A deletion audit record is retained. This cannot be undone."
+      : `Delete this ${kind}? This action cannot be undone.`))) return;
     const path =
       page === "Suppliers"
         ? `/suppliers/${row.id}`
@@ -423,7 +433,7 @@ export default function App() {
             : `/purchase-orders/${row.id}`;
     try {
       setError("");
-      await call(path, undefined, "DELETE");
+      await call(path, deleteBody, "DELETE");
     } catch (e) {
       setError((e as Error).message);
     }
@@ -832,6 +842,7 @@ export default function App() {
           type={modal}
           data={data}
           close={() => setModal("")}
+          createMaterial={(body) => call("/materials", body)}
           submit={async (url, body) => {
             try {
               setError("");
@@ -1705,15 +1716,14 @@ function SalesPage({
           </FilteredRecords>
         </div>
       ) : (
-        <FilteredRecords records={rows} title="records" minimumRows={page === "Pricing List" ? 5 : 1} paginate={page !== "Invoices"} customerSearch={page === "Invoices"} key={page + collectionView}>
+        <FilteredRecords records={rows} title="records" minimumRows={page === "Pricing List" ? 5 : 1} paginate={false} customerSearch={page === "Invoices"} key={page + collectionView}>
           {(filteredRows, filtersActive) => (
-            <InvoicePagination records={filteredRows} enabled={page === "Invoices"}>
+            <InvoicePagination records={filteredRows} enabled={false}>
               {(pageRows) => (
             <div
               ref={salesTableRef}
-              className={`table-card sales-table-card ${page === "Collections" && collectionView === "history" ? "collection-history-table" : ""} ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
+              className={`table-card sales-table-card ${page === "Collections" ? (collectionView === "history" ? "collection-history-table" : "collection-due-table") : ""} ${page === "Invoices" ? "invoice-table-card" : ""} ${page === "Pricing List" ? "pricing-table-card" : ""}`}
             >
-              {page === "Invoices" && <p className="invoice-table-help">Scroll horizontally to see received amounts, outstanding balances, status and actions.</p>}
               <table>
                 <thead>
                   <tr>
@@ -1750,7 +1760,7 @@ function SalesPage({
                               : page,
                             r,
                           )}
-                          <td>
+                          <td data-label={page === "Collections" && collectionView === "due" ? "Actions" : undefined}>
                             <div className="row-actions" onClick={event => event.stopPropagation()}>
                               {page === "Collections" && collectionView === "due" && (
                                 <button
@@ -2830,18 +2840,18 @@ function salesCells(page: string, r: any) {
   if (page === "Collections Due")
     return (
       <>
-        <td>
+        <td data-label="Invoice">
           <b>{invoiceReference(r)}</b>
         </td>
-        <td>{r.customer_name}</td>
-        <td>{r.rep_name}</td>
-        <td>{r.due_date || "Terms not set"}</td>
-        <td>{money(r.total)}</td>
-        <td>{money(r.received_amount)}</td>
-        <td>
+        <td data-label="Customer">{r.customer_name}</td>
+        <td data-label="Salesperson">{r.rep_name}</td>
+        <td data-label="Due date">{r.due_date || "Terms not set"}</td>
+        <td data-label="Invoice total">{money(r.total)}</td>
+        <td data-label="Paid">{money(r.received_amount)}</td>
+        <td data-label="To be paid">
           <b>{money(r.outstanding)}</b>
         </td>
-        <td>{status(Number(r.received_amount) > 0 ? "part paid" : "unpaid")}</td>
+        <td data-label="Status">{status(Number(r.received_amount) > 0 ? "part paid" : "unpaid")}</td>
       </>
     );
   if (page === "Debtors Aging")
@@ -4000,6 +4010,7 @@ function SalesCreateModal({
   const firstArticleId = Number(firstArticle?.id || 0);
   const [inventoryArticleId, setInventoryArticleId] = useState(firstArticleId);
   const [expandedPoLine, setExpandedPoLine] = useState<number | null>(null);
+  const [activePoLine, setActivePoLine] = useState<number | null>(0);
   const [poLines, setPoLines] = useState<any[]>([
     ...(initial?.lines?.length
       ? initial.lines.map((line: any) => ({
@@ -5127,6 +5138,8 @@ function SalesCreateModal({
           ) : type === "po" || type === "sales_order" ? (
             <>
               {!newCustomer && selectedCustomerId > 0 && (
+                <details className="po-customer-context" open={!isEasyOrder || orderStep === 1}>
+                  <summary>Customer balances and previous orders</summary>
                 <CustomerOrderContext
                   key={selectedCustomerId}
                   api={API}
@@ -5136,6 +5149,7 @@ function SalesCreateModal({
                   excludePoId={type === "po" && initial ? Number(initial.id) : undefined}
                   excludeOrderId={type === "sales_order" && initial ? Number(initial.id) : undefined}
                 />
+                </details>
               )}
               <nav className="easy-order-steps" aria-label="Order progress">
                 {["Customer", "Items", "Review"].map((label, index) => (
@@ -5326,16 +5340,20 @@ function SalesCreateModal({
                     Order amount payable on credit: <b>{money(poGrandTotal)}</b>.
                   </p>
                 )}
-                <div className="po-lines">
+                <div className="po-lines customer-po-entry">
                   <div className="po-lines-head">
                     <div>
                       <b>Order items</b>
-                      <small>Add one or more articles below.</small>
+                      <small>{poLines.length} articles. Open an article to edit its sizes and colours.</small>
                     </div>
+                    <button type="button" className="secondary-action" onClick={() => setActivePoLine(null)}>
+                      Collapse all articles
+                    </button>
                     <button
                       type="button"
                       className="secondary-action"
-                      onClick={() =>
+                      onClick={() => {
+                        setActivePoLine(poLines.length);
                         setPoLines((lines) => [
                           ...lines,
                           {
@@ -5347,8 +5365,8 @@ function SalesCreateModal({
                             set_item_id: 0,
                             quantity: 1,
                           },
-                        ])
-                      }
+                        ]);
+                      }}
                     >
                       <Plus /> Add article
                     </button>
@@ -5366,7 +5384,16 @@ function SalesCreateModal({
                       (quantity: any) => Number(quantity) > 0,
                     ).length;
                     return (
-                      <div className={`po-line compact-order-line ${selectedArticle ? "has-article" : ""}`} key={index}>
+                      <div className={`po-line compact-order-line ${selectedArticle ? "has-article" : ""} ${activePoLine === index ? "po-editing" : "po-collapsed"}`} key={index}
+                        onInvalidCapture={() => setActivePoLine(index)}>
+                        <button type="button" className="po-compact-heading"
+                          aria-expanded={activePoLine === index}
+                          onClick={() => setActivePoLine(activePoLine === index ? null : index)}>
+                          <span>{index + 1}. {selectedArticle ? `${selectedArticle.code} — ${selectedArticle.name}` : "Choose an article"}</span>
+                          <small>{line.order_mode === "custom" ? `${selectedSizeCount} sizes` : `${line.quantity} sets`}</small>
+                          <b>{money(poLineTotal(line))}</b>
+                          <ChevronDown />
+                        </button>
                         <label className="po-article-field">
                           Search article
                           <div className="article-picker-control">
@@ -7014,7 +7041,7 @@ function Records({
   return (
     <FilteredRecords records={rows} title="records" key={page}>
       {(filteredRows, filtersActive) => (
-        <div className="table-card">
+        <div className={`table-card${page === "General Ledger" ? " general-ledger-table" : ""}`}>
           <table>
             <thead>
               <tr>
@@ -7066,25 +7093,25 @@ function Records({
                     </>
                   ) : (
                     <>
-                      <td>
+                      <td data-label="Journal">
                         <b>{row.number}</b>
                       </td>
-                      <td>{row.posting_date}</td>
-                      <td>{row.description}</td>
-                      <td>
+                      <td data-label="Posting date">{row.posting_date}</td>
+                      <td data-label="Description">{row.description}</td>
+                      <td data-label="Debit">
                         {money(
                           row.lines.reduce((s: number, l: JournalLine) => s + Number(l.debit), 0),
                         )}
                       </td>
-                      <td>
+                      <td data-label="Credit">
                         {money(
                           row.lines.reduce((s: number, l: JournalLine) => s + Number(l.credit), 0),
                         )}
                       </td>
-                      <td>{status(row.status)}</td>
+                      <td data-label="Status">{status(row.status)}</td>
                     </>
                   )}
-                  <td>
+                  <td data-label="Actions">
                     <div className="row-actions">
                       {page === "Purchase Orders" && row.status === "draft" && (
                         <button className="approve" onClick={() => approve(row.id)}>
@@ -7114,7 +7141,7 @@ function Records({
                           >
                             <Pencil />
                           </button>
-                          {(page !== "General Ledger" || row.status !== "posted") && <button
+                          {page !== "General Ledger" && <button
                             className="icon-action delete"
                             title="Delete"
                             onClick={() => remove(row)}
@@ -7126,6 +7153,10 @@ function Records({
                       {page === "General Ledger" && reverse && row.status === "posted" &&
                         ["manual_journal", "account_opening"].includes(row.source_type) && (
                         <button className="secondary-action" onClick={() => reverse(row)}>Reverse</button>
+                      )}
+                      {page === "General Ledger" && reverse &&
+                        ["manual_journal", "account_opening", "journal_reversal"].includes(row.source_type) && (
+                        <button className="icon-action delete" title="Delete journal and linked original/reversal" aria-label={`Delete ${row.number} and linked original/reversal`} onClick={() => remove(row)}><Trash2 /></button>
                       )}
                     </div>
                   </td>
@@ -7149,11 +7180,13 @@ function CreateModal({
   data,
   close,
   submit,
+  createMaterial,
 }: {
   type: string;
   data: Workspace;
   close: () => void;
   submit: (url: string, body: any) => Promise<void>;
+  createMaterial: (body: { code: string; name: string; category: string; unit: string }) => Promise<Material>;
 }) {
   const [busy, setBusy] = useState(false);
   const [journalLines, setJournalLines] = useState([emptyJournalLine(), emptyJournalLine()]);
@@ -7288,6 +7321,7 @@ function CreateModal({
             materials={data.materials}
             lines={purchaseLines}
             change={setPurchaseLines}
+            createMaterial={createMaterial}
           />
         </>
       ) : type === "grn" ? (

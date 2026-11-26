@@ -1,0 +1,72 @@
+/* Customer PO entry: keep the article list compact and edit one article at a time. */
+@media screen {
+  .record-workspace-page .modal:has(.customer-po-entry) > .popup-header { padding: 10px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .record-workspace-page .modal:has(.customer-po-entry) .workspace-entry-back { margin: 0; }
+  .record-workspace-page .modal:has(.customer-po-entry) > .popup-header h2 { font-size: 20px; margin: 4px 0; }
+  .record-workspace-page .modal:has(.customer-po-entry) > .popup-body { padding: 10px 16px; }
+  .record-workspace-page .modal:has(.customer-po-entry) > .popup-footer { padding: 8px 16px; }
+  .record-workspace-page .modal:has(.customer-po-entry) .easy-order-steps { margin: 4px 0 8px; padding: 4px 0; }
+  .record-workspace-page .modal:has(.customer-po-entry) .order-step[data-step="2"] > :is(legend, p) { display: none; }
+  .record-workspace-page .modal:has(.customer-po-entry) .order-step { padding: 0; }
+  .record-workspace-page .modal:has(.customer-po-entry) .order-step > legend { font-size: 14px; margin-bottom: 4px; }
+  .record-workspace-page .modal:has(.customer-po-entry) .order-step > p { margin: 4px 0; font-size: 12px; }
+  .po-customer-context { margin: 0 0 8px; }
+  .po-customer-context > summary { cursor: pointer; color: #335c57; font-size: 12px; padding: 6px 0; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-line:not(.has-article) { grid-template-areas: "heading heading heading heading" "article article article remove"; }
+  .shell .record-workspace-page .modal .customer-po-entry { gap: 5px; padding: 8px; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-lines-head { gap: 8px; padding: 6px 0; margin-bottom: 6px; position: static; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-lines-head > div { margin-right: auto; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-lines-head button { min-height: 32px; padding: 6px 10px; font-size: 12px; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-line { margin: 0; padding: 8px; gap: 8px; }
+  .shell .record-workspace-page .modal .customer-po-entry .compact-order-line:not(.invoice-line) {
+    grid-template-areas: "heading heading heading heading" "article article article remove" "method method colour colour" "template template quantity total" "pricing pricing pricing pricing" "custom custom custom custom" "details details details details";
+  }
+  .shell .record-workspace-page .modal .customer-po-entry .compact-order-line > .po-compact-heading { grid-area: heading; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-line:not(.has-article) > .po-compact-heading { display: grid; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-line > .po-compact-heading {
+    grid-area: heading; display: grid; grid-template-columns: minmax(0, 1fr) auto auto 18px;
+    gap: 12px; align-items: center; width: 100%; min-height: 32px; height: auto;
+    padding: 5px 8px; border: 0; background: #edf5f3; color: #173d46; text-align: left;
+    font-size: 12px; line-height: 1.3; border-radius: 5px;
+  }
+  .shell .record-workspace-page .modal .customer-po-entry .po-compact-heading > span { overflow-wrap: anywhere; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-compact-heading small { font-size: 11px; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-compact-heading svg { width: 16px; height: 16px; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-editing > .po-compact-heading svg { transform: rotate(180deg); }
+  .shell .record-workspace-page .modal .customer-po-entry .po-collapsed { display: block; padding: 0; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-collapsed > :not(.po-compact-heading) { display: none; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-line label,
+  .shell .record-workspace-page .modal .customer-po-entry .order-method-field > span { font-size: 11px; margin: 0; gap: 3px; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-line input:not([type=checkbox]),
+  .shell .record-workspace-page .modal .customer-po-entry .po-line select,
+  .shell .record-workspace-page .modal .customer-po-entry .article-picker-control .article-details-button {
+    min-height: 32px; height: 32px; padding-top: 4px; padding-bottom: 4px; font-size: 12px;
+  }
+  .shell .record-workspace-page .modal .customer-po-entry .selected-article-name { padding: 4px 8px; margin-top: 3px; gap: 0; }
+  .shell .record-workspace-page .modal .customer-po-entry .selected-article-name strong { font-size: 12px; line-height: 1.3; }
+  .shell .record-workspace-page .modal .customer-po-entry .selected-article-name :is(small, span) { font-size: 10px; }
+  .shell .record-workspace-page .modal .customer-po-entry .order-method-options { gap: 5px; }
+  .shell .record-workspace-page .modal .customer-po-entry .order-method-options button { min-height: 32px; padding: 5px 8px; font-size: 11px; }
+  .shell .record-workspace-page .modal .customer-po-entry .order-method-options small,
+  .shell .record-workspace-page .modal .customer-po-entry .custom-pack-label { display: none; }
+  .shell .record-workspace-page .modal .customer-po-entry :is(.custom-size-summary, .order-pack-description, .po-line-total) { padding: 5px 8px; min-height: 32px; font-size: 11px; }
+  .shell .record-workspace-page .modal .customer-po-entry .po-line-total b { font-size: 14px; }
+  .shell .record-workspace-page .modal .customer-po-entry .custom-size-picker { margin-top: 0; }
+  .shell .record-workspace-page .modal .customer-po-entry :is(.custom-size-head, .custom-size-row) { padding: 5px 7px; gap: 6px; min-height: 32px; font-size: 11px; }
+  .shell .record-workspace-page .modal .customer-po-entry .custom-size-head { font-size: 10px; }
+  .shell .record-workspace-page .modal .customer-po-entry .size-colour-options { gap: 4px; }
+  .shell .record-workspace-page .modal .customer-po-entry .size-colour-options label { min-height: 26px; padding: 3px 5px; gap: 4px; font-size: 10px; }
+  .shell .record-workspace-page .modal .customer-po-entry .size-colour-options input[type=number] { width: 48px; min-height: 26px; height: 26px; padding: 2px 4px; }
+  .shell .record-workspace-page .modal .customer-po-entry input[type=checkbox] { width: 16px; height: 16px; min-height: 0; }
+  @media (max-width: 1000px) {
+    .shell .record-workspace-page .modal .customer-po-entry .po-line:not(.has-article) { grid-template-areas: "heading heading" "article remove"; }
+    .shell .record-workspace-page .modal .customer-po-entry .compact-order-line:not(.invoice-line) {
+      grid-template-areas: "heading heading" "article remove" "method method" "colour colour" "template template" "quantity total" "pricing pricing" "custom custom" "details details";
+    }
+  }
+  @media (max-width: 700px) {
+    .shell .record-workspace-page .modal .customer-po-entry .po-lines-head { flex-wrap: wrap; }
+    .shell .record-workspace-page .modal .customer-po-entry .po-compact-heading { gap: 6px; grid-template-columns: minmax(0, 1fr) auto 16px; }
+    .shell .record-workspace-page .modal .customer-po-entry .po-compact-heading small { display: none; }
+  }
+}

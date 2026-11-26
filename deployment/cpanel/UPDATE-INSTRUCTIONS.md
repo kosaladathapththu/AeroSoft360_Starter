@@ -5,6 +5,70 @@ Account: /home/camymarket
 
 This ZIP updates the application files. Creating it does not deploy anything.
 
+21 November update: Customer PO article entry uses compact controls and summary
+rows. Open one article to edit its sizes and colours; Collapse all articles shows
+the order list and totals together. Adding an article opens it for editing.
+Collections To Be Paid now fits its columns into the workspace and uses labelled
+rows on narrower screens. These layout changes require no migration or SQL import.
+The full payment voucher Excel report described below is included.
+
+20 November update: cancelled and revised payment vouchers now show LKR 0.00
+as the payment amount in the list and printed voucher. The original amount is
+labelled separately for history. This applies to previously cancelled vouchers
+as well; do not cancel them again or change their stored amounts. Cancellation
+asks whether to cancel and show zero, with a No option to keep the voucher.
+Cancel and Delete draft have separate visible labels. Posted vouchers retain
+their original journal and cancellation reversal; only eligible drafts can be
+deleted. This display/confirmation update needs no new migration or SQL import.
+After upload, clear caches as described below and hard-refresh the browser.
+
+Payment Vouchers now includes a Full payment vouchers report button. It downloads
+an Excel workbook with Summary, Vouchers and Payment lines sheets for all vouchers,
+independent of page filters. Original, cancelled and net posted amounts are separate;
+the workbook includes reasons, revision links, journal references and reversal checks.
+This report requires no database migration or SQL import.
+
+20 November validation: production build and all 16 frontend suites passed;
+17 of 20 standalone backend suites passed, including payment vouchers and
+cash flow. The full release check is not green: collection-payment fixtures
+lack commission_category, customer-opening checks encounter a null commission
+representative, and the dashboard article stock-pool assertion fails. These
+areas require follow-up before treating this as a fully validated release.
+
+19 November update: Payment Vouchers can be edited while draft and deleted with
+a required reason. Editing a posted voucher reverses it on a chosen accounting
+date and creates a linked replacement draft for review; posted records are never
+deleted. A replacement draft stays linked in history and must be corrected by
+editing it or by posting and cancelling it. Before using these controls, run the
+one-time migration in step 3:
+
+    php artisan migrate --path=database/migrations/2026_11_19_000001_create_payment_voucher_revisions.php --force
+
+If an earlier attempt failed with MySQL's “index name is too long” error, upload
+the corrected migration from this update and rerun the command. It detects the
+partially created table and adds the shorter index without dropping data.
+
+19 November update: users with purchase-order management access can add a material
+from the New Purchase Order form. The material is saved to the catalog and selected
+on the order; inventory is added only when goods are received. This update adds no
+database migration and requires no SQL import.
+
+General Ledger layout follow-up: the table fits the workspace without horizontal
+scrolling, wraps descriptions/actions, and uses labelled cards on narrow screens.
+No migration, SQL import or transaction cleanup is required. This ZIP does not
+contain or execute the one-time journal cleanup command. Preserve all live data.
+
+Latest follow-up: invoices show article and colour without size columns; matching
+article/colour/rate rows are combined for display only. Stock size records remain
+unchanged. Full record lists replace Next/Previous pagination across the app.
+Cash Flow includes an optional cash/bank account selector and correct treatment
+of opening reversals. General Ledger offers permanent deletion of manual and
+account-opening journals together with their linked reversal and lines. Deletion
+requires a reason and confirmation, retains an audit snapshot, and is blocked in
+closed periods. Source-generated invoice/payment journals are handled in their
+source modules. Uploading this package does not delete any transaction.
+These follow-up changes require no new migration or database import.
+
 Latest 13 November update: customer/supplier/product ledger selection uses a
 visible searchable list with empty-state feedback. Ledger movements show all
 matching rows without Next/Previous pagination. The app and public login pages
@@ -91,17 +155,18 @@ Earlier collection updates require the migration in step 3 only if it has not al
 history tables and account 1120 (Cheques in Hand), without rewriting invoices
 or earlier receipts. Stop and resolve any account-code conflict reported by it.
 
-## 3. Apply earlier pending migrations only, then clear cached configuration
+## 3. Apply pending migrations only, then clear cached configuration
 
-The quotation and sales-order deletion changes in this follow-up need no
-migration. The commands below are only for an installation that has not yet
-received the preceding collection and catalogue updates. Do not rerun them if
-those migrations are already recorded as complete.
+Laravel skips migration files already recorded as complete. Apply the voucher
+revision migration before using posted-voucher corrections. The earlier commands
+below are only for an installation that has not yet received the preceding
+collection and catalogue updates.
 
 In cPanel Terminal, use the PHP binary matching the ERP domain:
 
     cd /home/camymarket/aerosoft360
     /opt/cpanel/ea-php82/root/usr/bin/php artisan config:clear
+    /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_19_000001_create_payment_voucher_revisions.php --force
     /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_06_000001_create_customer_collections.php --force
     /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_09_000001_group_cheques_under_current_assets.php --force
     /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --path=database/migrations/2026_11_09_000002_add_card_collection_charges.php --force
@@ -152,7 +217,10 @@ A downloaded template or preview does not update inventory.
    In Bulk Inventory Import, download an Excel template and inspect its Instructions
    sheet. Download and preview do not change balances. Apply only verified real counts.
    Raw material count changes require an open accounting period and post journals.
-8. Use Ctrl+F5 if the browser displays the previous page. Keep old hashed
+8. In Payment Vouchers, confirm drafts can be edited and deleted with a reason.
+   Posted voucher edits must reverse the original on the selected adjustment date
+   and create a linked replacement draft; review and post it to complete the correction.
+9. Use Ctrl+F5 if the browser displays the previous page. Keep old hashed
    assets temporarily so already open browser sessions continue to work.
 
 If checks fail, restore the previous application files from your backup.

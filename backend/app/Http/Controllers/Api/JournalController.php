@@ -102,18 +102,36 @@ final class JournalController extends Controller
         return response()->json($this->journal($journal));
     }
 
-    public function destroy(int $journal): JsonResponse
+    public function destroy(Request $request, int $journal): JsonResponse
     {
-        $entry = DB::table("journal_entries")->find($journal);
-        abort_unless($entry, 404, "Journal not found.");
-        abort_if($entry->status === 'posted', 422, 'Posted journals must be reversed to preserve their history.');
-        abort_unless(
-            $entry->source_type === "manual_journal",
-            422,
-            "System-generated journals cannot be deleted. Reverse the source transaction instead.",
-        );
-        DB::table("journal_entries")->where("id", $journal)->delete();
-        return response()->json(["message" => "Manual journal deleted."]);
+        $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
+        abort_if(trim($data['reason']) === '', 422, 'Enter a deletion reason.');
+        return DB::transaction(function () use ($request, $journal, $data) {
+            $selected = DB::table('journal_entries')->find($journal);
+            abort_unless($selected, 404, 'Journal not found.');
+            $originalId = $selected->source_type === 'journal_reversal' ? (int) $selected->source_id : $journal;
+            $original = DB::table('journal_entries')->lockForUpdate()->find($originalId);
+            abort_unless($original, 422, 'Original journal is missing.');
+            abort_unless(in_array($original->source_type, ['manual_journal', 'account_opening'], true), 422,
+                'This journal belongs to a source transaction. Delete or cancel that transaction in its own module.');
+            $entries = DB::table('journal_entries')->where('id', $originalId)
+                ->orWhere(fn ($query) => $query->where('source_type', 'journal_reversal')->where('source_id', $originalId))
+                ->orderBy('id')->lockForUpdate()->get();
+            $ids = $entries->pluck('id')->all();
+            $closedPeriod = DB::table('accounting_periods')->whereIn('id', $entries->pluck('accounting_period_id'))
+                ->where('status', '<>', 'open')->exists();
+            abort_if($closedPeriod, 422, 'A journal in a closed accounting period cannot be deleted.');
+            $lines = DB::table('journal_lines')->whereIn('journal_entry_id', $ids)->get();
+            DB::table('audit_logs')->insert([
+                'event' => 'journal.deleted', 'entity_type' => 'journal', 'entity_id' => $originalId,
+                'payload' => json_encode(['reason' => trim($data['reason']), 'user_id' => $request->attributes->get('auth_user')?->id,
+                    'entries' => $entries, 'lines' => $lines]),
+                'created_at' => now(),
+            ]);
+            DB::table('journal_lines')->whereIn('journal_entry_id', $ids)->delete();
+            DB::table('journal_entries')->whereIn('id', $ids)->delete();
+            return response()->json(['message' => 'Journal and linked reversal deleted. Reports will recalculate from remaining entries.', 'deleted_ids' => $ids]);
+        });
     }
 
     private function journal(int $id): object

@@ -6,6 +6,7 @@ import { WorkflowContext } from "./workflow";
 import { createPortal } from "react-dom";
 import {
   Check,
+  Download,
   Eye,
   FileText,
   Loader2,
@@ -45,7 +46,9 @@ export default function PaymentVouchersPage({
   const [editor, setEditor] = useState<any>(undefined);
   const [view, setView] = useState<any>(null);
   const [cancelling, setCancelling] = useState<any>(null);
+  const [deleting, setDeleting] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [filter, setFilter] = useState("all");
   const load = useCallback(async () => {
     const response = await fetch(`${api}/payment-vouchers`, {
@@ -108,6 +111,31 @@ export default function PaymentVouchersPage({
       setError((err as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+  const downloadReport = async () => {
+    setExporting(true);
+    setError("");
+    try {
+      const response = await fetch(`${api}/payment-vouchers/export`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.message || "Unable to download payment voucher report.");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Payment-Vouchers-Report-${today()}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setExporting(false);
     }
   };
   if (!data)
@@ -199,6 +227,15 @@ export default function PaymentVouchersPage({
         <button
           type="button"
           className="secondary-action"
+          disabled={exporting}
+          title="Download all vouchers, summary, payment lines and reversal checks; page filters do not apply"
+          onClick={downloadReport}
+        >
+          {exporting ? <Loader2 /> : <Download />} {exporting ? "Preparing report…" : "Full payment vouchers report"}
+        </button>
+        <button
+          type="button"
+          className="secondary-action"
           onClick={() => load().catch((err) => setError(err.message))}
         >
           <RefreshCw /> Refresh
@@ -240,9 +277,13 @@ export default function PaymentVouchersPage({
                       <td>
                         <b>{v.number}</b>
                         <small>
-                          {v.kind === "supplier"
-                            ? `Supplier · ${v.receipt_number}`
-                            : "Expense payment"}
+                          {v.revised_from_number
+                            ? `Revision of ${v.revised_from_number}`
+                            : v.revised_to_number
+                              ? `Replaced by ${v.revised_to_number}`
+                              : v.kind === "supplier"
+                                ? `Supplier · ${v.receipt_number}`
+                                : "Expense payment"}
                         </small>
                       </td>
                       <td>{v.payment_date}</td>
@@ -255,11 +296,12 @@ export default function PaymentVouchersPage({
                         <small>{v.payment_method.replace(/_/g, " ")}</small>
                       </td>
                       <td>
-                        <b>{money(v.total)}</b>
+                        <b>{money(v.status === "void" ? 0 : v.total)}</b>
+                        {v.status === "void" && <small>Original: {money(v.total)}</small>}
                       </td>
                       <td>
                         <span className={`status ${v.status}`}>
-                          {v.status === "void" ? "Cancelled" : v.status}
+                          {v.status === "void" ? (v.revised_to_number ? "Revised" : "Cancelled") : v.status}
                         </span>
                       </td>
                       <td>
@@ -276,24 +318,37 @@ export default function PaymentVouchersPage({
                           >
                             <Eye />
                           </button>
-                          {canManage && v.status === "draft" && (
+                          {canManage && (v.status === "draft" || v.status === "posted") && (
                             <button
                               type="button"
                               className="icon-action edit"
                               aria-label={`Edit ${v.number}`}
+                              title={v.status === "posted" ? "Create a reasoned correction" : "Edit draft"}
                               onClick={() => setEditor(v)}
                             >
                               <Pencil />
                             </button>
                           )}
-                          {canManage && v.status !== "void" && (
+                          {canManage && v.status === "draft" && !v.revised_from_number && (
+                            <button
+                              type="button"
+                              className="icon-action delete"
+                              aria-label={`Delete draft ${v.number}`}
+                              title="Delete draft"
+                              onClick={() => setDeleting(v)}
+                            >
+                              <Trash2 /> Delete draft
+                            </button>
+                          )}
+                          {canManage && v.status === "posted" && (
                             <button
                               type="button"
                               className="icon-action delete"
                               aria-label={`Cancel ${v.number}`}
+                              title="Cancel and reverse posted voucher"
                               onClick={() => setCancelling(v)}
                             >
-                              <X />
+                              <X /> Cancel
                             </button>
                           )}
                         </div>
@@ -350,6 +405,16 @@ export default function PaymentVouchersPage({
           }}
         />
       )}
+      {deleting && (
+        <DeleteDraftVoucher
+          voucher={deleting}
+          close={() => setDeleting(null)}
+          save={async (body) => {
+            await mutate(`/${deleting.id}`, body, "DELETE");
+            setDeleting(null);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -388,6 +453,16 @@ function VoucherEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const receipt = data.receipts.find((r: any) => Number(r.id) === Number(receiptId));
+  const editingPosted = voucher?.status === "posted";
+  const defaultReplacementDate =
+    editingPosted && today() < voucher.payment_date ? voucher.payment_date : today();
+  const receiptAmountLimit =
+    Number(receipt?.outstanding || 0) +
+    (editingPosted &&
+    voucher.kind === "supplier" &&
+    Number(voucher.goods_receipt_id) === Number(receipt?.id)
+      ? Number(voucher.total || 0)
+      : 0);
   const total = kind === "supplier" ? Number(lines[0]?.amount || 0) : totalOf(lines);
   return (
     <div
@@ -418,6 +493,7 @@ function VoucherEditor({
               reference: form.get("reference"),
               description: form.get("description"),
               reason: form.get("reason"),
+              revision_date: editingPosted ? form.get("revision_date") : null,
               lines: (kind === "supplier" ? [lines[0]] : lines).map((line) => ({
                 account_id: kind === "supplier" ? null : Number(line.account_id),
                 description:
@@ -477,11 +553,11 @@ function VoucherEditor({
                   </select>
                 </label>
                 <label>
-                  Payment date
+                  {editingPosted ? "Replacement payment date" : "Payment date"}
                   <input
                     name="payment_date"
                     type="date"
-                    defaultValue={voucher?.payment_date || today()}
+                    defaultValue={editingPosted ? defaultReplacementDate : voucher?.payment_date || today()}
                     required
                   />
                 </label>
@@ -514,7 +590,7 @@ function VoucherEditor({
                   {receipt && (
                     <p className="report-note">
                       {receipt.supplier_name} · {receipt.supplier_invoice || receipt.number} ·
-                      Balance: <b>{money(receipt.outstanding)}</b>
+                      Balance: <b>{money(receiptAmountLimit)}</b>
                     </p>
                   )}
                 </>
@@ -627,7 +703,7 @@ function VoucherEditor({
                     <input
                       type="number"
                       min="0.01"
-                      max={kind === "supplier" ? Number(receipt?.outstanding || 0) : 999999999999}
+                      max={kind === "supplier" ? receiptAmountLimit : 999999999999}
                       step="0.01"
                       value={line.amount}
                       required
@@ -671,20 +747,38 @@ function VoucherEditor({
                 </button>
               )}
             </section>
+            {editingPosted && (
+              <label>
+                Accounting reversal date
+                <input
+                  name="revision_date"
+                  type="date"
+                  min={voucher.payment_date}
+                  defaultValue={defaultReplacementDate}
+                  required
+                />
+              </label>
+            )}
             {voucher && (
               <label>
-                Reason for editing
+                {editingPosted ? "Reason for correction" : "Reason for editing"}
                 <input
                   name="reason"
                   required
                   pattern=".*\S.*"
                   maxLength={500}
-                  placeholder="Explain this change"
+                  placeholder={
+                    editingPosted
+                      ? "Explain why this posted voucher is being corrected"
+                      : "Explain this change"
+                  }
                 />
               </label>
             )}
             <p className="report-note">
-              Save a draft first. Review and post it to update the ledger and supplier balance.
+              {editingPosted
+                ? "Saving reverses the posted voucher on the adjustment date and creates a replacement draft dated on or after it. Review and post the replacement to update the ledger."
+                : "Save a draft first. Review and post it to update the ledger and supplier balance."}
             </p>
           </fieldset>
         </div>
@@ -698,7 +792,8 @@ function VoucherEditor({
               Cancel
             </button>
             <button className="primary" disabled={busy || total <= 0}>
-              {busy ? <Loader2 /> : <Check />} Save draft
+              {busy ? <Loader2 /> : <Check />}
+              {editingPosted ? "Create replacement draft" : "Save draft"}
             </button>
           </div>
         </div>
@@ -713,7 +808,14 @@ export function VoucherPaper({ voucher: v }: { voucher: any }) {
       <div className="bill-brand">
         <div>
           <span>SUPUN AEROSOFT (PVT) LTD</span>
-          <p>Payment voucher · {v.status === "void" ? "CANCELLED" : v.status.toUpperCase()}</p>
+          <p>
+            Payment voucher ·{" "}
+            {v.status === "void"
+              ? v.revised_to_number
+                ? "REVISED"
+                : "CANCELLED"
+              : v.status.toUpperCase()}
+          </p>
         </div>
         <div>
           <h1>PAYMENT VOUCHER</h1>
@@ -765,7 +867,7 @@ export function VoucherPaper({ voucher: v }: { voucher: any }) {
           <tr>
             <th>Description</th>
             <th>Account</th>
-            <th>Amount (LKR)</th>
+            <th>{v.status === "void" ? "Original amount (LKR)" : "Amount (LKR)"}</th>
           </tr>
         </thead>
         <tbody>
@@ -783,15 +885,31 @@ export function VoucherPaper({ voucher: v }: { voucher: any }) {
       <div className="bill-summary">
         <div className="bill-note">
           {v.status === "draft"
-            ? "DRAFT — not posted to the ledger."
+            ? v.revised_from_number
+              ? `REPLACEMENT DRAFT for ${v.revised_from_number} — review and post to the ledger.`
+              : "DRAFT — not posted to the ledger."
             : v.status === "void"
-              ? `CANCELLED on ${v.void_date}. Reason: ${v.void_reason}`
+              ? v.revised_to_number
+                ? `REVISED on ${v.void_date}. Replaced by ${v.revised_to_number}. Reason: ${v.void_reason}`
+                : `CANCELLED on ${v.void_date}. Reason: ${v.void_reason}`
               : "Posted payment voucher."}
         </div>
         <dl>
+          {v.status === "void" && (
+            <>
+              <div>
+                <dt>Original payment</dt>
+                <dd>{money(v.total)}</dd>
+              </div>
+              <div>
+                <dt>Cancelled amount</dt>
+                <dd>{money(v.total)}</dd>
+              </div>
+            </>
+          )}
           <div className="bill-total">
             <dt>Total payment</dt>
-            <dd>{money(v.total)}</dd>
+            <dd>{money(v.status === "void" ? 0 : v.total)}</dd>
           </div>
         </dl>
       </div>
@@ -919,6 +1037,10 @@ function CancelVoucher({
               ? "This creates a reversal journal and restores the supplier balance where applicable."
               : "This cancels the draft without posting a journal."}
           </p>
+          <p>
+            Cancel this voucher and change the total payment from {money(voucher.total)} to {money(0)}?
+            The original amount and cancellation reason will remain in the history.
+          </p>
           <label>
             Cancellation date
             <input
@@ -943,10 +1065,92 @@ function CancelVoucher({
         <div className="popup-footer">
           <div className="actions">
             <button type="button" disabled={busy} onClick={close}>
-              Keep voucher
+              No, keep voucher
             </button>
             <button className="primary" disabled={busy}>
-              {busy ? <Loader2 /> : <X />} Cancel voucher
+              {busy ? <Loader2 /> : <X />} Yes, cancel and show zero
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>,
+    document.body,
+  );
+}
+
+function DeleteDraftVoucher({
+  voucher,
+  close,
+  save,
+}: {
+  voucher: any;
+  close: () => void;
+  save: (body: { reason: string }) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return createPortal(
+    <div className="backdrop voucher-cancel-overlay">
+      <form
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-voucher-title"
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const form = new FormData(event.currentTarget);
+          setBusy(true);
+          try {
+            await save({ reason: String(form.get("reason") || "").trim() });
+          } catch (err) {
+            setError((err as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <div className="popup-header">
+          <button
+            type="button"
+            className="close"
+            disabled={busy}
+            onClick={close}
+            aria-label="Close delete confirmation"
+          >
+            <X />
+          </button>
+          <span>DELETE PAYMENT DRAFT</span>
+          <h2 id="delete-voucher-title">Delete {voucher.number}?</h2>
+        </div>
+        <div className="popup-body">
+          {error && (
+            <div className="error" role="alert">
+              {error}
+            </div>
+          )}
+          <p>
+            This permanently removes the draft and keeps a record of the deletion reason. Posted
+            vouchers cannot be deleted; use Cancel to reverse one.
+          </p>
+          <label>
+            Reason
+            <input
+              name="reason"
+              required
+              pattern=".*\S.*"
+              maxLength={500}
+              placeholder="Explain why this draft is being deleted"
+            />
+          </label>
+        </div>
+        <div className="popup-footer">
+          <div className="actions">
+            <button type="button" disabled={busy} onClick={close}>
+              Keep draft
+            </button>
+            <button className="primary" disabled={busy}>
+              {busy ? <Loader2 /> : <Trash2 />} Delete draft
             </button>
           </div>
         </div>

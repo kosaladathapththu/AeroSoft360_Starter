@@ -3,8 +3,8 @@ import "./screen-pagination.css";
 
 /** Screen-only pagination. Render the full filtered data so report aggregates,
  * exports and print output never accidentally use only the visible page. */
-export default function ScreenPagination({ children, selection, title, minimumRows = 1 }: {
-  children: ReactNode; selection: string; title: string; minimumRows?: number;
+export default function ScreenPagination({ children, selection, title, minimumRows = 1, enabled = false }: {
+  children: ReactNode; selection: string; title: string; minimumRows?: number; enabled?: boolean;
 }) {
   const content = useRef<HTMLDivElement>(null);
   const groups = useRef<HTMLTableRowElement[][]>([]);
@@ -16,6 +16,7 @@ export default function ScreenPagination({ children, selection, title, minimumRo
 
   useEffect(() => setPage(1), [selection]);
   useEffect(() => {
+    if (!enabled) return;
     const root = content.current;
     if (!root) return;
     let frame = 0;
@@ -60,8 +61,9 @@ export default function ScreenPagination({ children, selection, title, minimumRo
       window.removeEventListener("resize", schedule);
       groups.current.forEach((rows) => rows.forEach((row) => row.removeAttribute("data-screen-page-hidden")));
     };
-  }, [children, selection, page, minimumRows]);
+  }, [children, selection, page, minimumRows, enabled]);
 
+  if (!enabled) return <>{children}</>;
   const pages = Math.max(1, Math.ceil(count / limit));
   return <div className="screen-record-page">
     <div ref={content}>{children}</div>

@@ -347,6 +347,9 @@ Route::prefix("v1")->group(function (): void {
         Route::post("/suppliers", [ProcurementController::class, "storeSupplier"])->middleware(
             "permission:suppliers.manage",
         );
+        Route::post("/materials", [ProcurementController::class, "storeMaterial"])->middleware(
+            "permission:purchases.manage",
+        );
         Route::put("/suppliers/{supplier}", [
             ProcurementController::class,
             "updateSupplier",
@@ -391,6 +394,8 @@ Route::prefix("v1")->group(function (): void {
         Route::get("/payment-vouchers", [PaymentVoucherController::class, "index"])->middleware(
             "permission:workspace.view",
         );
+        Route::get('/payment-vouchers/export', [PaymentVoucherController::class, 'export'])
+            ->middleware('permission:workspace.view');
         Route::get("/accounts", [AccountController::class, "index"])->middleware(
             "permission:workspace.view",
         );
@@ -416,6 +421,10 @@ Route::prefix("v1")->group(function (): void {
         Route::put("/payment-vouchers/{id}", [
             PaymentVoucherController::class,
             "update",
+        ])->middleware("permission:accounting.manage");
+        Route::delete("/payment-vouchers/{id}", [
+            PaymentVoucherController::class,
+            "delete",
         ])->middleware("permission:accounting.manage");
         Route::post("/payment-vouchers/{id}/post", [
             PaymentVoucherController::class,
