@@ -89,6 +89,7 @@ import "./layout-fixes.css";
 import "./form-defaults.css";
 import "./compact-layout.css";
 import "./workspace-entry.css";
+import "./customer-po-entry.css";
 import "./system-colours.css";
 
 const PublicSite = lazy(() => import("./PublicSite"));
@@ -4009,6 +4010,7 @@ function SalesCreateModal({
   const firstArticleId = Number(firstArticle?.id || 0);
   const [inventoryArticleId, setInventoryArticleId] = useState(firstArticleId);
   const [expandedPoLine, setExpandedPoLine] = useState<number | null>(null);
+  const [activePoLine, setActivePoLine] = useState<number | null>(0);
   const [poLines, setPoLines] = useState<any[]>([
     ...(initial?.lines?.length
       ? initial.lines.map((line: any) => ({
@@ -5136,6 +5138,8 @@ function SalesCreateModal({
           ) : type === "po" || type === "sales_order" ? (
             <>
               {!newCustomer && selectedCustomerId > 0 && (
+                <details className="po-customer-context" open={!isEasyOrder || orderStep === 1}>
+                  <summary>Customer balances and previous orders</summary>
                 <CustomerOrderContext
                   key={selectedCustomerId}
                   api={API}
@@ -5145,6 +5149,7 @@ function SalesCreateModal({
                   excludePoId={type === "po" && initial ? Number(initial.id) : undefined}
                   excludeOrderId={type === "sales_order" && initial ? Number(initial.id) : undefined}
                 />
+                </details>
               )}
               <nav className="easy-order-steps" aria-label="Order progress">
                 {["Customer", "Items", "Review"].map((label, index) => (
@@ -5335,16 +5340,20 @@ function SalesCreateModal({
                     Order amount payable on credit: <b>{money(poGrandTotal)}</b>.
                   </p>
                 )}
-                <div className="po-lines">
+                <div className="po-lines customer-po-entry">
                   <div className="po-lines-head">
                     <div>
                       <b>Order items</b>
-                      <small>Add one or more articles below.</small>
+                      <small>{poLines.length} articles. Open an article to edit its sizes and colours.</small>
                     </div>
+                    <button type="button" className="secondary-action" onClick={() => setActivePoLine(null)}>
+                      Collapse all articles
+                    </button>
                     <button
                       type="button"
                       className="secondary-action"
-                      onClick={() =>
+                      onClick={() => {
+                        setActivePoLine(poLines.length);
                         setPoLines((lines) => [
                           ...lines,
                           {
@@ -5356,8 +5365,8 @@ function SalesCreateModal({
                             set_item_id: 0,
                             quantity: 1,
                           },
-                        ])
-                      }
+                        ]);
+                      }}
                     >
                       <Plus /> Add article
                     </button>
@@ -5375,7 +5384,16 @@ function SalesCreateModal({
                       (quantity: any) => Number(quantity) > 0,
                     ).length;
                     return (
-                      <div className={`po-line compact-order-line ${selectedArticle ? "has-article" : ""}`} key={index}>
+                      <div className={`po-line compact-order-line ${selectedArticle ? "has-article" : ""} ${activePoLine === index ? "po-editing" : "po-collapsed"}`} key={index}
+                        onInvalidCapture={() => setActivePoLine(index)}>
+                        <button type="button" className="po-compact-heading"
+                          aria-expanded={activePoLine === index}
+                          onClick={() => setActivePoLine(activePoLine === index ? null : index)}>
+                          <span>{index + 1}. {selectedArticle ? `${selectedArticle.code} — ${selectedArticle.name}` : "Choose an article"}</span>
+                          <small>{line.order_mode === "custom" ? `${selectedSizeCount} sizes` : `${line.quantity} sets`}</small>
+                          <b>{money(poLineTotal(line))}</b>
+                          <ChevronDown />
+                        </button>
                         <label className="po-article-field">
                           Search article
                           <div className="article-picker-control">

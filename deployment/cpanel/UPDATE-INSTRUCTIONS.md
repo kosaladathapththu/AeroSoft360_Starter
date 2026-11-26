@@ -5,6 +5,13 @@ Account: /home/camymarket
 
 This ZIP updates the application files. Creating it does not deploy anything.
 
+21 November update: Customer PO article entry uses compact controls and summary
+rows. Open one article to edit its sizes and colours; Collapse all articles shows
+the order list and totals together. Adding an article opens it for editing.
+Collections To Be Paid now fits its columns into the workspace and uses labelled
+rows on narrower screens. These layout changes require no migration or SQL import.
+The full payment voucher Excel report described below is included.
+
 20 November update: cancelled and revised payment vouchers now show LKR 0.00
 as the payment amount in the list and printed voucher. The original amount is
 labelled separately for history. This applies to previously cancelled vouchers
